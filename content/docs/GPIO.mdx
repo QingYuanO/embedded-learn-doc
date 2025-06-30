@@ -1,0 +1,277 @@
+---
+title: GPIO
+description: GPIO 通用输入输出端口
+---
+
+## GPIO简介
+- GPIO（General Purpose Input Output）通用输入输出口
+- 可配置为8种输入输出模式
+- 引脚电平：0V~3.3V，部分引脚可容忍5V
+- 输出模式下可控制端口输出高低电平，用以驱动LED、控制蜂鸣器、模拟通信协议输出时序等
+- 输入模式下可读取端口的高低电平或电压，用于读取按键输入、外接模块电平信号输入、ADC电压采集、模拟通信协议接收数据等
+
+### GPIO基本结构
+
+![GPIO基本结构](/images/gpio/gpio1.png)
+
+### GPIO位结构
+
+![GPIO位结构](/images/gpio/gpio2.png)
+
+## GPIO模式
+通过配置GPIO的端口配置寄存器，端口可以配置成以下8种模式
+| 模式名称 | 性质 | 特征 |
+| --- | --- | --- |
+| 浮空输入 | 数字输入 | 可读取引脚电平，若引脚悬空，则电平不确定 |
+| 上拉输入 | 数字输入 | 可读取引脚电平，内部连接上拉电阻，悬空时默认高电平 |
+| 下拉输入 | 数字输入 | 可读取引脚电平，内部连接下拉电阻，悬空时默认低电平 |
+| 模拟输入 | 模拟输入 | GPIO无效，引脚直接接入内部ADC |
+| 开漏输出 | 数字输出 | 可输出引脚电平，高电平为高阻态，低电平接VSS |
+| 推挽输出 | 数字输出 | 可输出引脚电平，高电平接VDD，低电平接VSS |
+| 复用开漏输出 | 数字输出 | 由片上外设控制，高电平为高阻态，低电平接VSS |
+| 复用推挽输出 | 数字输出 | 由片上外设控制，高电平接VDD，低电平接VSS |
+
+## GPIO STM32 标准库函数介绍
+
+### GPIO_InitTypeDef 结构体定义
+
+```c
+/** 
+  * @brief  GPIO 初始化结构体定义  
+  */
+
+typedef struct
+{
+  /*!< 指定要配置的GPIO引脚：此参数可以是 @ref GPIO_pins_define 中的任意值 GPIO_Pin_x，x可以是(0..15)+All */
+  uint16_t GPIO_Pin;             
+
+  /*!< 指定所选引脚的速度：此参数可以是 @ref GPIOSpeed_TypeDef 中的值
+    typedef enum
+    { 
+      GPIO_Speed_10MHz = 1,
+      GPIO_Speed_2MHz, 
+      GPIO_Speed_50MHz
+    }GPIOSpeed_TypeDef;
+   */
+  GPIOSpeed_TypeDef GPIO_Speed;  
+
+  /*!< 指定所选引脚的工作模式：此参数可以是 @ref GPIOMode_TypeDef 中的值
+    typedef enum
+    { 
+      GPIO_Mode_AIN = 0x0, // 模拟输入
+      GPIO_Mode_IN_FLOATING = 0x04, // 浮空输入
+      GPIO_Mode_IPD = 0x28, // 下拉输入
+      GPIO_Mode_IPU = 0x48, // 上拉输入
+      GPIO_Mode_Out_OD = 0x14, // 开漏输出
+      GPIO_Mode_Out_PP = 0x10, // 推挽输出
+      GPIO_Mode_AF_OD = 0x1C, // 复用开漏输出
+      GPIO_Mode_AF_PP = 0x18 // 复用推挽输出
+    }GPIOMode_TypeDef;
+   */
+  GPIOMode_TypeDef GPIO_Mode;    
+}GPIO_InitTypeDef;
+
+```
+
+### 初始化函数
+
+```c
+/**
+  * @brief  根据GPIO_InitStruct中指定的参数初始化GPIOx外设
+  * @param  GPIOx: x可以是(A..G)用于选择GPIO外设
+  * @param  GPIO_InitStruct: 指向GPIO_InitTypeDef结构体的指针，
+  *         包含了指定GPIO外设的配置信息
+  * @retval 无
+  */
+void GPIO_Init(GPIO_TypeDef* GPIOx, GPIO_InitTypeDef* GPIO_InitStruct);
+
+/** 例子 */
+void GPIO_Init_Example(){
+  GPIO_InitTypeDef GPIO_InitStruct;
+  GPIO_InitStruct.GPIO_Pin = GPIO_Pin_4 | GPIO_Pin_5 | GPIO_Pin_6;
+  GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStruct.GPIO_Mode = GPIO_Mode_Out_PP;
+  GPIO_Init(GPIOA, &GPIO_InitStruct);
+}
+```
+### 读取函数
+
+```c
+/**
+  * @brief  读取指定输入端口引脚的电平值。
+  * @param  GPIOx: x可以是(A..G)，用于选择GPIO外设。
+  * @param  GPIO_Pin: 指定要读取的端口引脚。
+  *   此参数可以是GPIO_Pin_x，其中x为(0..15)。
+  * @retval 输入端口引脚的电平值。
+  */
+uint8_t GPIO_ReadInputDataBit(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
+
+/**
+  * @brief  读取指定GPIO输入数据端口的值。
+  * @param  GPIOx: x可以是(A..G)，用于选择GPIO外设。
+  * @retval GPIO输入数据端口的值。
+  */
+uint16_t GPIO_ReadInputData(GPIO_TypeDef* GPIOx);
+
+/**
+  * @brief  读取指定输出数据端口引脚的电平值。
+  * @param  GPIOx: x可以是(A..G)，用于选择GPIO外设。
+  * @param  GPIO_Pin: 指定要读取的端口引脚。
+  *   此参数可以是GPIO_Pin_x，其中x为(0..15)。
+  * @retval 输出端口引脚的电平值。
+  */
+uint8_t GPIO_ReadOutputDataBit(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
+
+/**
+  * @brief  读取指定GPIO输出数据端口的值。
+  * @param  GPIOx: x可以是(A..G)，用于选择GPIO外设。
+  * @retval GPIO输出数据端口的值。
+  */
+uint16_t GPIO_ReadOutputData(GPIO_TypeDef* GPIOx);
+```
+
+### 设置函数
+
+```c
+/**
+  * @brief  设置GPIOx引脚为高电平
+  * @param  GPIOx: x可以是(A..G)用于选择GPIO外设
+  * @param  GPIO_Pin: 要设置的引脚
+  * @retval 无
+  */
+void GPIO_SetBits(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin); 
+
+/**
+  * @brief  设置GPIOx引脚为低电平
+  * @param  GPIOx: x可以是(A..G)用于选择GPIO外设
+  * @param  GPIO_Pin: 要设置的引脚
+  * @retval 无
+  */
+void GPIO_ResetBits(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
+
+/**
+  * @brief  设置或清除选定的数据端口位。
+  * @param  GPIOx: x可以是(A..G)，用于选择GPIO外设。
+  * @param  GPIO_Pin: 指定要写入的端口位。
+  *   此参数可以是GPIO_Pin_x，其中x为(0..15)。
+  * @param  BitVal: 指定要写入选定位的值。
+  *   此参数可以是BitAction枚举值之一：
+  *     @arg Bit_RESET: 清除端口引脚
+  *     @arg Bit_SET: 置位端口引脚
+  * @retval 无
+  */
+void GPIO_WriteBit(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin, BitAction BitVal);
+
+/**
+  * @brief  向指定的GPIO数据端口写入数据。
+  * @param  GPIOx: x可以是(A..G)，用于选择GPIO外设。
+  * @param  PortVal: 指定要写入端口输出数据寄存器的值。
+  * @retval 无
+  */
+void GPIO_Write(GPIO_TypeDef* GPIOx, uint16_t PortVal);
+```
+
+### 中断函数
+
+```c
+/**
+  * @brief  配置GPIO引脚为中断源。
+  * @param  GPIOx: x可以是(A..G)，用于选择GPIO外设。
+  * @param  GPIO_Pin: 指定要配置为中断源的引脚。
+  *   此参数可以是GPIO_Pin_x，其中x为(0..15)。
+  * @param  GPIO_Mode: 指定引脚的工作模式。
+  *   此参数可以是GPIO_Mode_IN_FLOATING、GPIO_Mode_IPU或GPIO_Mode_IPD。
+  * @retval 无
+  */
+void GPIO_EXTILineConfig(uint8_t GPIO_PortSource, uint8_t GPIO_PinSource);
+
+/** 例子 */
+GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource0); // 将外部中断的0号线映射到GPIOB，即选择PB0为外部中断引脚
+```
+
+
+## 代码实例
+
+### LED例子
+
+```c
+#include "stm32f10x.h"      // STM32F1 系列
+#include "Delay.h"
+
+// LED初始化函数
+void Led_Init()
+{
+  // 使能GPIOA和GPIOC的时钟
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);
+
+  GPIO_InitTypeDef GPIO_InitStruct;
+  // 配置GPIOA的4、5、6号引脚为推挽输出模式，速度50MHz
+  GPIO_InitStruct.GPIO_Pin = GPIO_Pin_4 | GPIO_Pin_5 | GPIO_Pin_6;
+  GPIO_InitStruct.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStruct.GPIO_Mode = GPIO_Mode_Out_PP;
+  GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  GPIO_InitTypeDef GPIO_InitStructKey;
+  // 配置GPIOC的3号引脚为浮空输入模式，速度50MHz（用于按键输入）
+  GPIO_InitStructKey.GPIO_Pin = GPIO_Pin_3;
+  GPIO_InitStructKey.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructKey.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+  GPIO_Init(GPIOC, &GPIO_InitStructKey);
+
+  // 初始化后将LED全部熄灭（高电平，低电平灯亮）
+  GPIO_WriteBit(GPIOA, GPIO_Pin_4 | GPIO_Pin_5 | GPIO_Pin_6, Bit_SET);
+}
+
+// 按键控制LED函数
+void Led_Key()
+{
+  // 读取按键（PC3）当前电平
+  uint8_t key_value = GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_3);
+  if (key_value == 0) // 按键按下（低电平）
+  {
+    Delay_ms(10); // 消抖延时
+    while (GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_3) == 0)
+      ; // 等待按键释放
+    Delay_ms(10); // 再次消抖
+
+    // 读取LED（PA5）当前状态
+    uint8_t led_value = GPIO_ReadOutputDataBit(GPIOA, GPIO_Pin_5);
+
+    if (led_value == 0)
+    {
+      // 如果LED亮（低电平），则熄灭（高电平）
+      GPIO_WriteBit(GPIOA, GPIO_Pin_5, Bit_SET);
+    }
+    else
+    {
+      // 如果LED灭（高电平），则点亮（低电平）
+      GPIO_WriteBit(GPIOA, GPIO_Pin_5, Bit_RESET);
+    }
+  }
+}
+
+// 灯闪烁函数
+void Led_Flash()
+{
+  // 点亮LED（PA5，低电平灯亮）
+  GPIO_WriteBit(GPIOA, GPIO_Pin_5, Bit_RESET);
+  Delay_ms(500); // 延时500ms
+  // 熄灭LED（PA5，高电平灯灭）
+  GPIO_WriteBit(GPIOA, GPIO_Pin_5, Bit_SET);
+  Delay_ms(500); // 延时500ms
+}
+
+// LED流水灯函数
+void Led_Flow()
+{
+  // 依次点亮PA4、PA5、PA6，实现流水灯效果（低电平灯亮）
+  GPIO_Write(GPIOA, ~0x0010); // 点亮PA4（0000 0000 0001 0000）
+  Delay_ms(200);
+  GPIO_Write(GPIOA, ~0x0020); // 点亮PA5（0000 0000 0010 0000）
+  Delay_ms(200);
+  GPIO_Write(GPIOA, ~0x0040); // 点亮PA6（0000 0000 0100 0000）
+  Delay_ms(200);
+}
+
+```

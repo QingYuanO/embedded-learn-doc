@@ -1,45 +1,66 @@
-# embedded-learn-doc
+# 嵌入式开发学习笔记
 
-This is a Next.js application generated with
-[Create Fumadocs](https://github.com/fuma-nama/fumadocs).
+这是一个使用 [Fumadocs](https://fumadocs.dev/) 构建的嵌入式开发学习笔记文档网站。
 
-Run development server:
+## 文档结构
 
-```bash
-npm run dev
-# or
-pnpm dev
-# or
-yarn dev
+```
+content/
+  ├── docs/
+  │   ├── getting-started/        # 入门指南
+  │   │   ├── environment.md      # 开发环境搭建
+  │   │   └── basic-concepts.md   # 基本概念
+  │   ├── hardware/              # 硬件相关
+  │   │   ├── mcu/               # 微控制器
+  │   │   ├── peripherals/       # 外设
+  │   │   └── interfaces/        # 接口
+  │   ├── software/              # 软件相关
+  │   │   ├── rtos/             # 实时操作系统
+  │   │   ├── drivers/          # 驱动程序
+  │   │   └── protocols/        # 通信协议
+  │   └── projects/             # 实践项目
+  │       ├── led-control/      # LED控制
+  │       └── sensor-reading/   # 传感器读取
 ```
 
-Open http://localhost:3000 with your browser to see the result.
+## 开发指南
 
-## Explore
+1. 安装依赖：
 
-In the project, you can see:
+```bash
+pnpm install
+```
 
-- `lib/source.ts`: Code for content source adapter, [`loader()`](https://fumadocs.dev/docs/headless/source-api) provides the interface to access your content.
-- `app/layout.config.tsx`: Shared options for layouts, optional but preferred to keep.
+2. 启动开发服务器：
 
-| Route                     | Description                                            |
-| ------------------------- | ------------------------------------------------------ |
-| `app/(home)`              | The route group for your landing page and other pages. |
-| `app/docs`                | The documentation layout and pages.                    |
-| `app/api/search/route.ts` | The Route Handler for search.                          |
+```bash
+pnpm dev
+```
 
-### Fumadocs MDX
+3. 构建生产版本：
 
-A `source.config.ts` config file has been included, you can customise different options like frontmatter schema.
+```bash
+pnpm build
+```
 
-Read the [Introduction](https://fumadocs.dev/docs/mdx) for further details.
+## 写作规范
 
-## Learn More
+1. 使用 Markdown 格式编写文档
+2. 代码示例需要包含详细的注释
+3. 每个文档都应该包含：
+   - 标题
+   - 简介
+   - 正文内容
+   - 相关资源链接
+   - 实践练习（如果适用）
 
-To learn more about Next.js and Fumadocs, take a look at the following
-resources:
+## 贡献指南
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js
-  features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [Fumadocs](https://fumadocs.vercel.app) - learn about Fumadocs
+1. Fork 本仓库
+2. 创建新的分支
+3. 提交更改
+4. 发起 Pull Request
+
+## 许可证
+
+MIT

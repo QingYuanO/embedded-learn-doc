@@ -1,0 +1,36 @@
+---
+title: stm32cubeide + 标准库开发STM32 项目
+description: 本文章介绍如何在 Mac 上使用 stm32cubeide + 标准库 开发 STM32 项目
+---
+
+# 准备工作
+
+下载[标准库](https://www.st.com.cn/zh/embedded-software/stm32-standard-peripheral-libraries.html) 
+
+下载[stm32cubeide](https://www.st.com.cn/content/st_com/zh/stm32cubeide.html) 
+
+# 创建项目
+
+1. 打开 stm32cubeide，点击 `File` -> `New` -> `STM32 Project`
+2. 选择 `芯片` 型号
+4. 选择 `Empty Project` 模板
+5. 点击 `Finish`
+
+# 手动添加标准库
+
+1. 将解压的文件复制到上面创建的工程中
+2. 将`/Project/STM32F10x_StdPeriph_Template/`下的 `stm32f10x_conf.h`、`stm32f10x_it.c`、`stm32f10x_it.h`、`system_stm32f10x.c` 文件复制到工程的 `Core/Src` 文件夹中
+3. 添加头文件
+    - 右键项目，选择 `Properties` -> `C/C++ General` -> `Paths and Symbols` -> `Includes` 添加 
+    - `/Libraries/CMSIS/CM3/CoreSupport`
+    - `/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x`
+    - `/Libraries/STM32F10x_StdPeriph_Driver/inc`
+4. 添加源文件
+    - 右键项目，选择 `Properties` -> `C/C++ General` -> `Paths and Symbols` -> `Source Location` 添加 
+    - `/Libraries/CMSIS/CM3`
+    - `/Libraries/CMSIS/CM3/DeviceSupport/ST/STM32F10x` 
+5. 修改`core_cm3.c`文件，将`=r`修改为`=&r`
+6. 添加宏定义
+    - 右键项目，选择 `Properties` -> `C/C++ Build` -> `Settings` -> `Tool Settings` -> `MCU GCC Compiler` -> `Preprocessor` 添加 
+    - `USE_STDPERIPH_DRIVER`
+    - `STM32F10X_HD`
