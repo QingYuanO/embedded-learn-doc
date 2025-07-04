@@ -1,0 +1,11 @@
+{
+  "title": "Display Name",
+  "icon": "MyIcon",
+  "pages": [
+    "std-start",
+    "gpio",
+    "exti",
+    "communication-bus-protocol"
+  ],
+  "defaultOpen": true
+}

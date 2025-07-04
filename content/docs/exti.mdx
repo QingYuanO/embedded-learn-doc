@@ -1,0 +1,382 @@
+---
+title: EXTI
+description: EXTI 外部中断
+---
+
+## 中断系统
+
+- 中断：在主程序运行过程中，出现了特定的中断触发条件（中断源），使得CPU暂停当前正在运行的程序，转而去处理中断程序，处理完成后又返回原来被暂停的位置继续运行
+
+- 中断优先级：当有多个中断源同时申请中断时，CPU会根据中断源的轻重缓急进行裁决，优先响应更加紧急的中断源
+
+- 中断嵌套：当一个中断程序正在运行时，又有新的更高优先级的中断源申请中断，CPU再次暂停当前中断程序，转而去处理新的中断程序，处理完成后依次进行返回
+
+
+## 中断执行流程
+
+![中断执行流程](/images/exti/exti1.png)
+
+## STM32中断
+
+- 68个可屏蔽中断通道，包含EXTI、TIM、ADC、USART、SPI、I2C、RTC等多个外设
+
+- 使用NVIC统一管理中断，每个中断通道都拥有16个可编程的优先等级，可对优先级进行分组，进一步设置抢占优先级和响应优先级
+
+![NVIC](/images/exti/exti2.png)
+![NVIC](/images/exti/exti3.png)
+![NVIC](/images/exti/exti4.png)
+![NVIC](/images/exti/exti5.png)
+
+## NVIC基本结构
+
+![NVIC](/images/exti/exti6.png)
+
+## NVIC优先级分组
+
+- NVIC的中断优先级由优先级寄存器的4位（0~15）决定，这4位可以进行切分，分为高n位的抢占优先级和低4-n位的响应优先级
+
+- 抢占优先级高的可以中断嵌套，响应优先级高的可以优先排队，抢占优先级和响应优先级均相同的按中断号排队
+
+| 分组方式 | 抢占优先级         | 响应优先级         |
+|----------|-------------------|-------------------|
+| 分组0    | 0位，取值为0      | 4位，取值为0~15   |
+| 分组1    | 1位，取值为0~1    | 3位，取值为0~7    |
+| 分组2    | 2位，取值为0~3    | 2位，取值为0~3    |
+| 分组3    | 3位，取值为0~7    | 1位，取值为0~1    |
+| 分组4    | 4位，取值为0~15   | 0位，取值为0      |
+
+## EXTI简介
+
+- EXTI（Extern Interrupt）外部中断
+- EXTI可以监测指定GPIO口的电平信号，当其指定的GPIO口产生电平变化时，EXTI将立即向NVIC发出中断申请，经过NVIC裁决后即可中断CPU主程序，使CPU执行EXTI对应的中断程序
+- 支持的触发方式：上升沿/下降沿/双边沿/软件触发
+- 支持的GPIO口：所有GPIO口，但相同的Pin不能同时触发中断
+- 通道数：16个GPIO_Pin，外加PVD输出、RTC闹钟、USB唤醒、以太网唤醒
+- 触发响应方式：中断响应/事件响应
+
+## EXTI基本结构
+
+![EXTI基本结构](/images/exti/exti7.png)
+
+## AFIO复用IO口
+
+- AFIO主要用于引脚复用功能的选择和重定义
+
+- 在STM32中，AFIO主要完成两个任务：复用功能引脚重映射、中断引脚选择
+
+![AFIO复用IO口](/images/exti/exti8.png)
+
+## EXTI框图
+
+![EXTI框图](/images/exti/exti9.png)
+
+
+## EXTI 外部中断 STM32 标准库函数介绍
+
+### 1. 开启时钟
+
+```c title="开启时钟"
+/*开启时钟*/
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE); // 开启GPIOB的时钟
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // 开启AFIO的时钟，外部中断必须开启AFIO的时钟
+```
+
+### 2. 初始化GPIO
+
+```c title="GPIO初始化"
+/*GPIO初始化*/
+GPIO_InitTypeDef GPIO_InitStructure;
+GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1;
+GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+GPIO_Init(GPIOB, &GPIO_InitStructure); // 将PB0和PB1引脚初始化为上拉输入
+```
+
+### 3. AFIO选择中断引脚
+
+```c title="GPIO_EXTILineConfig 函数原型"
+/**
+  * @brief  选择用作EXTI线路的GPIO引脚。
+  * @param  GPIO_PortSource: 选择作为EXTI线路源的GPIO端口。
+  *   该参数可以为 GPIO_PortSourceGPIOx，其中x为A到G。
+  * @param  GPIO_PinSource: 指定要配置的EXTI线路。
+  *   该参数可以为 GPIO_PinSourcex，其中x为0到15。
+  * @retval 无
+  */
+void GPIO_EXTILineConfig(uint8_t GPIO_PortSource, uint8_t GPIO_PinSource)
+```
+
+```c title="AFIO选择中断引脚"
+/*AFIO选择中断引脚*/
+GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource0); // 将外部中断的0号线映射到GPIOB，即选择PB0为外部中断引脚
+GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource1); // 将外部中断的1号线映射到GPIOB，即选择PB1为外部中断引脚
+```
+
+### 4. EXTI初始化
+
+```c title="EXTI_InitTypeDef 结构体定义"
+typedef struct
+{
+/*!< 指定要使能或失能的EXTI线路。此参数可以是@ref EXTI_Lines的任意组合 */
+uint32_t EXTI_Line;              
+/*!< 指定EXTI线路的工作模式。此参数可以是@ref EXTIMode_TypeDef的取值
+typedef enum
+{
+  EXTI_Mode_Interrupt = 0x00, // 中断模式
+  EXTI_Mode_Event = 0x04 // 事件模式
+}EXTIMode_TypeDef;
+ */
+EXTIMode_TypeDef EXTI_Mode;       
+/*!< 指定EXTI线路的触发信号有效边沿。此参数可以是@ref EXTITrigger_TypeDef的取值
+typedef enum
+{
+  EXTI_Trigger_Rising = 0x08, // 上升沿触发
+  EXTI_Trigger_Falling = 0x0C, // 下降沿触发
+  EXTI_Trigger_Rising_Falling = 0x10 // 上升沿和下降沿触发
+}EXTITrigger_TypeDef;
+ */
+EXTITrigger_TypeDef EXTI_Trigger; 
+/*!< 指定所选EXTI线路的新状态。此参数可以设置为ENABLE或DISABLE */ 
+FunctionalState EXTI_LineCmd;     
+}EXTI_InitTypeDef;
+```
+
+```c title="EXTI_Init 函数原型"
+/**
+  * @brief  根据EXTI_InitStruct中指定的参数初始化EXTI外设。
+  * @param  EXTI_InitStruct: 指向EXTI_InitTypeDef结构体的指针，
+  *         该结构体包含了EXTI外设的配置信息。
+  * @retval 无
+  */
+void EXTI_Init(EXTI_InitTypeDef* EXTI_InitStruct)
+```
+
+```c title="EXTI初始化"
+/*EXTI初始化*/
+EXTI_InitTypeDef EXTI_InitStructure;                    // 定义结构体变量
+EXTI_InitStructure.EXTI_Line = EXTI_Line0 | EXTI_Line1; // 选择配置外部中断的0号线和1号线
+EXTI_InitStructure.EXTI_LineCmd = ENABLE;               // 指定外部中断线使能
+EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;     // 指定外部中断线为中断模式
+EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Falling; // 指定外部中断线为下降沿触发
+EXTI_Init(&EXTI_InitStructure);                         // 将结构体变量交给EXTI_Init，配置EXTI外设
+
+```
+
+### NVIC
+
+```c title="NVIC中断分组"
+/**
+配置NVIC为分组2
+即抢占优先级范围：0~3，响应优先级范围：0~3
+此分组配置在整个工程中仅需调用一次
+若有多个中断，可以把此代码放在main函数内，while循环之前
+若调用多次配置分组的代码，则后执行的配置会覆盖先执行的配置
+*/
+NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2); 
+```
+
+```c title="NVIC_InitTypeDef 结构体定义"
+typedef struct
+{
+  uint8_t NVIC_IRQChannel;                    /*!< 指定要使能或失能的中断通道。
+                                                   此参数可以是 @ref IRQn_Type 的取值
+                                                   （完整的STM32设备中断通道列表请参考 stm32f10x.h 文件） */
+
+  uint8_t NVIC_IRQChannelPreemptionPriority;  /*!< 指定 NVIC_IRQChannel 所选中断通道的抢占优先级。
+                                                   此参数的取值范围为0~15，具体请参考 @ref NVIC_Priority_Table 表格 */
+
+  uint8_t NVIC_IRQChannelSubPriority;         /*!< 指定 NVIC_IRQChannel 所选中断通道的响应优先级（子优先级）。
+                                                   此参数的取值范围为0~15，具体请参考 @ref NVIC_Priority_Table 表格 */
+
+  FunctionalState NVIC_IRQChannelCmd;         /*!< 指定 NVIC_IRQChannel 所定义的中断通道是否使能。
+                                                   此参数可以设置为 ENABLE 或 DISABLE */   
+} NVIC_InitTypeDef;
+```
+
+```c title="NVIC配置"
+NVIC_InitTypeDef NVIC_InitStructure;                      // 定义结构体变量
+NVIC_InitStructure.NVIC_IRQChannel = EXTI0_IRQn;          // 选择配置NVIC的EXTI0线
+NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;           // 指定NVIC线路使能
+NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1; // 指定NVIC线路的抢占优先级为1
+NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;        // 指定NVIC线路的响应优先级为1
+NVIC_Init(&NVIC_InitStructure);                           // 将结构体变量交给NVIC_Init，配置NVIC外设
+
+NVIC_InitStructure.NVIC_IRQChannel = EXTI1_IRQn;          // 选择配置NVIC的EXTI1线
+NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;           // 指定NVIC线路使能
+NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1; // 指定NVIC线路的抢占优先级为1
+NVIC_InitStructure.NVIC_IRQChannelSubPriority = 2;        // 指定NVIC线路的响应优先级为2
+NVIC_Init(&NVIC_InitStructure);  
+```
+
+### 中断函数
+
+```c title="EXTI0_IRQHandler"
+/**
+ * 函    数：EXTI0外部中断函数
+ * 参    数：无
+ * 返 回 值：无
+ * 注意事项：此函数为中断函数，无需调用，中断触发后自动执行
+ *           函数名为预留的指定名称，可以从启动文件复制
+ *           请确保函数名正确，不能有任何差异，否则中断函数将不能进入
+ */
+void EXTI0_IRQHandler(void)
+{
+  if (EXTI_GetITStatus(EXTI_Line0) == SET) // 判断是否是外部中断0号线触发的中断
+  {
+    // 中断处理代码
+
+    EXTI_ClearITPendingBit(EXTI_Line0); // 清除外部中断0号线的中断标志位
+                                        // 中断标志位必须清除
+                                        // 否则中断将连续不断地触发，导致主程序卡死
+  }
+}
+
+// 其他中断函数同理
+```
+
+
+
+## 代码实例
+
+### 旋转编码器
+
+```c title="Encoder.h"
+#ifndef __ENCODER_H
+#define __ENCODER_H
+
+void Encoder_Init(void);
+int16_t Encoder_Get(void);
+
+#endif
+
+```
+
+```c title="Encoder.c"
+#include "stm32f10x.h"
+
+int16_t Encoder_Count; // 全局变量，用于计数旋转编码器的增量值
+
+/**
+ * 函    数：旋转编码器初始化
+ * 参    数：无
+ * 返 回 值：无
+ */
+void Encoder_Init(void)
+{
+  /*开启时钟*/
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE); // 开启GPIOB的时钟
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  // 开启AFIO的时钟，外部中断必须开启AFIO的时钟
+
+  /*GPIO初始化*/
+  GPIO_InitTypeDef GPIO_InitStructure;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_Init(GPIOB, &GPIO_InitStructure); // 将PB0和PB1引脚初始化为上拉输入
+
+  /*AFIO选择中断引脚*/
+  GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource0); // 将外部中断的0号线映射到GPIOB，即选择PB0为外部中断引脚
+  GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource1); // 将外部中断的1号线映射到GPIOB，即选择PB1为外部中断引脚
+
+  /*EXTI初始化*/
+  EXTI_InitTypeDef EXTI_InitStructure;                    // 定义结构体变量
+  EXTI_InitStructure.EXTI_Line = EXTI_Line0 | EXTI_Line1; // 选择配置外部中断的0号线和1号线
+  EXTI_InitStructure.EXTI_LineCmd = ENABLE;               // 指定外部中断线使能
+  EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;     // 指定外部中断线为中断模式
+  EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Falling; // 指定外部中断线为下降沿触发
+  EXTI_Init(&EXTI_InitStructure);                         // 将结构体变量交给EXTI_Init，配置EXTI外设
+
+  /*NVIC中断分组*/
+  NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2); // 配置NVIC为分组2
+                                                  // 即抢占优先级范围：0~3，响应优先级范围：0~3
+                                                  // 此分组配置在整个工程中仅需调用一次
+                                                  // 若有多个中断，可以把此代码放在main函数内，while循环之前
+                                                  // 若调用多次配置分组的代码，则后执行的配置会覆盖先执行的配置
+
+  /*NVIC配置*/
+  NVIC_InitTypeDef NVIC_InitStructure;                      // 定义结构体变量
+  NVIC_InitStructure.NVIC_IRQChannel = EXTI0_IRQn;          // 选择配置NVIC的EXTI0线
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;           // 指定NVIC线路使能
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1; // 指定NVIC线路的抢占优先级为1
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;        // 指定NVIC线路的响应优先级为1
+  NVIC_Init(&NVIC_InitStructure);                           // 将结构体变量交给NVIC_Init，配置NVIC外设
+
+  NVIC_InitStructure.NVIC_IRQChannel = EXTI1_IRQn;          // 选择配置NVIC的EXTI1线
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;           // 指定NVIC线路使能
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1; // 指定NVIC线路的抢占优先级为1
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 2;        // 指定NVIC线路的响应优先级为2
+  NVIC_Init(&NVIC_InitStructure);                           // 将结构体变量交给NVIC_Init，配置NVIC外设
+}
+
+/**
+ * 函    数：旋转编码器获取增量值
+ * 参    数：无
+ * 返 回 值：自上此调用此函数后，旋转编码器的增量值
+ */
+int16_t Encoder_Get(void)
+{
+  /*使用Temp变量作为中继，目的是返回Encoder_Count后将其清零*/
+  /*在这里，也可以直接返回Encoder_Count
+    但这样就不是获取增量值的操作方法了
+    也可以实现功能，只是思路不一样*/
+  int16_t Temp;
+  Temp = Encoder_Count;
+  Encoder_Count = 0;
+  return Temp;
+}
+
+/**
+ * 函    数：EXTI0外部中断函数
+ * 参    数：无
+ * 返 回 值：无
+ * 注意事项：此函数为中断函数，无需调用，中断触发后自动执行
+ *           函数名为预留的指定名称，可以从启动文件复制
+ *           请确保函数名正确，不能有任何差异，否则中断函数将不能进入
+ */
+void EXTI0_IRQHandler(void)
+{
+  if (EXTI_GetITStatus(EXTI_Line0) == SET) // 判断是否是外部中断0号线触发的中断
+  {
+    /*如果出现数据乱跳的现象，可再次判断引脚电平，以避免抖动*/
+    if (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_0) == 0)
+    {
+      if (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_1) == 0) // PB0的下降沿触发中断，此时检测另一相PB1的电平，目的是判断旋转方向
+      {
+        Encoder_Count--; // 此方向定义为反转，计数变量自减
+        // Serial_Printf("\r\nEncoder=%d", Encoder_Count);
+      }
+    }
+    EXTI_ClearITPendingBit(EXTI_Line0); // 清除外部中断0号线的中断标志位
+                                        // 中断标志位必须清除
+                                        // 否则中断将连续不断地触发，导致主程序卡死
+  }
+}
+
+/**
+ * 函    数：EXTI1外部中断函数
+ * 参    数：无
+ * 返 回 值：无
+ * 注意事项：此函数为中断函数，无需调用，中断触发后自动执行
+ *           函数名为预留的指定名称，可以从启动文件复制
+ *           请确保函数名正确，不能有任何差异，否则中断函数将不能进入
+ */
+void EXTI1_IRQHandler(void)
+{
+  if (EXTI_GetITStatus(EXTI_Line1) == SET) // 判断是否是外部中断1号线触发的中断
+  {
+    /*如果出现数据乱跳的现象，可再次判断引脚电平，以避免抖动*/
+    if (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_1) == 0)
+    {
+      if (GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_0) == 0) // PB1的下降沿触发中断，此时检测另一相PB0的电平，目的是判断旋转方向
+      {
+        Encoder_Count++; // 此方向定义为正转，计数变量自增
+        // Serial_Printf("\r\nEncoder=%d", Encoder_Count);
+      }
+    }
+    EXTI_ClearITPendingBit(EXTI_Line1); // 清除外部中断1号线的中断标志位
+                                        // 中断标志位必须清除
+                                        // 否则中断将连续不断地触发，导致主程序卡死
+  }
+}
+
+```
