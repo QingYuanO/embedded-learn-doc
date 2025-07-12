@@ -1,0 +1,12 @@
+{
+  "title": "TIM定时器",
+  "icon": "MyIcon",
+  "pages": [
+    "index",
+    "oc",
+    "ic",
+    "encoder"
+
+  ],
+  "defaultOpen": true
+}

@@ -1,10 +1,12 @@
 {
-  "title": "Display Name",
+  "title": "Embedded Learn",
   "icon": "MyIcon",
   "pages": [
     "std-start",
     "gpio",
     "exti",
+    "tim",
+    "dma",
     "communication-bus-protocol"
   ],
   "defaultOpen": true

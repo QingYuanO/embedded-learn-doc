@@ -1,0 +1,48 @@
+---
+title: DMA
+description: DMA(Direct Memory Access)直接存储器访问
+---
+
+## DMA简介
+
+- DMA（Direct Memory Access）直接存储器存取
+- DMA可以提供外设和存储器或者存储器和存储器之间的高速数据传输，无须CPU干预，节省了CPU的资源
+- 12个独立可配置的通道： DMA1（7个通道）， DMA2（5个通道）
+- 每个通道都支持软件触发和特定的硬件触发
+
+## 存储器映像
+
+| 类型 | 起始地址      | 存储器             | 用途                                 |
+|------|--------------|--------------------|--------------------------------------|
+| ROM  | 0x0800 0000  | 程序存储器Flash    | 存储C语言编译后的程序代码            |
+|      | 0x1FFF F000  | 系统存储器         | 存储BootLoader，用于串口下载         |
+|      | 0x1FFF F800  | 选项字节           | 存储一些独立于程序代码的配置参数     |
+| RAM  | 0x2000 0000  | 运行内存SRAM       | 存储运行过程中的临时变量             |
+|      | 0x4000 0000  | 外设寄存器         | 存储各个外设的配置参数               |
+|      | 0xE000 0000  | 内核外设寄存器     | 存储内核各个外设的配置参数           |
+
+
+## DMA框图
+
+<Image src="/dma/dma1.png" alt="DMA框图"  />
+
+## DMA基本结构
+
+<Image src="/dma/dma2.png" alt="DMA基本结构"  />
+
+## DMA请求
+
+<Image src="/dma/dma3.png" alt="DMA请求"  />
+
+## 数据宽度与对齐
+
+<Image src="/dma/dma4.png" alt="数据宽度与对齐"  />
+
+## 数据转运+DMA
+
+<Image src="/dma/dma5.png" alt="数据转运+DMA"  />
+
+## ADC扫描模式+DMA
+
+<Image src="/dma/dma6.png" alt="ADC扫描模式+DMA"  />
+
