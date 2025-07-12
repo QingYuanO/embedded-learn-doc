@@ -7,7 +7,10 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
   return {
     ...defaultMdxComponents,
     Mermaid,
-    img: (props) => <ImageZoom {...props} />,
+    img: (props) => {
+      console.log(props);
+      return <ImageZoom {...props} src={`https://${process.env.NEXT_PUBLIC_IMAGE_HOST}`} />;
+    },
     ...components,
   };
 }

@@ -14,7 +14,7 @@ description: EXTI 外部中断
 
 ## 中断执行流程
 
-![中断执行流程](/images/exti/exti1.png)
+<img src={`https://${process.env.NEXT_PUBLIC_IMAGE_HOST}/exti/exti1.png`} alt="中断执行流程" />
 
 ## STM32中断
 
@@ -22,14 +22,14 @@ description: EXTI 外部中断
 
 - 使用NVIC统一管理中断，每个中断通道都拥有16个可编程的优先等级，可对优先级进行分组，进一步设置抢占优先级和响应优先级
 
-![NVIC](/images/exti/exti2.png)
-![NVIC](/images/exti/exti3.png)
-![NVIC](/images/exti/exti4.png)
-![NVIC](/images/exti/exti5.png)
+<img src={`https://${process.env.NEXT_PUBLIC_IMAGE_HOST}/exti/exti2.png`} alt="NVIC" />
+<img src={`https://${process.env.NEXT_PUBLIC_IMAGE_HOST}/exti/exti3.png`} alt="NVIC" />
+<img src={`https://${process.env.NEXT_PUBLIC_IMAGE_HOST}/exti/exti4.png`} alt="NVIC" />
+<img src={`https://${process.env.NEXT_PUBLIC_IMAGE_HOST}/exti/exti5.png`} alt="NVIC" />
 
 ## NVIC基本结构
 
-![NVIC](/images/exti/exti6.png)
+<img src={`https://${process.env.NEXT_PUBLIC_IMAGE_HOST}/exti/exti6.png`} alt="NVIC" />
 
 ## NVIC优先级分组
 
@@ -56,7 +56,7 @@ description: EXTI 外部中断
 
 ## EXTI基本结构
 
-![EXTI基本结构](/images/exti/exti7.png)
+<img src={`https://${process.env.NEXT_PUBLIC_IMAGE_HOST}/exti/exti7.png`} alt="EXTI基本结构" />
 
 ## AFIO复用IO口
 
@@ -64,11 +64,11 @@ description: EXTI 外部中断
 
 - 在STM32中，AFIO主要完成两个任务：复用功能引脚重映射、中断引脚选择
 
-![AFIO复用IO口](/images/exti/exti8.png)
+<img src={`https://${process.env.NEXT_PUBLIC_IMAGE_HOST}/exti/exti8.png`} alt="AFIO复用IO口" />
 
 ## EXTI框图
 
-![EXTI框图](/images/exti/exti9.png)
+<img src={`https://${process.env.NEXT_PUBLIC_IMAGE_HOST}/exti/exti9.png`} alt="EXTI框图" />
 
 
 ## EXTI 外部中断 STM32 标准库函数介绍

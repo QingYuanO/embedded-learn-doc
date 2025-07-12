@@ -8,6 +8,7 @@ const config = {
   output: 'export',
   images: {
     unoptimized: true,
+    remotePatterns: [{ protocol: 'https', hostname: process.env.NEXT_PUBLIC_IMAGE_HOST }],
   },
 };
 
