@@ -1,0 +1,739 @@
+---
+title: ADC
+description: ADC(Analog-to-Digital Converter)模数转换器
+---
+
+## ADC简介
+
+- ADC（Analog-Digital Converter）模拟-数字转换器
+- ADC可以将引脚上连续变化的模拟电压转换为内存中存储的数字变量，建立模拟电路到数字电路的桥梁
+- 12位逐次逼近型ADC，1us转换时间
+- 输入电压范围：0-3.3V，转换结果范围：0-4095
+- 18个输入通道，可测量16个外部和2个内部信号源
+- 规则组和注入组两个转换单元
+- 模拟看门狗自动监测输入电压范围
+
+## 逐次逼近型ADC
+
+<Image src="/adc/adc1.png" alt="逐次逼近型ADC"  />
+> **什么是逐次逼近型ADC？**  
+> 逐次逼近型ADC（SAR ADC, Successive Approximation Register ADC）是一种常见的模数转换器结构。其核心思想是通过逐步逼近的方式，将模拟输入电压与内部参考电压进行比较，每次确定一位数字输出，最终得到完整的数字量。  
+> 
+> **工作原理简述：**  
+> 1. 采样保持电路锁定输入电压。  
+> 2. SAR寄存器从最高位开始，依次尝试每一位（先假设为1），通过比较器判断DAC输出与输入电压的大小。  
+> 3. 若DAC输出小于输入电压，则该位保留为1，否则清零。  
+> 4. 依次完成所有位的判断，最终得到数字输出。  
+
+
+## ADC框图
+
+<Image src="/adc/adc2.png" alt="ADC框图"  />
+
+## ADC基本结构
+
+<Image src="/adc/adc3.png" alt="ADC基本结构"  />
+
+## 输入通道
+| 通道    | ADC1         | ADC2         | ADC3         |
+|---------|--------------|--------------|--------------|
+| 通道0   | PA0          | PA0          | PA0          |
+| 通道1   | PA1          | PA1          | PA1          |
+| 通道2   | PA2          | PA2          | PA2          |
+| 通道3   | PA3          | PA3          | PA3          |
+| 通道4   | PA4          | PA4          | PF6          |
+| 通道5   | PA5          | PA5          | PF7          |
+| 通道6   | PA6          | PA6          | PF8          |
+| 通道7   | PA7          | PA7          | PF9          |
+| 通道8   | PB0          | PB0          | PF10         |
+| 通道9   | PB1          | PB1          |              |
+| 通道10  | PC0          | PC0          | PC0          |
+| 通道11  | PC1          | PC1          | PC1          |
+| 通道12  | PC2          | PC2          | PC2          |
+| 通道13  | PC3          | PC3          | PC3          |
+| 通道14  | PC4          | PC4          |              |
+| 通道15  | PC5          | PC5          |              |
+| 通道16  | 温度传感器   |              |              |
+| 通道17  | 内部参考电压 |              |              |
+
+## 转换模式
+
+### 单次转换，非扫描模式
+<Image src="/adc/adc4.png" alt="单次转换，非扫描模式"  />
+
+### 连续转换，非扫描模式
+<Image src="/adc/adc5.png" alt="连续转换，非扫描模式"  />
+
+### 单次转换，扫描模式
+<Image src="/adc/adc6.png" alt="单次转换，扫描模式"  />
+
+### 连续转换，扫描模式
+<Image src="/adc/adc7.png" alt="连续转换，扫描模式"  />
+
+
+## 触发控制
+<Image src="/adc/adc8.png" alt="触发控制"  />
+
+## 数据对齐
+
+<Image src="/adc/adc9.png" alt="转换时间"  />
+
+## 转换时间
+- AD转换的步骤：采样，保持，量化，编码
+
+- STM32 ADC的总转换时间为：$$T_{\text{CONV}} = t_{\text{采样时间}} + 12.5\,\text{ADC周期}$$
+
+- 例如：当ADCCLK=14MHz，采样时间为1.5个ADC周期
+  - $$T_{\text{CONV}} = t_{\text{采样}} + 12.5\,\text{ADC周期} = 1.5 + 12.5 = 14\,\text{ADC周期} = 1\,\mu\text{s}$$
+
+## 校准
+- ADC有一个内置自校准模式。校准可大幅减小因内部电容器组的变化而造成的准精度误差。校准期间，在每个电容器上都会计算出一个误差修正码(数字值)，这个码用于消除在随后的转换中每个电容器上产生的误差
+
+- 建议在每次上电后执行一次校准
+
+- 启动校准前， ADC必须处于关电状态超过至少两个ADC时钟周
+
+## 标准库函数
+
+
+### ADC_DeInit
+```c
+/**
+ * @brief  将ADC外设寄存器重置为默认值
+ * @param  ADCx: 选择要重置的ADC外设（ADC1或ADC2）
+ * @retval 无
+ * @example
+ *     ADC_DeInit(ADC1);
+ */
+void ADC_DeInit(ADC_TypeDef* ADCx);
+```
+
+### ADC_Init
+```c
+/**
+ * @brief  根据ADC_InitStruct中指定的参数初始化ADC外设
+ * @param  ADCx: 选择要初始化的ADC外设
+ * @param  ADC_InitStruct: 指向ADC_InitTypeDef结构体的指针，包含配置信息
+ * @retval 无
+ * @example
+ *     ADC_InitTypeDef ADC_InitStructure;
+ *     ADC_StructInit(&ADC_InitStructure);
+ *     ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;
+ *     ADC_Init(ADC1, &ADC_InitStructure);
+ */
+void ADC_Init(ADC_TypeDef* ADCx, ADC_InitTypeDef* ADC_InitStruct);
+```
+
+### ADC_StructInit
+```c
+/**
+ * @brief  将ADC_InitStruct的每个成员填充为默认值
+ * @param  ADC_InitStruct: 指向要填充默认值的ADC_InitTypeDef结构体的指针
+ * @retval 无
+ * @example
+ *     ADC_InitTypeDef ADC_InitStructure;
+ *     ADC_StructInit(&ADC_InitStructure);
+ */
+void ADC_StructInit(ADC_InitTypeDef* ADC_InitStruct);
+```
+
+### ADC_Cmd
+```c
+/**
+ * @brief  使能或禁用指定的ADC外设
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  NewState: 新的功能状态（ENABLE或DISABLE）
+ * @retval 无
+ * @example
+ *     ADC_Cmd(ADC1, ENABLE);
+ */
+void ADC_Cmd(ADC_TypeDef* ADCx, FunctionalState NewState);
+```
+
+### ADC_DMACmd
+```c
+/**
+ * @brief  使能或禁用ADC的DMA请求
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  NewState: 新的功能状态（ENABLE或DISABLE）
+ * @retval 无
+ * @example
+ *     ADC_DMACmd(ADC1, ENABLE);
+ */
+void ADC_DMACmd(ADC_TypeDef* ADCx, FunctionalState NewState);
+```
+
+### ADC_ITConfig
+```c
+/**
+ * @brief  使能或禁用指定的ADC中断
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  ADC_IT: 指定要配置的ADC中断源
+ * @param  NewState: 新的功能状态（ENABLE或DISABLE）
+ * @retval 无
+ * @example
+ *     ADC_ITConfig(ADC1, ADC_IT_EOC, ENABLE);
+ */
+void ADC_ITConfig(ADC_TypeDef* ADCx, uint16_t ADC_IT, FunctionalState NewState);
+```
+
+### ADC_ResetCalibration
+```c
+/**
+ * @brief  重置ADC的校准寄存器
+ * @param  ADCx: 选择要重置校准的ADC外设
+ * @retval 无
+ * @example
+ *     ADC_ResetCalibration(ADC1);
+ */
+void ADC_ResetCalibration(ADC_TypeDef* ADCx);
+```
+
+### ADC_GetResetCalibrationStatus
+```c
+/**
+ * @brief  获取ADC校准重置状态
+ * @param  ADCx: 选择要查询的ADC外设
+ * @retval 校准重置状态（SET或RESET）
+ * @example
+ *     while(ADC_GetResetCalibrationStatus(ADC1));
+ */
+FlagStatus ADC_GetResetCalibrationStatus(ADC_TypeDef* ADCx);
+```
+
+### ADC_StartCalibration
+```c
+/**
+ * @brief  开始ADC校准过程
+ * @param  ADCx: 选择要校准的ADC外设
+ * @retval 无
+ * @example
+ *     ADC_StartCalibration(ADC1);
+ */
+void ADC_StartCalibration(ADC_TypeDef* ADCx);
+```
+
+### ADC_GetCalibrationStatus
+```c
+/**
+ * @brief  获取ADC校准状态
+ * @param  ADCx: 选择要查询的ADC外设
+ * @retval 校准状态（SET或RESET）
+ * @example
+ *     while(ADC_GetCalibrationStatus(ADC1));
+ */
+FlagStatus ADC_GetCalibrationStatus(ADC_TypeDef* ADCx);
+```
+### ADC_SoftwareStartConvCmd
+```c
+/**
+ * @brief  使能或禁用ADC软件启动转换
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  NewState: 新的功能状态（ENABLE或DISABLE）
+ * @retval 无
+ * @example
+ *     ADC_SoftwareStartConvCmd(ADC1, ENABLE);
+ */
+void ADC_SoftwareStartConvCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
+```
+### ADC_GetSoftwareStartConvStatus
+```c
+/**
+ * @brief  获取ADC软件启动转换状态
+ * @param  ADCx: 选择要查询的ADC外设
+ * @retval 软件启动转换状态（SET或RESET）
+ * @example
+ *     if(ADC_GetSoftwareStartConvStatus(ADC1) == SET) { /* ... */ }
+ */
+FlagStatus ADC_GetSoftwareStartConvStatus(ADC_TypeDef* ADCx);
+```
+### ADC_DiscModeChannelCountConfig
+```c
+/**
+ * @brief  配置ADC间断模式下的通道数量
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  Number: 间断模式下的通道数量
+ * @retval 无
+ * @example
+ *     ADC_DiscModeChannelCountConfig(ADC1, 3);
+ */
+void ADC_DiscModeChannelCountConfig(ADC_TypeDef* ADCx, uint8_t Number);
+```
+### ADC_DiscModeCmd
+```c
+/**
+ * @brief  使能或禁用ADC间断模式
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  NewState: 新的功能状态（ENABLE或DISABLE）
+ * @retval 无
+ * @example
+ *     ADC_DiscModeCmd(ADC1, ENABLE);
+ */
+void ADC_DiscModeCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
+```
+### ADC_RegularChannelConfig
+```c
+/**
+ * @brief  配置ADC规则转换通道
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  ADC_Channel: 选择要配置的ADC通道
+ * @param  Rank: 规则转换序列中的排名
+ * @param  ADC_SampleTime: 指定通道的采样时间
+ * @retval 无
+ * @example
+ *     ADC_RegularChannelConfig(ADC1, ADC_Channel_0, 1, ADC_SampleTime_55Cycles5);
+ */
+void ADC_RegularChannelConfig(ADC_TypeDef* ADCx, uint8_t ADC_Channel, uint8_t Rank, uint8_t ADC_SampleTime);
+```
+### ADC_ExternalTrigConvCmd
+```c
+/**
+ * @brief  使能或禁用ADC外部触发转换
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  NewState: 新的功能状态（ENABLE或DISABLE）
+ * @retval 无
+ * @example
+ *     ADC_ExternalTrigConvCmd(ADC1, ENABLE);
+ */
+void ADC_ExternalTrigConvCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
+```
+### ADC_GetConversionValue
+```c
+/**
+ * @brief  获取ADC规则转换结果
+ * @param  ADCx: 选择要读取的ADC外设
+ * @retval ADC转换结果值
+ * @example
+ *     uint16_t value = ADC_GetConversionValue(ADC1);
+ */
+uint16_t ADC_GetConversionValue(ADC_TypeDef* ADCx);
+```
+### ADC_GetDualModeConversionValue
+```c
+/**
+ * @brief  获取双ADC模式下的转换结果
+ * @retval 双ADC转换结果值
+ * @example
+ *     uint32_t dualValue = ADC_GetDualModeConversionValue();
+ */
+uint32_t ADC_GetDualModeConversionValue(void);
+```
+### ADC_AutoInjectedConvCmd
+```c
+/**
+ * @brief  使能或禁用ADC自动注入转换
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  NewState: 新的功能状态（ENABLE或DISABLE）
+ * @retval 无
+ * @example
+ *     ADC_AutoInjectedConvCmd(ADC1, ENABLE);
+ */
+void ADC_AutoInjectedConvCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
+```
+### ADC_InjectedDiscModeCmd
+```c
+/**
+ * @brief  使能或禁用ADC注入组间断模式
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  NewState: 新的功能状态（ENABLE或DISABLE）
+ * @retval 无
+ * @example
+ *     ADC_InjectedDiscModeCmd(ADC1, ENABLE);
+ */
+void ADC_InjectedDiscModeCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
+```
+### ADC_ExternalTrigInjectedConvConfig
+```c
+/**
+ * @brief  配置ADC注入组外部触发源
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  ADC_ExternalTrigInjecConv: 选择注入组外部触发源
+ * @retval 无
+ * @example
+ *     ADC_ExternalTrigInjectedConvConfig(ADC1, ADC_ExternalTrigInjecConv_T2_TRGO);
+ */
+void ADC_ExternalTrigInjectedConvConfig(ADC_TypeDef* ADCx, uint32_t ADC_ExternalTrigInjecConv);
+```
+### ADC_ExternalTrigInjectedConvCmd
+```c
+/**
+ * @brief  使能或禁用ADC注入组外部触发转换
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  NewState: 新的功能状态（ENABLE或DISABLE）
+ * @retval 无
+ * @example
+ *     ADC_ExternalTrigInjectedConvCmd(ADC1, ENABLE);
+ */
+void ADC_ExternalTrigInjectedConvCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
+```
+### ADC_SoftwareStartInjectedConvCmd
+```c
+/**
+ * @brief  使能或禁用ADC注入组软件启动转换
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  NewState: 新的功能状态（ENABLE或DISABLE）
+ * @retval 无
+ * @example
+ *     ADC_SoftwareStartInjectedConvCmd(ADC1, ENABLE);
+ */
+void ADC_SoftwareStartInjectedConvCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
+```
+### ADC_GetSoftwareStartInjectedConvCmdStatus
+```c
+/**
+ * @brief  获取ADC注入组软件启动转换状态
+ * @param  ADCx: 选择要查询的ADC外设
+ * @retval 注入组软件启动转换状态（SET或RESET）
+ * @example
+ *     if(ADC_GetSoftwareStartInjectedConvCmdStatus(ADC1) == SET) { /* ... */ }
+ */
+FlagStatus ADC_GetSoftwareStartInjectedConvCmdStatus(ADC_TypeDef* ADCx);
+```
+### ADC_InjectedChannelConfig
+```c
+/**
+ * @brief  配置ADC注入转换通道
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  ADC_Channel: 选择要配置的ADC通道
+ * @param  Rank: 注入转换序列中的排名
+ * @param  ADC_SampleTime: 指定通道的采样时间
+ * @retval 无
+ * @example
+ *     ADC_InjectedChannelConfig(ADC1, ADC_Channel_1, 1, ADC_SampleTime_55Cycles5);
+ */
+void ADC_InjectedChannelConfig(ADC_TypeDef* ADCx, uint8_t ADC_Channel, uint8_t Rank, uint8_t ADC_SampleTime);
+```
+### ADC_InjectedSequencerLengthConfig
+```c
+/**
+ * @brief  配置ADC注入转换序列长度
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  Length: 注入转换序列长度
+ * @retval 无
+ * @example
+ *     ADC_InjectedSequencerLengthConfig(ADC1, 2);
+ */
+void ADC_InjectedSequencerLengthConfig(ADC_TypeDef* ADCx, uint8_t Length);
+```
+### ADC_SetInjectedOffset
+```c
+/**
+ * @brief  设置ADC注入通道偏移值
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  ADC_InjectedChannel: 选择要配置的注入通道
+ * @param  Offset: 偏移值
+ * @retval 无
+ * @example
+ *     ADC_SetInjectedOffset(ADC1, ADC_InjectedChannel_1, 0x10);
+ */
+void ADC_SetInjectedOffset(ADC_TypeDef* ADCx, uint8_t ADC_InjectedChannel, uint16_t Offset);
+```
+### ADC_GetInjectedConversionValue
+```c
+/**
+ * @brief  获取ADC注入转换结果
+ * @param  ADCx: 选择要读取的ADC外设
+ * @param  ADC_InjectedChannel: 选择要读取的注入通道
+ * @retval ADC注入转换结果值
+ * @example
+ *     uint16_t injValue = ADC_GetInjectedConversionValue(ADC1, ADC_InjectedChannel_1);
+ */
+uint16_t ADC_GetInjectedConversionValue(ADC_TypeDef* ADCx, uint8_t ADC_InjectedChannel);
+```
+### ADC_AnalogWatchdogCmd
+```c
+/**
+ * @brief  使能或禁用ADC模拟看门狗
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  ADC_AnalogWatchdog: 选择要配置的模拟看门狗
+ * @retval 无
+ * @example
+ *     ADC_AnalogWatchdogCmd(ADC1, ADC_AnalogWatchdog_SingleRegEnable);
+ */
+void ADC_AnalogWatchdogCmd(ADC_TypeDef* ADCx, uint32_t ADC_AnalogWatchdog);
+```
+### ADC_AnalogWatchdogThresholdsConfig
+```c
+/**
+ * @brief  配置ADC模拟看门狗阈值
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  HighThreshold: 高阈值
+ * @param  LowThreshold: 低阈值
+ * @retval 无
+ * @example
+ *     ADC_AnalogWatchdogThresholdsConfig(ADC1, 0xFFF, 0x000);
+ */
+void ADC_AnalogWatchdogThresholdsConfig(ADC_TypeDef* ADCx, uint16_t HighThreshold, uint16_t LowThreshold);
+```
+### ADC_AnalogWatchdogSingleChannelConfig
+```c
+/**
+ * @brief  配置ADC模拟看门狗单通道
+ * @param  ADCx: 选择要配置的ADC外设
+ * @param  ADC_Channel: 选择要监控的ADC通道
+ * @retval 无
+ * @example
+ *     ADC_AnalogWatchdogSingleChannelConfig(ADC1, ADC_Channel_0);
+ */
+void ADC_AnalogWatchdogSingleChannelConfig(ADC_TypeDef* ADCx, uint8_t ADC_Channel);
+```	
+### ADC_TempSensorVrefintCmd
+```c
+/**
+ * @brief  使能或禁用温度传感器和Vrefint
+ * @param  NewState: 新的功能状态（ENABLE或DISABLE）
+ * @retval 无
+ * @example
+ *     ADC_TempSensorVrefintCmd(ENABLE);
+ */
+void ADC_TempSensorVrefintCmd(FunctionalState NewState);
+```
+### ADC_GetFlagStatus
+```c
+/**
+ * @brief  检查指定的ADC标志位是否设置
+ * @param  ADCx: 选择要查询的ADC外设
+ * @param  ADC_FLAG: 指定要检查的ADC标志位
+ * @retval 标志位状态（SET或RESET）
+ * @example
+ *     if(ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == SET) { /* ... */ }
+ */
+FlagStatus ADC_GetFlagStatus(ADC_TypeDef* ADCx, uint8_t ADC_FLAG);
+```
+### ADC_ClearFlag
+```c
+/**
+ * @brief  清除ADC标志位
+ * @param  ADCx: 选择要清除标志位的ADC外设
+ * @param  ADC_FLAG: 指定要清除的ADC标志位
+ * @retval 无
+ * @example
+ *     ADC_ClearFlag(ADC1, ADC_FLAG_EOC);
+ */
+void ADC_ClearFlag(ADC_TypeDef* ADCx, uint8_t ADC_FLAG);
+```
+### ADC_GetITStatus
+```c
+/**
+ * @brief  检查指定的ADC中断是否发生
+ * @param  ADCx: 选择要查询的ADC外设
+ * @param  ADC_IT: 指定要检查的ADC中断源
+ * @retval 中断状态（SET或RESET）
+ * @example
+ *     if(ADC_GetITStatus(ADC1, ADC_IT_EOC) == SET) { /* ... */ }
+ */
+ITStatus ADC_GetITStatus(ADC_TypeDef* ADCx, uint16_t ADC_IT);
+```
+### ADC_ClearITPendingBit
+```c
+/**
+ * @brief  清除ADC中断挂起位
+ * @param  ADCx: 选择要清除中断挂起位的ADC外设
+ * @param  ADC_IT: 指定要清除的ADC中断源
+ * @retval 无
+ * @example
+ *     ADC_ClearITPendingBit(ADC1, ADC_IT_EOC);
+ */
+void ADC_ClearITPendingBit(ADC_TypeDef* ADCx, uint16_t ADC_IT);
+```
+
+## 例子
+
+### AD单通道
+
+```c title="AD.h"
+#ifndef __AD_H
+#define __AD_H
+
+void AD_Init(void);
+uint16_t AD_GetValue(void);
+
+#endif
+```
+
+```c title="AD.c"
+#include "stm32f10x.h"                  // Device header
+
+/**
+  * 函    数：AD初始化
+  * 参    数：无
+  * 返 回 值：无
+  */
+void AD_Init(void)
+{
+	/*开启时钟*/
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);	//开启ADC1的时钟
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);	//开启GPIOA的时钟
+	
+	/*设置ADC时钟*/
+	RCC_ADCCLKConfig(RCC_PCLK2_Div6);						//选择时钟6分频，ADCCLK = 72MHz / 6 = 12MHz
+	
+	/*GPIO初始化*/
+	GPIO_InitTypeDef GPIO_InitStructure;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOA, &GPIO_InitStructure);					//将PA0引脚初始化为模拟输入
+	
+	/*规则组通道配置*/
+	ADC_RegularChannelConfig(ADC1, ADC_Channel_0, 1, ADC_SampleTime_55Cycles5);		//规则组序列1的位置，配置为通道0
+	
+	/*ADC初始化*/
+	ADC_InitTypeDef ADC_InitStructure;						//定义结构体变量
+	ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;		//模式，选择独立模式，即单独使用ADC1
+	ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;	//数据对齐，选择右对齐
+	ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;	//外部触发，使用软件触发，不需要外部触发
+	ADC_InitStructure.ADC_ContinuousConvMode = DISABLE;		//连续转换，失能，每转换一次规则组序列后停止
+	ADC_InitStructure.ADC_ScanConvMode = DISABLE;			//扫描模式，失能，只转换规则组的序列1这一个位置
+	ADC_InitStructure.ADC_NbrOfChannel = 1;					//通道数，为1，仅在扫描模式下，才需要指定大于1的数，在非扫描模式下，只能是1
+	ADC_Init(ADC1, &ADC_InitStructure);						//将结构体变量交给ADC_Init，配置ADC1
+	
+	/*ADC使能*/
+	ADC_Cmd(ADC1, ENABLE);									//使能ADC1，ADC开始运行
+	
+	/*ADC校准*/
+	ADC_ResetCalibration(ADC1);								//固定流程，内部有电路会自动执行校准
+	while (ADC_GetResetCalibrationStatus(ADC1) == SET);
+	ADC_StartCalibration(ADC1);
+	while (ADC_GetCalibrationStatus(ADC1) == SET);
+}
+
+/**
+  * 函    数：获取AD转换的值
+  * 参    数：无
+  * 返 回 值：AD转换的值，范围：0~4095
+  */
+uint16_t AD_GetValue(void)
+{
+	ADC_SoftwareStartConvCmd(ADC1, ENABLE);					//软件触发AD转换一次
+	while (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET);	//等待EOC标志位，即等待AD转换结束
+	return ADC_GetConversionValue(ADC1);					//读数据寄存器，得到AD转换的结果
+}
+```
+
+```c title="main.c"
+#include "stm32f10x.h"                  // Device header
+#include "Delay.h"
+#include "AD.h"
+
+uint16_t ADValue;			//定义AD值变量
+float Voltage;				//定义电压变量
+
+int main(void)
+{
+	/*模块初始化*/
+	AD_Init();				//AD初始化
+	
+	
+	while (1)
+	{
+		ADValue = AD_GetValue();					//获取AD转换的值
+		Voltage = (float)ADValue / 4095 * 3.3;		//将AD值线性变换到0~3.3的范围，表示电压
+		
+    //输出AD值和电压值
+
+		
+		Delay_ms(100);			//延时100ms，手动增加一些转换的间隔时间
+	}
+}
+
+```
+
+### AD多通道
+
+```c title="AD.h"
+#ifndef __AD_H
+#define __AD_H
+
+void AD_Init(void);
+uint16_t AD_GetValue(uint8_t ADC_Channel);
+
+#endif
+```
+
+```c title="AD.c"
+#include "stm32f10x.h"                  // Device header
+
+/**
+  * 函    数：AD初始化
+  * 参    数：无
+  * 返 回 值：无
+  */
+void AD_Init(void)
+{
+	/*开启时钟*/
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);	//开启ADC1的时钟
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);	//开启GPIOA的时钟
+	
+	/*设置ADC时钟*/
+	RCC_ADCCLKConfig(RCC_PCLK2_Div6);						//选择时钟6分频，ADCCLK = 72MHz / 6 = 12MHz
+	
+	/*GPIO初始化*/
+	GPIO_InitTypeDef GPIO_InitStructure;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1 | GPIO_Pin_2 | GPIO_Pin_3;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOA, &GPIO_InitStructure);					//将PA0、PA1、PA2和PA3引脚初始化为模拟输入
+	
+	/*不在此处配置规则组序列，而是在每次AD转换前配置，这样可以灵活更改AD转换的通道*/
+	
+	/*ADC初始化*/
+	ADC_InitTypeDef ADC_InitStructure;						//定义结构体变量
+	ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;		//模式，选择独立模式，即单独使用ADC1
+	ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;	//数据对齐，选择右对齐
+	ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;	//外部触发，使用软件触发，不需要外部触发
+	ADC_InitStructure.ADC_ContinuousConvMode = DISABLE;		//连续转换，失能，每转换一次规则组序列后停止
+	ADC_InitStructure.ADC_ScanConvMode = DISABLE;			//扫描模式，失能，只转换规则组的序列1这一个位置
+	ADC_InitStructure.ADC_NbrOfChannel = 1;					//通道数，为1，仅在扫描模式下，才需要指定大于1的数，在非扫描模式下，只能是1
+	ADC_Init(ADC1, &ADC_InitStructure);						//将结构体变量交给ADC_Init，配置ADC1
+	
+	/*ADC使能*/
+	ADC_Cmd(ADC1, ENABLE);									//使能ADC1，ADC开始运行
+	
+	/*ADC校准*/
+	ADC_ResetCalibration(ADC1);								//固定流程，内部有电路会自动执行校准
+	while (ADC_GetResetCalibrationStatus(ADC1) == SET);
+	ADC_StartCalibration(ADC1);
+	while (ADC_GetCalibrationStatus(ADC1) == SET);
+}
+
+/**
+  * 函    数：获取AD转换的值
+  * 参    数：ADC_Channel 指定AD转换的通道，范围：ADC_Channel_x，其中x可以是0/1/2/3
+  * 返 回 值：AD转换的值，范围：0~4095
+  */
+uint16_t AD_GetValue(uint8_t ADC_Channel)
+{
+	ADC_RegularChannelConfig(ADC1, ADC_Channel, 1, ADC_SampleTime_55Cycles5);	//在每次转换前，根据函数形参灵活更改规则组的通道1
+	ADC_SoftwareStartConvCmd(ADC1, ENABLE);					//软件触发AD转换一次
+	while (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET);	//等待EOC标志位，即等待AD转换结束
+	return ADC_GetConversionValue(ADC1);					//读数据寄存器，得到AD转换的结果
+}
+```
+
+```c title="main.c"
+#include "stm32f10x.h"                  // Device header
+#include "Delay.h"
+#include "AD.h"
+
+uint16_t AD0, AD1, AD2, AD3;	//定义AD值变量
+
+int main(void)
+{
+	/*模块初始化*/
+	AD_Init();					//AD初始化
+	
+	while (1)
+	{
+		AD0 = AD_GetValue(ADC_Channel_0);		//单次启动ADC，转换通道0
+		AD1 = AD_GetValue(ADC_Channel_1);		//单次启动ADC，转换通道1
+		AD2 = AD_GetValue(ADC_Channel_2);		//单次启动ADC，转换通道2
+		AD3 = AD_GetValue(ADC_Channel_3);		//单次启动ADC，转换通道3
+		
+		// 输出AD值和电压值
+		
+		Delay_ms(100);			//延时100ms，手动增加一些转换的间隔时间
+	}
+}
+
+```

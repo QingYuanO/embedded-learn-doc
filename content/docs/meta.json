@@ -6,6 +6,7 @@
     "gpio",
     "exti",
     "tim",
+    "adc",
     "dma",
     "communication-bus-protocol"
   ],
