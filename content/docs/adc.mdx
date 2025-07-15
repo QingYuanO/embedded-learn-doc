@@ -96,7 +96,7 @@ description: ADC(Analog-to-Digital Converter)模数转换器
 ## 标准库函数
 
 
-### ADC_DeInit
+### 1.ADC_DeInit
 ```c
 /**
  * @brief  将ADC外设寄存器重置为默认值
@@ -108,7 +108,7 @@ description: ADC(Analog-to-Digital Converter)模数转换器
 void ADC_DeInit(ADC_TypeDef* ADCx);
 ```
 
-### ADC_Init
+### 2.ADC_Init
 ```c
 /**
  * @brief  根据ADC_InitStruct中指定的参数初始化ADC外设
@@ -124,7 +124,7 @@ void ADC_DeInit(ADC_TypeDef* ADCx);
 void ADC_Init(ADC_TypeDef* ADCx, ADC_InitTypeDef* ADC_InitStruct);
 ```
 
-### ADC_StructInit
+### 3.ADC_StructInit
 ```c
 /**
  * @brief  将ADC_InitStruct的每个成员填充为默认值
@@ -137,7 +137,7 @@ void ADC_Init(ADC_TypeDef* ADCx, ADC_InitTypeDef* ADC_InitStruct);
 void ADC_StructInit(ADC_InitTypeDef* ADC_InitStruct);
 ```
 
-### ADC_Cmd
+### 4.ADC_Cmd
 ```c
 /**
  * @brief  使能或禁用指定的ADC外设
@@ -150,7 +150,7 @@ void ADC_StructInit(ADC_InitTypeDef* ADC_InitStruct);
 void ADC_Cmd(ADC_TypeDef* ADCx, FunctionalState NewState);
 ```
 
-### ADC_DMACmd
+### 5.ADC_DMACmd
 ```c
 /**
  * @brief  使能或禁用ADC的DMA请求
@@ -163,7 +163,7 @@ void ADC_Cmd(ADC_TypeDef* ADCx, FunctionalState NewState);
 void ADC_DMACmd(ADC_TypeDef* ADCx, FunctionalState NewState);
 ```
 
-### ADC_ITConfig
+### 6.ADC_ITConfig
 ```c
 /**
  * @brief  使能或禁用指定的ADC中断
@@ -177,7 +177,7 @@ void ADC_DMACmd(ADC_TypeDef* ADCx, FunctionalState NewState);
 void ADC_ITConfig(ADC_TypeDef* ADCx, uint16_t ADC_IT, FunctionalState NewState);
 ```
 
-### ADC_ResetCalibration
+### 7.ADC_ResetCalibration
 ```c
 /**
  * @brief  重置ADC的校准寄存器
@@ -189,7 +189,7 @@ void ADC_ITConfig(ADC_TypeDef* ADCx, uint16_t ADC_IT, FunctionalState NewState);
 void ADC_ResetCalibration(ADC_TypeDef* ADCx);
 ```
 
-### ADC_GetResetCalibrationStatus
+### 8.ADC_GetResetCalibrationStatus
 ```c
 /**
  * @brief  获取ADC校准重置状态
@@ -201,7 +201,7 @@ void ADC_ResetCalibration(ADC_TypeDef* ADCx);
 FlagStatus ADC_GetResetCalibrationStatus(ADC_TypeDef* ADCx);
 ```
 
-### ADC_StartCalibration
+### 9.ADC_StartCalibration
 ```c
 /**
  * @brief  开始ADC校准过程
@@ -213,7 +213,7 @@ FlagStatus ADC_GetResetCalibrationStatus(ADC_TypeDef* ADCx);
 void ADC_StartCalibration(ADC_TypeDef* ADCx);
 ```
 
-### ADC_GetCalibrationStatus
+### 10.ADC_GetCalibrationStatus
 ```c
 /**
  * @brief  获取ADC校准状态
@@ -224,7 +224,7 @@ void ADC_StartCalibration(ADC_TypeDef* ADCx);
  */
 FlagStatus ADC_GetCalibrationStatus(ADC_TypeDef* ADCx);
 ```
-### ADC_SoftwareStartConvCmd
+### 11.ADC_SoftwareStartConvCmd
 ```c
 /**
  * @brief  使能或禁用ADC软件启动转换
@@ -236,7 +236,7 @@ FlagStatus ADC_GetCalibrationStatus(ADC_TypeDef* ADCx);
  */
 void ADC_SoftwareStartConvCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
 ```
-### ADC_GetSoftwareStartConvStatus
+### 12.ADC_GetSoftwareStartConvStatus
 ```c
 /**
  * @brief  获取ADC软件启动转换状态
@@ -247,7 +247,7 @@ void ADC_SoftwareStartConvCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
  */
 FlagStatus ADC_GetSoftwareStartConvStatus(ADC_TypeDef* ADCx);
 ```
-### ADC_DiscModeChannelCountConfig
+### 13.ADC_DiscModeChannelCountConfig
 ```c
 /**
  * @brief  配置ADC间断模式下的通道数量
@@ -259,7 +259,7 @@ FlagStatus ADC_GetSoftwareStartConvStatus(ADC_TypeDef* ADCx);
  */
 void ADC_DiscModeChannelCountConfig(ADC_TypeDef* ADCx, uint8_t Number);
 ```
-### ADC_DiscModeCmd
+### 14.ADC_DiscModeCmd
 ```c
 /**
  * @brief  使能或禁用ADC间断模式
@@ -271,7 +271,7 @@ void ADC_DiscModeChannelCountConfig(ADC_TypeDef* ADCx, uint8_t Number);
  */
 void ADC_DiscModeCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
 ```
-### ADC_RegularChannelConfig
+### 15.ADC_RegularChannelConfig
 ```c
 /**
  * @brief  配置ADC规则转换通道
@@ -285,7 +285,7 @@ void ADC_DiscModeCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
  */
 void ADC_RegularChannelConfig(ADC_TypeDef* ADCx, uint8_t ADC_Channel, uint8_t Rank, uint8_t ADC_SampleTime);
 ```
-### ADC_ExternalTrigConvCmd
+### 16.ADC_ExternalTrigConvCmd
 ```c
 /**
  * @brief  使能或禁用ADC外部触发转换
@@ -297,7 +297,7 @@ void ADC_RegularChannelConfig(ADC_TypeDef* ADCx, uint8_t ADC_Channel, uint8_t Ra
  */
 void ADC_ExternalTrigConvCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
 ```
-### ADC_GetConversionValue
+### 17.ADC_GetConversionValue
 ```c
 /**
  * @brief  获取ADC规则转换结果
@@ -308,7 +308,7 @@ void ADC_ExternalTrigConvCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
  */
 uint16_t ADC_GetConversionValue(ADC_TypeDef* ADCx);
 ```
-### ADC_GetDualModeConversionValue
+### 18.ADC_GetDualModeConversionValue
 ```c
 /**
  * @brief  获取双ADC模式下的转换结果
@@ -318,7 +318,7 @@ uint16_t ADC_GetConversionValue(ADC_TypeDef* ADCx);
  */
 uint32_t ADC_GetDualModeConversionValue(void);
 ```
-### ADC_AutoInjectedConvCmd
+### 19.ADC_AutoInjectedConvCmd
 ```c
 /**
  * @brief  使能或禁用ADC自动注入转换
@@ -330,7 +330,7 @@ uint32_t ADC_GetDualModeConversionValue(void);
  */
 void ADC_AutoInjectedConvCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
 ```
-### ADC_InjectedDiscModeCmd
+### 20.ADC_InjectedDiscModeCmd
 ```c
 /**
  * @brief  使能或禁用ADC注入组间断模式
@@ -342,7 +342,7 @@ void ADC_AutoInjectedConvCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
  */
 void ADC_InjectedDiscModeCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
 ```
-### ADC_ExternalTrigInjectedConvConfig
+### 21.ADC_ExternalTrigInjectedConvConfig
 ```c
 /**
  * @brief  配置ADC注入组外部触发源
@@ -354,7 +354,7 @@ void ADC_InjectedDiscModeCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
  */
 void ADC_ExternalTrigInjectedConvConfig(ADC_TypeDef* ADCx, uint32_t ADC_ExternalTrigInjecConv);
 ```
-### ADC_ExternalTrigInjectedConvCmd
+### 22.ADC_ExternalTrigInjectedConvCmd
 ```c
 /**
  * @brief  使能或禁用ADC注入组外部触发转换
@@ -366,7 +366,7 @@ void ADC_ExternalTrigInjectedConvConfig(ADC_TypeDef* ADCx, uint32_t ADC_External
  */
 void ADC_ExternalTrigInjectedConvCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
 ```
-### ADC_SoftwareStartInjectedConvCmd
+### 23.ADC_SoftwareStartInjectedConvCmd
 ```c
 /**
  * @brief  使能或禁用ADC注入组软件启动转换
@@ -378,7 +378,7 @@ void ADC_ExternalTrigInjectedConvCmd(ADC_TypeDef* ADCx, FunctionalState NewState
  */
 void ADC_SoftwareStartInjectedConvCmd(ADC_TypeDef* ADCx, FunctionalState NewState);
 ```
-### ADC_GetSoftwareStartInjectedConvCmdStatus
+### 24.ADC_GetSoftwareStartInjectedConvCmdStatus
 ```c
 /**
  * @brief  获取ADC注入组软件启动转换状态
@@ -389,7 +389,7 @@ void ADC_SoftwareStartInjectedConvCmd(ADC_TypeDef* ADCx, FunctionalState NewStat
  */
 FlagStatus ADC_GetSoftwareStartInjectedConvCmdStatus(ADC_TypeDef* ADCx);
 ```
-### ADC_InjectedChannelConfig
+### 25.ADC_InjectedChannelConfig
 ```c
 /**
  * @brief  配置ADC注入转换通道
@@ -403,7 +403,7 @@ FlagStatus ADC_GetSoftwareStartInjectedConvCmdStatus(ADC_TypeDef* ADCx);
  */
 void ADC_InjectedChannelConfig(ADC_TypeDef* ADCx, uint8_t ADC_Channel, uint8_t Rank, uint8_t ADC_SampleTime);
 ```
-### ADC_InjectedSequencerLengthConfig
+### 26.ADC_InjectedSequencerLengthConfig
 ```c
 /**
  * @brief  配置ADC注入转换序列长度
@@ -415,7 +415,7 @@ void ADC_InjectedChannelConfig(ADC_TypeDef* ADCx, uint8_t ADC_Channel, uint8_t R
  */
 void ADC_InjectedSequencerLengthConfig(ADC_TypeDef* ADCx, uint8_t Length);
 ```
-### ADC_SetInjectedOffset
+### 27.ADC_SetInjectedOffset
 ```c
 /**
  * @brief  设置ADC注入通道偏移值
@@ -428,7 +428,7 @@ void ADC_InjectedSequencerLengthConfig(ADC_TypeDef* ADCx, uint8_t Length);
  */
 void ADC_SetInjectedOffset(ADC_TypeDef* ADCx, uint8_t ADC_InjectedChannel, uint16_t Offset);
 ```
-### ADC_GetInjectedConversionValue
+### 28.ADC_GetInjectedConversionValue
 ```c
 /**
  * @brief  获取ADC注入转换结果
@@ -440,7 +440,7 @@ void ADC_SetInjectedOffset(ADC_TypeDef* ADCx, uint8_t ADC_InjectedChannel, uint1
  */
 uint16_t ADC_GetInjectedConversionValue(ADC_TypeDef* ADCx, uint8_t ADC_InjectedChannel);
 ```
-### ADC_AnalogWatchdogCmd
+### 29.ADC_AnalogWatchdogCmd
 ```c
 /**
  * @brief  使能或禁用ADC模拟看门狗
@@ -452,7 +452,7 @@ uint16_t ADC_GetInjectedConversionValue(ADC_TypeDef* ADCx, uint8_t ADC_InjectedC
  */
 void ADC_AnalogWatchdogCmd(ADC_TypeDef* ADCx, uint32_t ADC_AnalogWatchdog);
 ```
-### ADC_AnalogWatchdogThresholdsConfig
+### 30.ADC_AnalogWatchdogThresholdsConfig
 ```c
 /**
  * @brief  配置ADC模拟看门狗阈值
@@ -465,7 +465,7 @@ void ADC_AnalogWatchdogCmd(ADC_TypeDef* ADCx, uint32_t ADC_AnalogWatchdog);
  */
 void ADC_AnalogWatchdogThresholdsConfig(ADC_TypeDef* ADCx, uint16_t HighThreshold, uint16_t LowThreshold);
 ```
-### ADC_AnalogWatchdogSingleChannelConfig
+### 31.ADC_AnalogWatchdogSingleChannelConfig
 ```c
 /**
  * @brief  配置ADC模拟看门狗单通道
@@ -477,7 +477,7 @@ void ADC_AnalogWatchdogThresholdsConfig(ADC_TypeDef* ADCx, uint16_t HighThreshol
  */
 void ADC_AnalogWatchdogSingleChannelConfig(ADC_TypeDef* ADCx, uint8_t ADC_Channel);
 ```	
-### ADC_TempSensorVrefintCmd
+### 32.ADC_TempSensorVrefintCmd
 ```c
 /**
  * @brief  使能或禁用温度传感器和Vrefint
@@ -488,7 +488,7 @@ void ADC_AnalogWatchdogSingleChannelConfig(ADC_TypeDef* ADCx, uint8_t ADC_Channe
  */
 void ADC_TempSensorVrefintCmd(FunctionalState NewState);
 ```
-### ADC_GetFlagStatus
+### 33.ADC_GetFlagStatus
 ```c
 /**
  * @brief  检查指定的ADC标志位是否设置
@@ -500,7 +500,7 @@ void ADC_TempSensorVrefintCmd(FunctionalState NewState);
  */
 FlagStatus ADC_GetFlagStatus(ADC_TypeDef* ADCx, uint8_t ADC_FLAG);
 ```
-### ADC_ClearFlag
+### 34.ADC_ClearFlag
 ```c
 /**
  * @brief  清除ADC标志位
@@ -512,7 +512,7 @@ FlagStatus ADC_GetFlagStatus(ADC_TypeDef* ADCx, uint8_t ADC_FLAG);
  */
 void ADC_ClearFlag(ADC_TypeDef* ADCx, uint8_t ADC_FLAG);
 ```
-### ADC_GetITStatus
+### 35.ADC_GetITStatus
 ```c
 /**
  * @brief  检查指定的ADC中断是否发生
@@ -524,7 +524,7 @@ void ADC_ClearFlag(ADC_TypeDef* ADCx, uint8_t ADC_FLAG);
  */
 ITStatus ADC_GetITStatus(ADC_TypeDef* ADCx, uint16_t ADC_IT);
 ```
-### ADC_ClearITPendingBit
+### 36.ADC_ClearITPendingBit
 ```c
 /**
  * @brief  清除ADC中断挂起位
