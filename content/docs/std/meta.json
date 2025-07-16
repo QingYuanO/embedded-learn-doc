@@ -1,0 +1,8 @@
+{
+  "title": "STM32 标准库",
+  "icon": "MyIcon",
+  "pages": [
+    "introduction"
+  ],
+  "root": true
+}

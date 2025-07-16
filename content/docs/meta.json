@@ -1,14 +1,6 @@
 {
-  "title": "Embedded Learn",
-  "icon": "MyIcon",
   "pages": [
-    "std-start",
-    "gpio",
-    "exti",
-    "tim",
-    "adc",
-    "dma",
-    "communication-bus-protocol"
-  ],
-  "defaultOpen": true
+    "jxkj-stm32",
+    "std"
+  ]
 }

@@ -1,0 +1,15 @@
+{
+  "title": "江协科技-STM32入门教程",
+  "icon": "School",
+  "pages": [
+    "std-start",
+    "gpio",
+    "exti",
+    "tim",
+    "adc",
+    "dma",
+    "communication-bus-protocol"
+  ],
+  "defaultOpen": true,
+  "root": true
+}

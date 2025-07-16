@@ -7,7 +7,7 @@ export default function HomePage() {
       <p className="text-fd-muted-foreground">
         You can open{' '}
         <Link
-          href="/docs"
+          href="/docs/jxkj-stm32/std-start"
           className="text-fd-foreground font-semibold underline"
         >
           /docs
