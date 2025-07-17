@@ -2,6 +2,9 @@
 @import 'fumadocs-ui/css/shadcn.css';
 @import 'fumadocs-ui/css/preset.css';
 
+
+/* #FED201 */
+
 :root {
   --jxkj-stm32-color: hsl(220, 91%, 54%);
 
