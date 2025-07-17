@@ -1,0 +1,349 @@
+---
+title: STM32F10x GPIO 
+description: STM32F10x GPIO标准库函数文档，详细介绍GPIO初始化、配置、输入输出控制等常用函数的用法与示例，适合初学者快速查阅和学习。
+---
+
+
+# STM32F10x GPIO 标准库函数详解
+
+本文档详细介绍了STM32F10x系列微控制器的GPIO（通用输入输出）标准库函数，包括函数声明、参数说明、返回值以及典型使用示例。
+
+## 概述
+
+STM32F10x的GPIO模块提供了丰富的引脚控制功能，支持多种工作模式：
+- 输入模式：浮空输入、上拉输入、下拉输入、模拟输入
+- 输出模式：推挽输出、开漏输出
+- 复用功能：各种外设的引脚复用
+- 中断功能：外部中断触发
+
+## 标准库函数文档
+
+### 1.GPIO_DeInit
+```c
+/**
+ * @brief  将GPIO外设寄存器重设为默认值
+ * @param  GPIOx: 选择要重置的GPIO外设，x可以是(A..G)
+ * @retval 无
+ * @example
+ *     GPIO_DeInit(GPIOA);
+ */
+void GPIO_DeInit(GPIO_TypeDef* GPIOx);
+```
+
+### 2.GPIO_AFIODeInit
+```c
+/**
+ * @brief  将复用功能（重映射、事件控制和EXTI配置）寄存器重设为默认值
+ * @param  无
+ * @retval 无
+ * @example
+ *     GPIO_AFIODeInit();
+ */
+void GPIO_AFIODeInit(void);
+```
+
+### 3.GPIO_Init
+```c
+/**
+ * @brief  根据GPIO_InitStruct中的指定参数初始化GPIOx外设
+ * @param  GPIOx: 选择GPIO外设，x可以是(A..G)
+ * @param  GPIO_InitStruct: 指向GPIO_InitTypeDef结构的指针，包含GPIO外设的配置信息
+ * @retval 无
+ * @example
+ *     GPIO_InitTypeDef GPIO_InitStructure;
+ *     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
+ *     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+ *     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+ *     GPIO_Init(GPIOC, &GPIO_InitStructure);
+ */
+void GPIO_Init(GPIO_TypeDef* GPIOx, GPIO_InitTypeDef* GPIO_InitStruct);
+```
+
+### 4.GPIO_StructInit
+```c
+/**
+ * @brief  将GPIO_InitStruct的每个成员填充为其默认值
+ * @param  GPIO_InitStruct: 指向要初始化的GPIO_InitTypeDef结构的指针
+ * @retval 无
+ * @example
+ *     GPIO_InitTypeDef GPIO_InitStructure;
+ *     GPIO_StructInit(&GPIO_InitStructure);
+ */
+void GPIO_StructInit(GPIO_InitTypeDef* GPIO_InitStruct);
+```
+
+### 5.GPIO_ReadInputDataBit
+```c
+/**
+ * @brief  读取指定的输入端口引脚
+ * @param  GPIOx: 选择GPIO外设，x可以是(A..G)
+ * @param  GPIO_Pin: 指定要读取的端口位，可以是GPIO_Pin_x，x为(0..15)
+ * @retval 输入端口引脚的值（Bit_SET或Bit_RESET）
+ * @example
+ *     uint8_t pinState = GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0);
+ */
+uint8_t GPIO_ReadInputDataBit(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
+```
+
+### 6.GPIO_ReadInputData
+```c
+/**
+ * @brief  读取指定的GPIO输入数据端口
+ * @param  GPIOx: 选择GPIO外设，x可以是(A..G)
+ * @retval GPIO输入数据端口值
+ * @example
+ *     uint16_t portData = GPIO_ReadInputData(GPIOA);
+ */
+uint16_t GPIO_ReadInputData(GPIO_TypeDef* GPIOx);
+```
+
+### 7.GPIO_ReadOutputDataBit
+```c
+/**
+ * @brief  读取指定的输出数据端口位
+ * @param  GPIOx: 选择GPIO外设，x可以是(A..G)
+ * @param  GPIO_Pin: 指定要读取的端口位，可以是GPIO_Pin_x，x为(0..15)
+ * @retval 输出端口引脚的值（Bit_SET或Bit_RESET）
+ * @example
+ *     uint8_t outputState = GPIO_ReadOutputDataBit(GPIOA, GPIO_Pin_1);
+ */
+uint8_t GPIO_ReadOutputDataBit(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
+```
+
+### 8.GPIO_ReadOutputData
+```c
+/**
+ * @brief  读取指定的GPIO输出数据端口
+ * @param  GPIOx: 选择GPIO外设，x可以是(A..G)
+ * @retval GPIO输出数据端口值
+ * @example
+ *     uint16_t outputData = GPIO_ReadOutputData(GPIOA);
+ */
+uint16_t GPIO_ReadOutputData(GPIO_TypeDef* GPIOx);
+```
+
+### 9.GPIO_SetBits
+```c
+/**
+ * @brief  设置选定的数据端口位
+ * @param  GPIOx: 选择GPIO外设，x可以是(A..G)
+ * @param  GPIO_Pin: 指定要写入的端口位，可以是GPIO_Pin_x的任意组合，x为(0..15)
+ * @retval 无
+ * @example
+ *     GPIO_SetBits(GPIOA, GPIO_Pin_0 | GPIO_Pin_1);
+ */
+void GPIO_SetBits(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
+```
+
+### 10.GPIO_ResetBits
+```c
+/**
+ * @brief  清除选定的数据端口位
+ * @param  GPIOx: 选择GPIO外设，x可以是(A..G)
+ * @param  GPIO_Pin: 指定要写入的端口位，可以是GPIO_Pin_x的任意组合，x为(0..15)
+ * @retval 无
+ * @example
+ *     GPIO_ResetBits(GPIOA, GPIO_Pin_0);
+ */
+void GPIO_ResetBits(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
+```
+
+### 11.GPIO_WriteBit
+```c
+/**
+ * @brief  设置或清除选定的数据端口位
+ * @param  GPIOx: 选择GPIO外设，x可以是(A..G)
+ * @param  GPIO_Pin: 指定要写入的端口位，可以是GPIO_Pin_x，x为(0..15)
+ * @param  BitVal: 指定要写入选定位的值，可以是BitAction枚举值之一：
+ *                 Bit_RESET: 清除端口引脚
+ *                 Bit_SET: 设置端口引脚
+ * @retval 无
+ * @example
+ *     GPIO_WriteBit(GPIOA, GPIO_Pin_0, Bit_SET);
+ */
+void GPIO_WriteBit(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin, BitAction BitVal);
+```
+
+### 12.GPIO_Write
+```c
+/**
+ * @brief  向指定的GPIO数据端口写入数据
+ * @param  GPIOx: 选择GPIO外设，x可以是(A..G)
+ * @param  PortVal: 指定要写入端口输出数据寄存器的值
+ * @retval 无
+ * @example
+ *     GPIO_Write(GPIOA, 0x00FF);
+ */
+void GPIO_Write(GPIO_TypeDef* GPIOx, uint16_t PortVal);
+```
+
+### 13.GPIO_PinLockConfig
+```c
+/**
+ * @brief  锁定GPIO引脚配置寄存器
+ * @param  GPIOx: 选择GPIO外设，x可以是(A..G)
+ * @param  GPIO_Pin: 指定要写入的端口位，可以是GPIO_Pin_x的任意组合，x为(0..15)
+ * @retval 无
+ * @example
+ *     GPIO_PinLockConfig(GPIOA, GPIO_Pin_0 | GPIO_Pin_1);
+ */
+void GPIO_PinLockConfig(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
+```
+
+### 14.GPIO_EventOutputConfig
+```c
+/**
+ * @brief  选择用作事件输出的GPIO引脚
+ * @param  GPIO_PortSource: 选择用作事件输出源的GPIO端口，可以是GPIO_PortSourceGPIOx，x为(A..E)
+ * @param  GPIO_PinSource: 指定事件输出的引脚，可以是GPIO_PinSourcex，x为(0..15)
+ * @retval 无
+ * @example
+ *     GPIO_EventOutputConfig(GPIO_PortSourceGPIOA, GPIO_PinSource0);
+ */
+void GPIO_EventOutputConfig(uint8_t GPIO_PortSource, uint8_t GPIO_PinSource);
+```
+
+### 15.GPIO_EventOutputCmd
+```c
+/**
+ * @brief  使能或禁用事件输出
+ * @param  NewState: 事件输出的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     GPIO_EventOutputCmd(ENABLE);
+ */
+void GPIO_EventOutputCmd(FunctionalState NewState);
+```
+
+### 16.GPIO_PinRemapConfig
+```c
+/**
+ * @brief  更改指定引脚的重映射
+ * @param  GPIO_Remap: 选择要重映射的引脚，可以是各种外设的重映射选项
+ * @param  NewState: 端口引脚重映射的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     GPIO_PinRemapConfig(GPIO_Remap_USART1, ENABLE);
+ */
+void GPIO_PinRemapConfig(uint32_t GPIO_Remap, FunctionalState NewState);
+```
+
+### 17.GPIO_EXTILineConfig
+```c
+/**
+ * @brief  选择用作EXTI线的GPIO引脚
+ * @param  GPIO_PortSource: 选择用作EXTI线源的GPIO端口，可以是GPIO_PortSourceGPIOx，x为(A..G)
+ * @param  GPIO_PinSource: 指定要配置的EXTI线，可以是GPIO_PinSourcex，x为(0..15)
+ * @retval 无
+ * @example
+ *     GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource0);
+ */
+void GPIO_EXTILineConfig(uint8_t GPIO_PortSource, uint8_t GPIO_PinSource);
+```
+
+### 18.GPIO_ETH_MediaInterfaceConfig
+```c
+/**
+ * @brief  选择以太网媒体接口
+ * @param  GPIO_ETH_MediaInterface: 指定媒体接口模式，可以是：
+ *                                  GPIO_ETH_MediaInterface_MII: MII模式
+ *                                  GPIO_ETH_MediaInterface_RMII: RMII模式
+ * @retval 无
+ * @example
+ *     GPIO_ETH_MediaInterfaceConfig(GPIO_ETH_MediaInterface_RMII);
+ */
+void GPIO_ETH_MediaInterfaceConfig(uint32_t GPIO_ETH_MediaInterface);
+```
+
+## 代码实现分析
+
+### 1. GPIO初始化函数分析
+
+`GPIO_Init`函数是GPIO模块的核心函数，它根据配置结构体来初始化GPIO引脚。该函数的主要特点：
+
+- **参数验证**：使用`assert_param`宏验证参数的有效性
+- **模式配置**：支持输入、输出、复用功能等多种模式
+- **速度配置**：输出模式下可配置引脚速度（2MHz、10MHz、50MHz）
+- **上下拉配置**：输入模式下可配置内部上下拉电阻
+
+### 2. 位操作函数分析
+
+`GPIO_SetBits`和`GPIO_ResetBits`函数使用BSRR（位设置/复位寄存器）和BRR（位复位寄存器）来实现原子操作：
+
+- **BSRR寄存器**：高16位用于复位，低16位用于设置
+- **BRR寄存器**：专门用于位复位操作
+- **原子操作**：避免读-修改-写操作中的竞态条件
+
+### 3. 引脚锁定机制
+
+`GPIO_PinLockConfig`函数实现了GPIO配置的锁定机制：
+
+- **锁定序列**：特定的写序列来锁定配置
+- **防止误操作**：锁定后配置寄存器无法被意外修改
+- **应用场景**：适用于关键引脚的配置保护
+
+### 4. 重映射功能
+
+`GPIO_PinRemapConfig`函数支持丰富的外设重映射功能：
+
+- **外设重映射**：SPI、I2C、USART、TIM等外设的引脚重映射
+- **调试接口重映射**：SWJ（SWD+JTAG）接口的配置
+- **以太网接口**：MII/RMII模式选择
+
+## 典型应用示例
+
+### 1. LED控制示例
+
+```c
+// 配置PC13为推挽输出，用于控制LED
+GPIO_InitTypeDef GPIO_InitStructure;
+GPIO_InitStructure.GPIO_Pin = GPIO_Pin_13;
+GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+// LED控制
+GPIO_SetBits(GPIOC, GPIO_Pin_13);    // LED熄灭
+GPIO_ResetBits(GPIOC, GPIO_Pin_13);  // LED点亮
+```
+
+### 2. 按键输入示例
+
+```c
+// 配置PA0为上拉输入，用于按键检测
+GPIO_InitTypeDef GPIO_InitStructure;
+GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+// 读取按键状态
+if(GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_0) == Bit_RESET) {
+    // 按键按下
+}
+```
+
+### 3. 外部中断配置示例
+
+```c
+// 配置PA0为外部中断源
+GPIO_InitTypeDef GPIO_InitStructure;
+GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+// 配置EXTI线
+GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource0);
+```
+
+## 总结
+
+STM32F10x的GPIO标准库提供了完整而强大的GPIO控制功能，包括：
+
+1. **灵活的配置选项**：支持多种输入输出模式
+2. **高效的位操作**：使用专用寄存器实现原子操作
+3. **丰富的重映射功能**：支持各种外设的引脚重映射
+4. **完善的保护机制**：提供引脚配置锁定功能
+5. **良好的可移植性**：标准化的API接口
+
+这些函数为STM32F10x系列微控制器的GPIO应用开发提供了坚实的基础，开发者可以根据具体需求选择合适的函数来实现各种GPIO控制功能。
+

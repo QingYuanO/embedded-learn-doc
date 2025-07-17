@@ -2,7 +2,8 @@
   "title": "STM32 标准库开发F1",
   "icon": "BookCheck",
   "pages": [
-    "introduction"
+    "introduction",
+    "stm32f10x_gpio"
   ],
   "root": true
 }
