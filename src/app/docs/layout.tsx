@@ -10,7 +10,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       <div className='min-h-screen' vaul-drawer-wrapper=''>
         <div className='absolute inset-0 -z-10 mx-0 max-w-none overflow-hidden'>
           <div className='absolute left-1/2 top-0 ml-[-30rem] h-[27rem] w-[85rem] dark:[mask-image:linear-gradient(white,transparent)]'>
-            <div className='absolute inset-0 bg-gradient-to-r from-[#FED201] to-[#FFF7CC] opacity-40 [mask-image:radial-gradient(farthest-side_at_top,white,transparent)] dark:from-[#FED201]/30 dark:to-[#FFD600]/30 dark:opacity-100'>
+            <div className='absolute inset-0 bg-gradient-to-r from-[#b43666] to-[#ff759a] opacity-40 [mask-image:radial-gradient(farthest-side_at_top,white,transparent)] dark:from-[#c43b69]/30 dark:to-[#ff75a1]/30 dark:opacity-100'>
               <svg
                 aria-hidden='true'
                 className='dark:fill-white/2.5 absolute inset-x-0 inset-y-[-50%] h-[200%] w-full skew-y-[-18deg] fill-black/40 stroke-black/50 mix-blend-overlay dark:stroke-white/5'
@@ -41,31 +41,32 @@ export default function Layout({ children }: { children: ReactNode }) {
         <DocsLayout
           {...baseOptions}
           tree={source.pageTree}
-          sidebar={{
-            // tabs: {
-            //   transform(option, node) {
-            //     const meta = source.getNodeMeta(node);
-            //     if (!meta || !node.icon) return option;
-            //     const color = `var(--${meta.file.dirname}-color, var(--color-fd-foreground))`;
-
-            //     return {
-            //       ...option,
-            //       icon: (
-            //         <div
-            //           className='[&_svg]:size-full rounded-lg size-full text-(--tab-color) max-md:bg-(--tab-color)/10 max-md:border max-md:p-1.5'
-            //           style={
-            //             {
-            //               '--tab-color': color,
-            //             } as object
-            //           }
-            //         >
-            //           {node.icon}
-            //         </div>
-            //       ),
-            //     };
-            //   },
-            // },
-          }}
+          sidebar={
+            {
+              // tabs: {
+              //   transform(option, node) {
+              //     const meta = source.getNodeMeta(node);
+              //     if (!meta || !node.icon) return option;
+              //     const color = `var(--${meta.file.dirname}-color, var(--color-fd-foreground))`;
+              //     return {
+              //       ...option,
+              //       icon: (
+              //         <div
+              //           className='[&_svg]:size-full rounded-lg size-full text-(--tab-color) max-md:bg-(--tab-color)/10 max-md:border max-md:p-1.5'
+              //           style={
+              //             {
+              //               '--tab-color': color,
+              //             } as object
+              //           }
+              //         >
+              //           {node.icon}
+              //         </div>
+              //       ),
+              //     };
+              //   },
+              // },
+            }
+          }
         >
           {children}
         </DocsLayout>
