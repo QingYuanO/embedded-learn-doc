@@ -3,7 +3,8 @@
   "icon": "BookCheck",
   "pages": [
     "introduction",
-    "stm32f10x_gpio"
+    "stm32f10x_gpio",
+    "stm32f10x_exti"
   ],
   "root": true
 }

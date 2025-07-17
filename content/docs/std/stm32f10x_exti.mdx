@@ -1,0 +1,317 @@
+---
+title: stm32f10x_exti
+description: STM32F10x EXTI（External Interrupt/Event Controller）外部中断/事件控制器是STM32微控制器中用于处理外部中断和事件的重要外设。本文档详细介绍STM32F10x标准库中EXTI相关的函数、结构体和数据类型。
+---
+
+## 数据类型定义
+
+### 枚举类型
+
+#### EXTI_Mode_TypeDef - EXTI模式枚举
+
+```c
+typedef enum
+{
+  EXTI_Mode_Interrupt = 0x00,  /* 中断模式 */
+  EXTI_Mode_Event = 0x04       /* 事件模式 */
+} EXTIMode_TypeDef;
+```
+
+**说明：**
+- `EXTI_Mode_Interrupt`：配置为中断模式，当检测到触发条件时会产生中断
+- `EXTI_Mode_Event`：配置为事件模式，当检测到触发条件时会产生事件（不产生中断）
+
+#### EXTI_Trigger_TypeDef - EXTI触发方式枚举
+
+```c
+typedef enum
+{
+  EXTI_Trigger_Rising = 0x08,        /* 上升沿触发 */
+  EXTI_Trigger_Falling = 0x0C,       /* 下降沿触发 */
+  EXTI_Trigger_Rising_Falling = 0x10 /* 上升沿和下降沿都触发 */
+} EXTITrigger_TypeDef;
+```
+
+**说明：**
+- `EXTI_Trigger_Rising`：仅在信号上升沿触发
+- `EXTI_Trigger_Falling`：仅在信号下降沿触发
+- `EXTI_Trigger_Rising_Falling`：在信号上升沿和下降沿都触发
+
+### 结构体类型
+
+#### EXTI_InitTypeDef - EXTI初始化结构体
+
+```c
+typedef struct
+{
+  uint32_t EXTI_Line;               /* EXTI线路选择 */
+  EXTIMode_TypeDef EXTI_Mode;       /* EXTI模式选择 */
+  EXTITrigger_TypeDef EXTI_Trigger; /* EXTI触发方式选择 */
+  FunctionalState EXTI_LineCmd;     /* EXTI线路使能状态 */
+} EXTI_InitTypeDef;
+```
+
+**成员说明：**
+- `EXTI_Line`：指定要配置的EXTI线路，可以是单个线路或多个线路的组合
+- `EXTI_Mode`：指定EXTI的工作模式（中断模式或事件模式）
+- `EXTI_Trigger`：指定触发信号的边沿类型
+- `EXTI_LineCmd`：指定EXTI线路的使能状态（ENABLE或DISABLE）
+
+## EXTI线路定义
+
+STM32F10x支持20条EXTI线路（Line0-Line19），每条线路都有特定的功能：
+
+```c
+#define EXTI_Line0       ((uint32_t)0x00001)  /* 外部中断线路0 */
+#define EXTI_Line1       ((uint32_t)0x00002)  /* 外部中断线路1 */
+#define EXTI_Line2       ((uint32_t)0x00004)  /* 外部中断线路2 */
+#define EXTI_Line3       ((uint32_t)0x00008)  /* 外部中断线路3 */
+#define EXTI_Line4       ((uint32_t)0x00010)  /* 外部中断线路4 */
+#define EXTI_Line5       ((uint32_t)0x00020)  /* 外部中断线路5 */
+#define EXTI_Line6       ((uint32_t)0x00040)  /* 外部中断线路6 */
+#define EXTI_Line7       ((uint32_t)0x00080)  /* 外部中断线路7 */
+#define EXTI_Line8       ((uint32_t)0x00100)  /* 外部中断线路8 */
+#define EXTI_Line9       ((uint32_t)0x00200)  /* 外部中断线路9 */
+#define EXTI_Line10      ((uint32_t)0x00400)  /* 外部中断线路10 */
+#define EXTI_Line11      ((uint32_t)0x00800)  /* 外部中断线路11 */
+#define EXTI_Line12      ((uint32_t)0x01000)  /* 外部中断线路12 */
+#define EXTI_Line13      ((uint32_t)0x02000)  /* 外部中断线路13 */
+#define EXTI_Line14      ((uint32_t)0x04000)  /* 外部中断线路14 */
+#define EXTI_Line15      ((uint32_t)0x08000)  /* 外部中断线路15 */
+#define EXTI_Line16      ((uint32_t)0x10000)  /* 连接到PVD输出 */
+#define EXTI_Line17      ((uint32_t)0x20000)  /* 连接到RTC闹钟事件 */
+#define EXTI_Line18      ((uint32_t)0x40000)  /* 连接到USB设备/OTG FS从挂起唤醒事件 */
+#define EXTI_Line19      ((uint32_t)0x80000)  /* 连接到以太网唤醒事件 */
+```
+
+## 标准库函数详解
+
+### 1. EXTI_DeInit
+
+```c
+/**
+ * @brief  将EXTI外设寄存器重设为默认值
+ * @param  无
+ * @retval 无
+ * @example
+ *     EXTI_DeInit();
+ */
+void EXTI_DeInit(void);
+```
+
+**功能说明：**
+将EXTI外设的所有寄存器恢复到复位状态，清除所有配置。
+
+**使用场景：**
+- 系统初始化时重置EXTI配置
+- 需要重新配置EXTI时先清除之前的设置
+
+### 2. EXTI_Init
+
+```c
+/**
+ * @brief  根据EXTI_InitStruct中指定的参数初始化EXTI外设
+ * @param  EXTI_InitStruct: 指向EXTI_InitTypeDef结构体的指针，包含EXTI的配置信息
+ * @retval 无
+ * @example
+ *     EXTI_InitTypeDef EXTI_InitStructure;
+ *     EXTI_InitStructure.EXTI_Line = EXTI_Line0;
+ *     EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
+ *     EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising;
+ *     EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+ *     EXTI_Init(&EXTI_InitStructure);
+ */
+void EXTI_Init(EXTI_InitTypeDef* EXTI_InitStruct);
+```
+
+**功能说明：**
+根据传入的结构体参数配置EXTI外设，包括线路选择、工作模式、触发方式和使能状态。
+
+**使用场景：**
+- 配置外部中断的基本参数
+- 设置按键、传感器等外部信号的触发条件
+
+### 3. EXTI_StructInit
+
+```c
+/**
+ * @brief  将EXTI_InitStruct中的每个参数按默认值填充
+ * @param  EXTI_InitStruct: 指向EXTI_InitTypeDef结构体的指针，将被填充默认值
+ * @retval 无
+ * @example
+ *     EXTI_InitTypeDef EXTI_InitStructure;
+ *     EXTI_StructInit(&EXTI_InitStructure);
+ */
+void EXTI_StructInit(EXTI_InitTypeDef* EXTI_InitStruct);
+```
+
+**功能说明：**
+将EXTI初始化结构体的所有成员设置为默认值，便于后续配置。
+
+**默认值：**
+- EXTI_Line = EXTI_Line0
+- EXTI_Mode = EXTI_Mode_Interrupt
+- EXTI_Trigger = EXTI_Trigger_Rising
+- EXTI_LineCmd = DISABLE
+
+### 4. EXTI_GenerateSWInterrupt
+
+```c
+/**
+ * @brief  产生一个软件中断
+ * @param  EXTI_Line: 指定要产生软件中断的EXTI线路
+ * @retval 无
+ * @example
+ *     EXTI_GenerateSWInterrupt(EXTI_Line0);
+ */
+void EXTI_GenerateSWInterrupt(uint32_t EXTI_Line);
+```
+
+**功能说明：**
+通过软件方式产生指定EXTI线路的中断，无需外部信号触发。
+
+**使用场景：**
+- 软件测试中断处理程序
+- 模拟外部中断信号
+- 调试中断系统
+
+### 5. EXTI_GetFlagStatus
+
+```c
+/**
+ * @brief  检查指定的EXTI线路标志位是否被设置
+ * @param  EXTI_Line: 指定要检查的EXTI线路
+ * @retval FlagStatus: 返回EXTI线路的状态（SET或RESET）
+ * @example
+ *     if(EXTI_GetFlagStatus(EXTI_Line0) == SET)
+ *     {
+ *         // 处理中断事件
+ *     }
+ */
+FlagStatus EXTI_GetFlagStatus(uint32_t EXTI_Line);
+```
+
+**功能说明：**
+检查指定EXTI线路的中断标志位状态，用于轮询方式检测中断事件。
+
+**返回值：**
+- `SET`：标志位已设置，表示有中断事件发生
+- `RESET`：标志位未设置，表示无中断事件
+
+### 6. EXTI_ClearFlag
+
+```c
+/**
+ * @brief  清除EXTI线路的中断标志位
+ * @param  EXTI_Line: 指定要清除标志位的EXTI线路
+ * @retval 无
+ * @example
+ *     EXTI_ClearFlag(EXTI_Line0);
+ */
+void EXTI_ClearFlag(uint32_t EXTI_Line);
+```
+
+**功能说明：**
+清除指定EXTI线路的中断标志位，通常在中断处理程序中调用。
+
+**使用场景：**
+- 中断服务程序中清除中断标志
+- 轮询方式处理中断时清除标志位
+
+### 7. EXTI_GetITStatus
+
+```c
+/**
+ * @brief  检查指定的EXTI线路中断是否发生
+ * @param  EXTI_Line: 指定要检查的EXTI线路
+ * @retval ITStatus: 返回中断状态（SET或RESET）
+ * @example
+ *     if(EXTI_GetITStatus(EXTI_Line0) == SET)
+ *     {
+ *         // 中断已发生
+ *     }
+ */
+ITStatus EXTI_GetITStatus(uint32_t EXTI_Line);
+```
+
+**功能说明：**
+检查指定EXTI线路的中断状态，与GetFlagStatus类似，但专门用于中断处理。
+
+**返回值：**
+- `SET`：中断已发生
+- `RESET`：中断未发生
+
+### 8. EXTI_ClearITPendingBit
+
+```c
+/**
+ * @brief  清除EXTI线路的中断挂起位
+ * @param  EXTI_Line: 指定要清除挂起位的EXTI线路
+ * @retval 无
+ * @example
+ *     EXTI_ClearITPendingBit(EXTI_Line0);
+ */
+void EXTI_ClearITPendingBit(uint32_t EXTI_Line);
+```
+
+**功能说明：**
+清除指定EXTI线路的中断挂起位，通常在中断服务程序中调用。
+
+**使用场景：**
+- 中断服务程序中清除中断挂起位
+- 确保中断处理完成后清除状态
+
+## 使用示例
+
+### 基本配置示例
+
+```c
+void EXTI_Configuration(void)
+{
+    EXTI_InitTypeDef EXTI_InitStructure;
+    
+    // 使能AFIO时钟
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+    
+    // 配置EXTI线路0为中断模式，上升沿触发
+    EXTI_InitStructure.EXTI_Line = EXTI_Line0;
+    EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
+    EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising;
+    EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+    EXTI_Init(&EXTI_InitStructure);
+    
+    // 配置GPIO连接到EXTI线路0
+    GPIO_EXTILineConfig(GPIO_PortSourceGPIOA, GPIO_PinSource0);
+    
+    // 使能NVIC中断
+    NVIC_EnableIRQ(EXTI0_IRQn);
+}
+```
+
+### 中断服务程序示例
+
+```c
+void EXTI0_IRQHandler(void)
+{
+    if(EXTI_GetITStatus(EXTI_Line0) == SET)
+    {
+        // 处理中断事件
+        LED_Toggle();  // 翻转LED状态
+        
+        // 清除中断挂起位
+        EXTI_ClearITPendingBit(EXTI_Line0);
+    }
+}
+```
+
+## 注意事项
+
+1. **时钟使能**：使用EXTI前需要使能AFIO时钟
+2. **GPIO配置**：需要将GPIO引脚连接到对应的EXTI线路
+3. **中断优先级**：合理设置中断优先级避免中断嵌套问题
+4. **标志位清除**：在中断服务程序中必须清除中断标志位
+5. **线路限制**：同一时刻一个GPIO端口只能有一个引脚连接到特定的EXTI线路
+
+## 总结
+
+STM32F10x EXTI标准库提供了完整的外部中断配置和处理功能，通过合理使用这些函数和结构体，可以轻松实现外部信号的检测和响应。掌握这些API的使用方法，对于开发基于STM32的嵌入式应用具有重要意义。

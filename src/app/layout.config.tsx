@@ -14,7 +14,7 @@ export const baseOptions: BaseLayoutProps = {
       <>
         <div className='flex items-center justify-center gap-2'>
           <Image src='/logo.png' alt='Logo' width={36} height={36} />
-          <span className='bg-primary from-foreground via-rose-200 to-primary bg-clip-text font-semibold text-transparent dark:bg-gradient-to-b '>
+          <span className='bg-[var(--primary)] from-foreground via-rose-200 to-[var(--primary)] bg-clip-text font-semibold text-transparent dark:bg-gradient-to-b '>
             Embedded Learning
           </span>
         </div>
