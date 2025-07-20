@@ -8,7 +8,7 @@
     "tim",
     "adc",
     "dma",
-    "communication-bus-protocol"
+    "uart"
   ],
   "defaultOpen": true,
   "root": true
