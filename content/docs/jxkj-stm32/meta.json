@@ -8,7 +8,8 @@
     "tim",
     "adc",
     "dma",
-    "uart"
+    "uart",
+    "i2c"
   ],
   "defaultOpen": true,
   "root": true

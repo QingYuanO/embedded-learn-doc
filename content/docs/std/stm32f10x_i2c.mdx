@@ -1,0 +1,876 @@
+---
+title: stm32f10x_i2c
+description: STM32F10x I2C 外设标准库函数参考文档
+---
+
+## 数据类型定义
+
+### 枚举类型
+
+#### I2C_Mode_TypeDef - I2C工作模式枚举
+
+```c
+typedef enum
+{
+  I2C_Mode_I2C = 0x0000,           /* 标准I2C模式 */
+  I2C_Mode_SMBusDevice = 0x0002,   /* SMBus设备模式 */
+  I2C_Mode_SMBusHost = 0x000A      /* SMBus主机模式 */
+} I2C_Mode_TypeDef;
+```
+
+**说明：**
+- `I2C_Mode_I2C`：标准I2C通信模式
+- `I2C_Mode_SMBusDevice`：SMBus设备模式，支持SMBus协议
+- `I2C_Mode_SMBusHost`：SMBus主机模式，具有SMBus主机功能
+
+#### I2C_DutyCycle_TypeDef - I2C快速模式占空比枚举
+
+```c
+typedef enum
+{
+  I2C_DutyCycle_2 = 0xBFFF,       /* 快速模式占空比 Tlow/Thigh = 2 */
+  I2C_DutyCycle_16_9 = 0x4000     /* 快速模式占空比 Tlow/Thigh = 16/9 */
+} I2C_DutyCycle_TypeDef;
+```
+
+**说明：**
+- `I2C_DutyCycle_2`：快速模式下时钟低电平与高电平比例为2:1
+- `I2C_DutyCycle_16_9`：快速模式下时钟低电平与高电平比例为16:9
+
+#### I2C_Ack_TypeDef - I2C应答配置枚举
+
+```c
+typedef enum
+{
+  I2C_Ack_Disable = 0x0000,       /* 失能应答 */
+  I2C_Ack_Enable = 0x0400         /* 使能应答 */
+} I2C_Ack_TypeDef;
+```
+
+**说明：**
+- `I2C_Ack_Disable`：关闭自动应答功能
+- `I2C_Ack_Enable`：开启自动应答功能
+
+#### I2C_Direction_TypeDef - I2C传输方向枚举
+
+```c
+typedef enum
+{
+  I2C_Direction_Transmitter = 0x00,  /* 发送器模式 */
+  I2C_Direction_Receiver = 0x01      /* 接收器模式 */
+} I2C_Direction_TypeDef;
+```
+
+**说明：**
+- `I2C_Direction_Transmitter`：主机发送模式
+- `I2C_Direction_Receiver`：主机接收模式
+
+#### I2C_AcknowledgedAddress_TypeDef - I2C地址模式枚举
+
+```c
+typedef enum
+{
+  I2C_AcknowledgedAddress_7bit = 0x4000,   /* 7位地址模式 */
+  I2C_AcknowledgedAddress_10bit = 0xC000   /* 10位地址模式 */
+} I2C_AcknowledgedAddress_TypeDef;
+```
+
+**说明：**
+- `I2C_AcknowledgedAddress_7bit`：使用7位设备地址
+- `I2C_AcknowledgedAddress_10bit`：使用10位设备地址
+
+### 结构体类型
+
+#### I2C_InitTypeDef - I2C初始化结构体
+
+```c
+typedef struct
+{
+  uint32_t I2C_ClockSpeed;          /* I2C时钟频率配置 */
+  uint16_t I2C_Mode;                /* I2C工作模式选择 */
+  uint16_t I2C_DutyCycle;           /* I2C快速模式占空比配置 */
+  uint16_t I2C_OwnAddress1;         /* I2C设备自身地址 */
+  uint16_t I2C_Ack;                 /* I2C应答功能使能 */
+  uint16_t I2C_AcknowledgedAddress; /* I2C地址长度选择 */
+} I2C_InitTypeDef;
+```
+
+**成员说明：**
+- `I2C_ClockSpeed`：指定I2C时钟频率，范围1Hz到400kHz
+- `I2C_Mode`：指定I2C工作模式（I2C模式、SMBus设备模式、SMBus主机模式）
+- `I2C_DutyCycle`：指定快速模式下的占空比配置
+- `I2C_OwnAddress1`：指定设备自身的第一个地址
+- `I2C_Ack`：指定应答使能控制
+- `I2C_AcknowledgedAddress`：指定地址长度选择（7位或10位）
+
+## I2C寄存器定义
+
+STM32F10x I2C外设包含以下寄存器：
+
+```c
+#define I2C_Register_CR1     ((uint8_t)0x00)  /* 控制寄存器1 */
+#define I2C_Register_CR2     ((uint8_t)0x04)  /* 控制寄存器2 */
+#define I2C_Register_OAR1    ((uint8_t)0x08)  /* 自身地址寄存器1 */
+#define I2C_Register_OAR2    ((uint8_t)0x0C)  /* 自身地址寄存器2 */
+#define I2C_Register_DR      ((uint8_t)0x10)  /* 数据寄存器 */
+#define I2C_Register_SR1     ((uint8_t)0x14)  /* 状态寄存器1 */
+#define I2C_Register_SR2     ((uint8_t)0x18)  /* 状态寄存器2 */
+#define I2C_Register_CCR     ((uint8_t)0x1C)  /* 时钟控制寄存器 */
+#define I2C_Register_TRISE   ((uint8_t)0x20)  /* 上升时间寄存器 */
+```
+
+## I2C中断标志定义
+
+### 基本中断类型
+
+```c
+#define I2C_IT_BUF    ((uint16_t)0x0400)  /* 缓冲区中断 */
+#define I2C_IT_EVT    ((uint16_t)0x0200)  /* 事件中断 */
+#define I2C_IT_ERR    ((uint16_t)0x0100)  /* 错误中断 */
+```
+
+### 具体中断标志
+
+```c
+#define I2C_IT_SMBALERT  ((uint32_t)0x01008000)  /* SMBus警报中断 */
+#define I2C_IT_TIMEOUT   ((uint32_t)0x01004000)  /* 超时/低电平检测中断 */
+#define I2C_IT_PECERR    ((uint32_t)0x01001000)  /* PEC错误中断 */
+#define I2C_IT_OVR       ((uint32_t)0x01000800)  /* 溢出/欠载中断 */
+#define I2C_IT_AF        ((uint32_t)0x01000400)  /* 应答失败中断 */
+#define I2C_IT_ARLO      ((uint32_t)0x01000200)  /* 仲裁丢失中断 */
+#define I2C_IT_BERR      ((uint32_t)0x01000100)  /* 总线错误中断 */
+#define I2C_IT_TXE       ((uint32_t)0x06000080)  /* 数据寄存器空中断 */
+#define I2C_IT_RXNE      ((uint32_t)0x06000040)  /* 数据寄存器非空中断 */
+#define I2C_IT_STOPF     ((uint32_t)0x02000010)  /* 停止条件检测中断 */
+#define I2C_IT_ADD10     ((uint32_t)0x02000008)  /* 10位地址头检测中断 */
+#define I2C_IT_BTF       ((uint32_t)0x02000004)  /* 字节传输完成中断 */
+#define I2C_IT_ADDR      ((uint32_t)0x02000002)  /* 地址匹配中断 */
+#define I2C_IT_SB        ((uint32_t)0x02000001)  /* 起始位检测中断 */
+```
+
+## I2C事件定义
+
+### 主机模式事件
+
+```c
+/* 主机模式选择事件 - EV5 */
+#define I2C_EVENT_MASTER_MODE_SELECT                      ((uint32_t)0x00030001)
+
+/* 主机发送器模式选择事件 - EV6 */
+#define I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED        ((uint32_t)0x00070082)
+
+/* 主机接收器模式选择事件 - EV6 */
+#define I2C_EVENT_MASTER_RECEIVER_MODE_SELECTED           ((uint32_t)0x00030002)
+
+/* 10位地址模式事件 - EV9 */
+#define I2C_EVENT_MASTER_MODE_ADDRESS10                   ((uint32_t)0x00030008)
+
+/* 主机接收到字节事件 - EV7 */
+#define I2C_EVENT_MASTER_BYTE_RECEIVED                    ((uint32_t)0x00030040)
+
+/* 主机字节发送中事件 - EV8 */
+#define I2C_EVENT_MASTER_BYTE_TRANSMITTING                ((uint32_t)0x00070080)
+
+/* 主机字节发送完成事件 - EV8_2 */
+#define I2C_EVENT_MASTER_BYTE_TRANSMITTED                 ((uint32_t)0x00070084)
+```
+
+### 从机模式事件
+
+```c
+/* 从机接收器地址匹配事件 - EV1 */
+#define I2C_EVENT_SLAVE_RECEIVER_ADDRESS_MATCHED          ((uint32_t)0x00020002)
+
+/* 从机发送器地址匹配事件 - EV1 */
+#define I2C_EVENT_SLAVE_TRANSMITTER_ADDRESS_MATCHED       ((uint32_t)0x00060082)
+
+/* 从机接收到字节事件 - EV2 */
+#define I2C_EVENT_SLAVE_BYTE_RECEIVED                     ((uint32_t)0x00020040)
+
+/* 从机停止条件检测事件 - EV4 */
+#define I2C_EVENT_SLAVE_STOP_DETECTED                     ((uint32_t)0x00000010)
+
+/* 从机字节发送完成事件 - EV3 */
+#define I2C_EVENT_SLAVE_BYTE_TRANSMITTED                  ((uint32_t)0x00060084)
+
+/* 从机应答失败事件 - EV3_2 */
+#define I2C_EVENT_SLAVE_ACK_FAILURE                       ((uint32_t)0x00000400)
+```
+
+## 标准库函数详解
+
+### 1. I2C_DeInit
+
+```c
+/**
+ * @brief  将I2C外设寄存器重设为默认值
+ * @param  I2Cx: 选择要重置的I2C外设，可以是I2C1或I2C2
+ * @retval 无
+ * @example
+ *     I2C_DeInit(I2C1);
+ */
+void I2C_DeInit(I2C_TypeDef* I2Cx);
+```
+
+**功能说明：**
+将指定I2C外设的所有寄存器恢复到复位状态，清除所有配置。
+
+### 2. I2C_Init
+
+```c
+/**
+ * @brief  使用指定参数初始化I2C外设
+ * @param  I2Cx: 选择要初始化的I2C外设，可以是I2C1或I2C2
+ * @param  I2C_InitStruct: 指向I2C_InitTypeDef结构体的指针，包含配置信息
+ * @retval 无
+ * @example
+ *     I2C_InitTypeDef I2C_InitStructure;
+ *     I2C_InitStructure.I2C_ClockSpeed = 100000;
+ *     I2C_InitStructure.I2C_Mode = I2C_Mode_I2C;
+ *     I2C_InitStructure.I2C_Ack = I2C_Ack_Enable;
+ *     I2C_Init(I2C1, &I2C_InitStructure);
+ */
+void I2C_Init(I2C_TypeDef* I2Cx, I2C_InitTypeDef* I2C_InitStruct);
+```
+
+**功能说明：**
+根据传入的结构体参数配置I2C外设，包括时钟频率、工作模式、应答功能等。
+
+### 3. I2C_StructInit
+
+```c
+/**
+ * @brief  使用默认值填充I2C_InitTypeDef结构体
+ * @param  I2C_InitStruct: 指向要初始化的I2C_InitTypeDef结构体的指针
+ * @retval 无
+ * @example
+ *     I2C_InitTypeDef I2C_InitStructure;
+ *     I2C_StructInit(&I2C_InitStructure);
+ */
+void I2C_StructInit(I2C_InitTypeDef* I2C_InitStruct);
+```
+
+**功能说明：**
+将I2C初始化结构体的所有成员设置为默认值，便于后续配置。
+
+### 4. I2C_Cmd
+
+```c
+/**
+ * @brief  使能或失能指定的I2C外设
+ * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
+ * @param  NewState: I2C外设的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     I2C_Cmd(I2C1, ENABLE);
+ */
+void I2C_Cmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
+```
+
+**功能说明：**
+使能或失能指定的I2C外设，控制I2C外设的开启和关闭。
+
+### 5. I2C_DMACmd
+
+```c
+/**
+ * @brief  使能或失能指定I2C的DMA请求
+ * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
+ * @param  NewState: I2C DMA传输的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     I2C_DMACmd(I2C1, ENABLE);
+ */
+void I2C_DMACmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
+```
+
+**功能说明：**
+配置I2C的DMA请求功能，使能后I2C可以通过DMA进行数据传输。
+
+### 6. I2C_DMALastTransferCmd
+
+```c
+/**
+ * @brief  指定下一个DMA传输是否为最后一个传输
+ * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
+ * @param  NewState: DMA最后传输状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     I2C_DMALastTransferCmd(I2C1, ENABLE);
+ */
+void I2C_DMALastTransferCmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
+```
+
+**功能说明：**
+设置DMA传输标志，指示当前传输是否为最后一次DMA传输。
+
+### 7. I2C_GenerateSTART
+
+```c
+/**
+ * @brief  产生I2C通信的START条件
+ * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
+ * @param  NewState: START条件产生状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     I2C_GenerateSTART(I2C1, ENABLE);
+ */
+void I2C_GenerateSTART(I2C_TypeDef* I2Cx, FunctionalState NewState);
+```
+
+**功能说明：**
+在I2C总线上产生START条件，开始一次I2C通信。
+
+### 8. I2C_GenerateSTOP
+
+```c
+/**
+ * @brief  产生I2C通信的STOP条件
+ * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
+ * @param  NewState: STOP条件产生状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     I2C_GenerateSTOP(I2C1, ENABLE);
+ */
+void I2C_GenerateSTOP(I2C_TypeDef* I2Cx, FunctionalState NewState);
+```
+
+**功能说明：**
+在I2C总线上产生STOP条件，结束一次I2C通信。
+
+### 9. I2C_AcknowledgeConfig
+
+```c
+/**
+ * @brief  使能或失能指定I2C的应答功能
+ * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
+ * @param  NewState: I2C应答的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     I2C_AcknowledgeConfig(I2C1, ENABLE);
+ */
+void I2C_AcknowledgeConfig(I2C_TypeDef* I2Cx, FunctionalState NewState);
+```
+
+**功能说明：**
+控制I2C外设的应答功能，在接收模式下决定是否发送ACK信号。
+
+### 10. I2C_OwnAddress2Config
+
+```c
+/**
+ * @brief  配置指定I2C的自身地址2
+ * @param  I2Cx: 选择要配置的I2C外设，可以是I2C1或I2C2
+ * @param  Address: 指定自身地址2的值
+ * @retval 无
+ * @example
+ *     I2C_OwnAddress2Config(I2C1, 0x30);
+ */
+void I2C_OwnAddress2Config(I2C_TypeDef* I2Cx, uint8_t Address);
+```
+
+**功能说明：**
+配置I2C外设的第二个自身地址，用于双地址模式。
+
+### 11. I2C_DualAddressCmd
+
+```c
+/**
+ * @brief  使能或失能指定I2C的双地址模式
+ * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
+ * @param  NewState: I2C双地址模式的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     I2C_DualAddressCmd(I2C1, ENABLE);
+ */
+void I2C_DualAddressCmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
+```
+
+**功能说明：**
+使能双地址模式，允许I2C外设响应两个不同的地址。
+
+### 12. I2C_GeneralCallCmd
+
+```c
+/**
+ * @brief  使能或失能指定I2C的广播呼叫功能
+ * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
+ * @param  NewState: I2C广播呼叫的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     I2C_GeneralCallCmd(I2C1, ENABLE);
+ */
+void I2C_GeneralCallCmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
+```
+
+**功能说明：**
+使能广播呼叫功能，允许I2C外设响应地址0x00的广播通信。
+
+### 13. I2C_Send7bitAddress
+
+```c
+/**
+ * @brief  发送一个7位地址字节来选择从设备
+ * @param  I2Cx: 选择要发送地址的I2C外设，可以是I2C1或I2C2
+ * @param  Address: 指定要发送的从设备地址
+ * @param  I2C_Direction: 指定I2C设备是发送器还是接收器
+ * @retval 无
+ * @example
+ *     I2C_Send7bitAddress(I2C1, 0xA0, I2C_Direction_Transmitter);
+ */
+void I2C_Send7bitAddress(I2C_TypeDef* I2Cx, uint8_t Address, uint8_t I2C_Direction);
+```
+
+**功能说明：**
+发送7位从设备地址和读写位，用于选择要通信的从设备。
+
+### 14. I2C_SendData
+
+```c
+/**
+ * @brief  通过I2C外设发送一个数据字节
+ * @param  I2Cx: 选择要发送数据的I2C外设，可以是I2C1或I2C2
+ * @param  Data: 要发送的数据字节
+ * @retval 无
+ * @example
+ *     I2C_SendData(I2C1, 0x55);
+ */
+void I2C_SendData(I2C_TypeDef* I2Cx, uint8_t Data);
+```
+
+**功能说明：**
+通过I2C数据寄存器发送一个字节的数据。
+
+### 15. I2C_ReceiveData
+
+```c
+/**
+ * @brief  从指定的I2C外设接收一个数据字节
+ * @param  I2Cx: 选择要接收数据的I2C外设，可以是I2C1或I2C2
+ * @retval 接收到的数据字节
+ * @example
+ *     uint8_t receivedData = I2C_ReceiveData(I2C1);
+ */
+uint8_t I2C_ReceiveData(I2C_TypeDef* I2Cx);
+```
+
+**功能说明：**
+从I2C数据寄存器读取接收到的数据字节。
+
+### 16. I2C_ReadRegister
+
+```c
+/**
+ * @brief  读取指定I2C寄存器的值并返回
+ * @param  I2Cx: 选择要读取的I2C外设，可以是I2C1或I2C2
+ * @param  I2C_Register: 指定要读取的寄存器
+ * @retval 寄存器的值
+ * @example
+ *     uint16_t regValue = I2C_ReadRegister(I2C1, I2C_Register_SR1);
+ */
+uint16_t I2C_ReadRegister(I2C_TypeDef* I2Cx, uint8_t I2C_Register);
+```
+
+**功能说明：**
+读取I2C外设指定寄存器的当前值。
+
+### 17. I2C_SoftwareResetCmd
+
+```c
+/**
+ * @brief  使能或失能指定I2C的软件复位
+ * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
+ * @param  NewState: I2C软件复位的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     I2C_SoftwareResetCmd(I2C1, ENABLE);
+ */
+void I2C_SoftwareResetCmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
+```
+
+**功能说明：**
+执行I2C外设的软件复位，用于错误恢复和状态重置。
+
+### 18. I2C_NACKPositionConfig
+
+```c
+/**
+ * @brief  选择指定I2C的NACK位置
+ * @param  I2Cx: 选择要配置的I2C外设，可以是I2C1或I2C2
+ * @param  I2C_NACKPosition: 指定NACK位置
+ * @retval 无
+ * @example
+ *     I2C_NACKPositionConfig(I2C1, I2C_NACKPosition_Current);
+ */
+void I2C_NACKPositionConfig(I2C_TypeDef* I2Cx, uint16_t I2C_NACKPosition);
+```
+
+**功能说明：**
+配置NACK信号的发送位置，用于多字节接收的控制。
+
+### 19. I2C_SMBusAlertConfig
+
+```c
+/**
+ * @brief  驱动指定I2C的SMBusAlert引脚为高电平或低电平
+ * @param  I2Cx: 选择要配置的I2C外设，可以是I2C1或I2C2
+ * @param  I2C_SMBusAlert: 指定SMBusAlert引脚电平
+ * @retval 无
+ * @example
+ *     I2C_SMBusAlertConfig(I2C1, I2C_SMBusAlert_Low);
+ */
+void I2C_SMBusAlertConfig(I2C_TypeDef* I2Cx, uint16_t I2C_SMBusAlert);
+```
+
+**功能说明：**
+配置SMBus警报引脚的电平状态。
+
+### 20. I2C_TransmitPEC
+
+```c
+/**
+ * @brief  使能或失能指定I2C的PEC传输
+ * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
+ * @param  NewState: I2C PEC传输的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     I2C_TransmitPEC(I2C1, ENABLE);
+ */
+void I2C_TransmitPEC(I2C_TypeDef* I2Cx, FunctionalState NewState);
+```
+
+**功能说明：**
+控制PEC（包错误检查）字节的传输。
+
+### 21. I2C_PECPositionConfig
+
+```c
+/**
+ * @brief  选择指定I2C的PEC位置
+ * @param  I2Cx: 选择要配置的I2C外设，可以是I2C1或I2C2
+ * @param  I2C_PECPosition: 指定PEC位置
+ * @retval 无
+ * @example
+ *     I2C_PECPositionConfig(I2C1, I2C_PECPosition_Current);
+ */
+void I2C_PECPositionConfig(I2C_TypeDef* I2Cx, uint16_t I2C_PECPosition);
+```
+
+**功能说明：**
+配置PEC字节在传输中的位置。
+
+### 22. I2C_CalculatePEC
+
+```c
+/**
+ * @brief  使能或失能指定I2C的PEC值计算
+ * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
+ * @param  NewState: I2C PEC计算的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     I2C_CalculatePEC(I2C1, ENABLE);
+ */
+void I2C_CalculatePEC(I2C_TypeDef* I2Cx, FunctionalState NewState);
+```
+
+**功能说明：**
+使能或失能PEC值的自动计算功能。
+
+### 23. I2C_GetPEC
+
+```c
+/**
+ * @brief  返回指定I2C的PEC值
+ * @param  I2Cx: 选择要获取PEC值的I2C外设，可以是I2C1或I2C2
+ * @retval PEC值
+ * @example
+ *     uint8_t pecValue = I2C_GetPEC(I2C1);
+ */
+uint8_t I2C_GetPEC(I2C_TypeDef* I2Cx);
+```
+
+**功能说明：**
+获取当前计算的PEC值。
+
+### 24. I2C_ARPCmd
+
+```c
+/**
+ * @brief  使能或失能指定I2C的ARP功能
+ * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
+ * @param  NewState: I2C ARP的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     I2C_ARPCmd(I2C1, ENABLE);
+ */
+void I2C_ARPCmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
+```
+
+**功能说明：**
+使能或失能ARP（地址解析协议）功能。
+
+### 25. I2C_StretchClockCmd
+
+```c
+/**
+ * @brief  使能或失能指定I2C的时钟延展功能
+ * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
+ * @param  NewState: I2C时钟延展的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     I2C_StretchClockCmd(I2C1, DISABLE);
+ */
+void I2C_StretchClockCmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
+```
+
+**功能说明：**
+控制时钟延展功能，当失能时从设备不能延长SCL的低电平时间。
+
+### 26. I2C_FastModeDutyCycleConfig
+
+```c
+/**
+ * @brief  选择指定I2C的快速模式占空比
+ * @param  I2Cx: 选择要配置的I2C外设，可以是I2C1或I2C2
+ * @param  I2C_DutyCycle: 指定快速模式占空比
+ * @retval 无
+ * @example
+ *     I2C_FastModeDutyCycleConfig(I2C1, I2C_DutyCycle_2);
+ */
+void I2C_FastModeDutyCycleConfig(I2C_TypeDef* I2Cx, uint16_t I2C_DutyCycle);
+```
+
+**功能说明：**
+配置I2C快速模式下的时钟占空比。
+
+### 27. I2C_CheckEvent
+
+```c
+/**
+ * @brief  检查最后一个I2C事件是否等于传递的事件
+ * @param  I2Cx: 选择要检查的I2C外设，可以是I2C1或I2C2
+ * @param  I2C_EVENT: 指定要检查的事件
+ * @retval 事件状态，SUCCESS或ERROR
+ * @example
+ *     if(I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_MODE_SELECT) == SUCCESS)
+ *     {
+ *         // 主机模式选择事件发生
+ *     }
+ */
+ErrorStatus I2C_CheckEvent(I2C_TypeDef* I2Cx, uint32_t I2C_EVENT);
+```
+
+**功能说明：**
+检查I2C状态寄存器中是否发生了指定的事件，用于轮询方式检测I2C状态。
+
+### 28. I2C_GetLastEvent
+
+```c
+/**
+ * @brief  返回最后一个I2C事件
+ * @param  I2Cx: 选择要获取事件的I2C外设，可以是I2C1或I2C2
+ * @retval 最后一个事件值
+ * @example
+ *     uint32_t lastEvent = I2C_GetLastEvent(I2C1);
+ */
+uint32_t I2C_GetLastEvent(I2C_TypeDef* I2Cx);
+```
+
+**功能说明：**
+获取I2C状态寄存器的组合值，包含SR1和SR2寄存器信息。
+
+### 29. I2C_GetFlagStatus
+
+```c
+/**
+ * @brief  检查指定的I2C标志位是否被设置
+ * @param  I2Cx: 选择要检查的I2C外设，可以是I2C1或I2C2
+ * @param  I2C_FLAG: 指定要检查的标志位
+ * @retval 标志位状态，SET或RESET
+ * @example
+ *     if(I2C_GetFlagStatus(I2C1, I2C_FLAG_BUSY) == SET)
+ *     {
+ *         // I2C总线忙
+ *     }
+ */
+FlagStatus I2C_GetFlagStatus(I2C_TypeDef* I2Cx, uint32_t I2C_FLAG);
+```
+
+**功能说明：**
+检查指定I2C标志位的状态，用于获取I2C外设的当前状态。
+
+### 30. I2C_ClearFlag
+
+```c
+/**
+ * @brief  清除指定I2C的待处理标志位
+ * @param  I2Cx: 选择要清除标志的I2C外设，可以是I2C1或I2C2
+ * @param  I2C_FLAG: 指定要清除的标志位
+ * @retval 无
+ * @example
+ *     I2C_ClearFlag(I2C1, I2C_FLAG_ADDR);
+ */
+void I2C_ClearFlag(I2C_TypeDef* I2Cx, uint32_t I2C_FLAG);
+```
+
+**功能说明：**
+清除指定的I2C标志位，通常用于清除错误标志或状态标志。
+
+### 31. I2C_ITConfig
+
+```c
+/**
+ * @brief  使能或失能指定的I2C中断
+ * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
+ * @param  I2C_IT: 指定要使能或失能的I2C中断源
+ * @param  NewState: 指定I2C中断的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     I2C_ITConfig(I2C1, I2C_IT_EVT, ENABLE);
+ */
+void I2C_ITConfig(I2C_TypeDef* I2Cx, uint16_t I2C_IT, FunctionalState NewState);
+```
+
+**功能说明：**
+配置I2C中断的使能状态，控制哪些I2C事件可以产生中断。
+
+### 32. I2C_GetITStatus
+
+```c
+/**
+ * @brief  检查指定的I2C中断是否发生
+ * @param  I2Cx: 选择要检查的I2C外设，可以是I2C1或I2C2
+ * @param  I2C_IT: 指定要检查的I2C中断源
+ * @retval 中断状态，SET或RESET
+ * @example
+ *     if(I2C_GetITStatus(I2C1, I2C_IT_RXNE) == SET)
+ *     {
+ *         // 接收数据寄存器非空中断
+ *     }
+ */
+ITStatus I2C_GetITStatus(I2C_TypeDef* I2Cx, uint32_t I2C_IT);
+```
+
+**功能说明：**
+检查指定I2C中断源的状态，用于中断服务程序中判断中断原因。
+
+### 33. I2C_ClearITPendingBit
+
+```c
+/**
+ * @brief  清除指定I2C的中断待处理位
+ * @param  I2Cx: 选择要清除中断的I2C外设，可以是I2C1或I2C2
+ * @param  I2C_IT: 指定要清除的I2C中断待处理位
+ * @retval 无
+ * @example
+ *     I2C_ClearITPendingBit(I2C1, I2C_IT_ADDR);
+ */
+void I2C_ClearITPendingBit(I2C_TypeDef* I2Cx, uint32_t I2C_IT);
+```
+
+**功能说明：**
+清除指定I2C中断的待处理位，通常在中断服务程序中调用。
+
+## 使用示例
+
+### 基本I2C配置示例
+
+```c
+void I2C_Configuration(void)
+{
+    I2C_InitTypeDef I2C_InitStructure;
+    
+    // 使能I2C1时钟
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1, ENABLE);
+    
+    // 配置I2C1参数
+    I2C_InitStructure.I2C_ClockSpeed = 100000;          // 100kHz
+    I2C_InitStructure.I2C_Mode = I2C_Mode_I2C;
+    I2C_InitStructure.I2C_DutyCycle = I2C_DutyCycle_2;
+    I2C_InitStructure.I2C_OwnAddress1 = 0x30;
+    I2C_InitStructure.I2C_Ack = I2C_Ack_Enable;
+    I2C_InitStructure.I2C_AcknowledgedAddress = I2C_AcknowledgedAddress_7bit;
+    
+    I2C_Init(I2C1, &I2C_InitStructure);
+    I2C_Cmd(I2C1, ENABLE);
+}
+```
+
+### I2C主机发送数据示例
+
+```c
+void I2C_WriteData(uint8_t deviceAddr, uint8_t data)
+{
+    // 1. 发送START条件
+    I2C_GenerateSTART(I2C1, ENABLE);
+    
+    // 2. 等待EV5事件（START条件发送完成）
+    while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_MODE_SELECT));
+    
+    // 3. 发送从设备地址（写模式）
+    I2C_Send7bitAddress(I2C1, deviceAddr, I2C_Direction_Transmitter);
+    
+    // 4. 等待EV6事件（地址发送完成并收到ACK）
+    while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED));
+    
+    // 5. 发送数据
+    I2C_SendData(I2C1, data);
+    
+    // 6. 等待EV8事件（数据发送完成）
+    while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_BYTE_TRANSMITTED));
+    
+    // 7. 发送STOP条件
+    I2C_GenerateSTOP(I2C1, ENABLE);
+}
+```
+
+### I2C主机读取数据示例
+
+```c
+uint8_t I2C_ReadData(uint8_t deviceAddr)
+{
+    uint8_t receivedData;
+    
+    // 1. 发送START条件
+    I2C_GenerateSTART(I2C1, ENABLE);
+    
+    // 2. 等待EV5事件
+    while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_MODE_SELECT));
+    
+    // 3. 发送从设备地址（读模式）
+    I2C_Send7bitAddress(I2C1, deviceAddr, I2C_Direction_Receiver);
+    
+    // 4. 等待EV6事件
+    while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_RECEIVER_MODE_SELECTED));
+    
+    // 5. 失能ACK（准备接收最后一个字节）
+    I2C_AcknowledgeConfig(I2C1, DISABLE);
+    
+    // 6. 等待EV7事件（数据接收完成）
+    while(!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_BYTE_RECEIVED));
+    
+    // 7. 读取数据
+    receivedData = I2C_ReceiveData(I2C1);
+    
+    // 8. 发送STOP条件
+    I2C_GenerateSTOP(I2C1, ENABLE);
+    
+    // 9. 重新使能ACK
+    I2C_AcknowledgeConfig(I2C1, ENABLE);
+    
+    return receivedData;
+}
+```
+
+## 注意事项
+
+1. **时钟配置**：使用I2C前需要使能相应的APB1时钟
+2. **GPIO配置**：需要将GPIO引脚配置为开漏输出或复用功能
+3. **上拉电阻**：I2C总线需要外部上拉电阻（通常4.7kΩ）
+4. **事件检查**：在I2C通信过程中必须检查相应的事件状态
+5. **总线仲裁**：多主机环境下要处理总线仲裁丢失的情况
+6. **错误处理**：需要处理应答失败、总线错误等异常情况
+
+## 总结
+
+STM32F10x I2C标准库提供了完整的I2C通信配置和控制功能，通过合理使用这些函数和结构体，可以轻松实现与各种I2C设备的通信。掌握这些API的使用方法，对于开发基于STM32的嵌入式应用具有重要意义。
