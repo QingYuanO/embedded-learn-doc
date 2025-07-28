@@ -5,6 +5,7 @@
     "introduction",
     "stm32f10x_gpio",
     "stm32f10x_exti",
+    "stm32f10x_tim",
     "stm32f10x_i2c"
   ],
   "root": true
