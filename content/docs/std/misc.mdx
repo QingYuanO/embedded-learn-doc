@@ -1,0 +1,246 @@
+---
+title: misc
+description: STM32F10x MISC 标准库函数参考文档
+---
+
+## 数据类型定义
+
+### NVIC_InitTypeDef - NVIC初始化结构体
+
+```c
+typedef struct
+{
+  uint8_t NVIC_IRQChannel;                    /* 指定要使能或失能的IRQ通道 */
+  uint8_t NVIC_IRQChannelPreemptionPriority;  /* 指定IRQ通道的抢占优先级 */
+  uint8_t NVIC_IRQChannelSubPriority;         /* 指定IRQ通道的子优先级 */
+  FunctionalState NVIC_IRQChannelCmd;         /* 指定IRQ通道的使能状态 */
+} NVIC_InitTypeDef;
+```
+
+**成员说明：**
+- `NVIC_IRQChannel`：指定要配置的IRQ通道号，可以是IRQn_Type类型的任意值（完整的IRQ通道列表请参考stm32f10x.h文件）
+- `NVIC_IRQChannelPreemptionPriority`：指定IRQ通道的抢占优先级，取值范围0-15，具体取值范围取决于优先级分组配置
+- `NVIC_IRQChannelSubPriority`：指定IRQ通道的子优先级，取值范围0-15，具体取值范围取决于优先级分组配置
+- `NVIC_IRQChannelCmd`：指定IRQ通道的使能状态，可设置为ENABLE或DISABLE
+
+## 常量定义
+
+### 向量表基地址定义
+
+```c
+#define NVIC_VectTab_RAM             ((uint32_t)0x20000000)  /* RAM中的向量表基地址 */
+#define NVIC_VectTab_FLASH           ((uint32_t)0x08000000)  /* FLASH中的向量表基地址 */
+```
+
+### 系统低功耗模式定义
+
+```c
+#define NVIC_LP_SEVONPEND            ((uint8_t)0x10)  /* 挂起事件唤醒 */
+#define NVIC_LP_SLEEPDEEP            ((uint8_t)0x04)  /* 深度睡眠模式 */
+#define NVIC_LP_SLEEPONEXIT          ((uint8_t)0x02)  /* 退出时睡眠 */
+```
+
+### 抢占优先级分组定义
+
+```c
+#define NVIC_PriorityGroup_0         ((uint32_t)0x700)  /* 0位抢占优先级，4位子优先级 */
+#define NVIC_PriorityGroup_1         ((uint32_t)0x600)  /* 1位抢占优先级，3位子优先级 */
+#define NVIC_PriorityGroup_2         ((uint32_t)0x500)  /* 2位抢占优先级，2位子优先级 */
+#define NVIC_PriorityGroup_3         ((uint32_t)0x400)  /* 3位抢占优先级，1位子优先级 */
+#define NVIC_PriorityGroup_4         ((uint32_t)0x300)  /* 4位抢占优先级，0位子优先级 */
+```
+
+### SysTick时钟源定义
+
+```c
+#define SysTick_CLKSource_HCLK_Div8  ((uint32_t)0xFFFFFFFB)  /* HCLK/8作为SysTick时钟源 */
+#define SysTick_CLKSource_HCLK       ((uint32_t)0x00000004)  /* HCLK作为SysTick时钟源 */
+```
+
+## 优先级分组表
+
+根据NVIC_PriorityGroupConfig函数配置的优先级分组，抢占优先级和子优先级的允许值如下：
+
+| 优先级分组 | 抢占优先级范围 | 子优先级范围 | 说明 |
+|------------|----------------|--------------|------|
+| NVIC_PriorityGroup_0 | 0 | 0-15 | 0位抢占优先级，4位子优先级 |
+| NVIC_PriorityGroup_1 | 0-1 | 0-7 | 1位抢占优先级，3位子优先级 |
+| NVIC_PriorityGroup_2 | 0-3 | 0-3 | 2位抢占优先级，2位子优先级 |
+| NVIC_PriorityGroup_3 | 0-7 | 0-1 | 3位抢占优先级，1位子优先级 |
+| NVIC_PriorityGroup_4 | 0-15 | 0 | 4位抢占优先级，0位子优先级 |
+
+## 标准库函数详解
+
+### 1. NVIC_PriorityGroupConfig
+
+```c
+/**
+ * @brief  配置NVIC中断优先级分组
+ * @param  NVIC_PriorityGroup: 指定优先级分组，可以是以下值之一：
+ *         - NVIC_PriorityGroup_0: 0位抢占优先级，4位子优先级
+ *         - NVIC_PriorityGroup_1: 1位抢占优先级，3位子优先级
+ *         - NVIC_PriorityGroup_2: 2位抢占优先级，2位子优先级
+ *         - NVIC_PriorityGroup_3: 3位抢占优先级，1位子优先级
+ *         - NVIC_PriorityGroup_4: 4位抢占优先级，0位子优先级
+ * @retval 无
+ * @example
+ *     NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
+ */
+void NVIC_PriorityGroupConfig(uint32_t NVIC_PriorityGroup);
+```
+
+**功能说明：**
+配置NVIC的中断优先级分组。该函数决定了抢占优先级和子优先级的位数分配，在整个应用程序中应该只调用一次，通常在系统初始化阶段配置。
+
+### 2. NVIC_Init
+
+```c
+/**
+ * @brief  初始化NVIC外设
+ * @param  NVIC_InitStruct: 指向NVIC_InitTypeDef结构体的指针，包含NVIC的配置信息
+ * @retval 无
+ * @example
+ *     NVIC_InitTypeDef NVIC_InitStructure;
+ *     NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
+ *     NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+ *     NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+ *     NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+ *     NVIC_Init(&NVIC_InitStructure);
+ */
+void NVIC_Init(NVIC_InitTypeDef* NVIC_InitStruct);
+```
+
+**功能说明：**
+根据NVIC_InitStruct中指定的参数初始化NVIC外设。该函数配置指定中断通道的优先级并使能或失能该中断。
+
+### 3. NVIC_SetVectorTable
+
+```c
+/**
+ * @brief  设置向量表的位置和偏移
+ * @param  NVIC_VectTab: 指定向量表是在RAM还是FLASH中，可以是以下值之一：
+ *         - NVIC_VectTab_RAM: 向量表位于RAM中
+ *         - NVIC_VectTab_FLASH: 向量表位于FLASH中
+ * @param  Offset: 向量表基地址的偏移量，必须是200的倍数
+ * @retval 无
+ * @example
+ *     NVIC_SetVectorTable(NVIC_VectTab_FLASH, 0x0);
+ */
+void NVIC_SetVectorTable(uint32_t NVIC_VectTab, uint32_t Offset);
+```
+
+**功能说明：**
+设置向量表的位置和偏移量。当应用程序不是从默认地址（0x08000000）开始运行时，需要使用此函数重新定位向量表。
+
+### 4. NVIC_SystemLPConfig
+
+```c
+/**
+ * @brief  配置系统的低功耗模式
+ * @param  LowPowerMode: 指定要配置的低功耗模式，可以是以下值之一：
+ *         - NVIC_LP_SEVONPEND: 挂起事件唤醒
+ *         - NVIC_LP_SLEEPDEEP: 深度睡眠模式
+ *         - NVIC_LP_SLEEPONEXIT: 退出时睡眠
+ * @param  NewState: 指定低功耗模式的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     NVIC_SystemLPConfig(NVIC_LP_SLEEPONEXIT, ENABLE);
+ */
+void NVIC_SystemLPConfig(uint8_t LowPowerMode, FunctionalState NewState);
+```
+
+**功能说明：**
+选择性地配置系统的低功耗模式。该函数可以配置处理器在中断服务程序返回后自动进入睡眠模式，或配置深度睡眠模式等。
+
+### 5. SysTick_CLKSourceConfig
+
+```c
+/**
+ * @brief  配置SysTick时钟源
+ * @param  SysTick_CLKSource: 指定SysTick时钟源，可以是以下值之一：
+ *         - SysTick_CLKSource_HCLK_Div8: HCLK/8作为SysTick时钟源
+ *         - SysTick_CLKSource_HCLK: HCLK作为SysTick时钟源
+ * @retval 无
+ * @example
+ *     SysTick_CLKSourceConfig(SysTick_CLKSource_HCLK_Div8);
+ */
+void SysTick_CLKSourceConfig(uint32_t SysTick_CLKSource);
+```
+
+**功能说明：**
+配置SysTick定时器的时钟源。SysTick是ARM Cortex-M3内核的系统定时器，常用于操作系统的时基或延时功能。
+
+## 使用示例
+
+### NVIC中断配置示例
+
+```c
+#include "misc.h"
+
+void NVIC_Configuration(void)
+{
+    NVIC_InitTypeDef NVIC_InitStructure;
+    
+    /* 设置NVIC优先级分组为Group2: 2位抢占优先级，2位子优先级 */
+    NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
+    
+    /* 配置USART1中断 */
+    NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+    
+    /* 配置定时器2中断 */
+    NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+}
+```
+
+### SysTick配置示例
+
+```c
+void SysTick_Configuration(void)
+{
+    /* 配置SysTick时钟源为HCLK/8 */
+    SysTick_CLKSourceConfig(SysTick_CLKSource_HCLK_Div8);
+    
+    /* 配置SysTick为1ms中断一次，假设HCLK为72MHz */
+    SysTick_Config(9000);  /* 72MHz/8/9000 = 1000Hz = 1ms */
+}
+```
+
+### 低功耗模式配置示例
+
+```c
+void LowPower_Configuration(void)
+{
+    /* 使能退出时睡眠功能 */
+    NVIC_SystemLPConfig(NVIC_LP_SLEEPONEXIT, ENABLE);
+    
+    /* 配置深度睡眠模式 */
+    NVIC_SystemLPConfig(NVIC_LP_SLEEPDEEP, ENABLE);
+}
+```
+
+## 注意事项
+
+1. **优先级分组配置**：NVIC_PriorityGroupConfig函数在整个应用程序中应该只调用一次，建议在系统初始化阶段配置，之后不要再更改。
+
+2. **优先级值范围**：抢占优先级和子优先级的有效范围取决于优先级分组的配置，超出范围的值将被忽略。
+
+3. **向量表重定位**：使用NVIC_SetVectorTable时，偏移量必须是512字节（0x200）的倍数，否则可能导致系统不稳定。
+
+4. **SysTick时钟源**：选择不同的SysTick时钟源会影响定时精度，需要根据实际的HCLK频率来计算合适的重装载值。
+
+5. **低功耗模式**：配置低功耗模式时要注意系统的唤醒条件，确保系统能够正常从低功耗模式中唤醒。
+
+6. **中断优先级**：抢占优先级高的中断可以打断抢占优先级低的中断，而子优先级只在抢占优先级相同时起作用，用于决定同时挂起的中断的执行顺序。
+
+## 总结
+
+MISC模块是STM32F10x标准库中的重要组成部分，提供了NVIC中断控制器和SysTick系统定时器的配置功能。通过合理配置中断优先级分组和各个中断的优先级，可以实现复杂的中断管理策略。SysTick定时器为系统提供了精确的时基，是实时操作系统和延时功能的基础。掌握MISC模块的使用对于开发高性能、低功耗的嵌入式应用至关重要。
+

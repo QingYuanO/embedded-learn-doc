@@ -3,12 +3,17 @@
   "icon": "BookCheck",
   "pages": [
     "introduction",
+    "misc",
     "stm32f10x_rcc",
     "stm32f10x_gpio",
     "stm32f10x_exti",
     "stm32f10x_tim",
     "stm32f10x_adc",
-    "stm32f10x_i2c"
+    "stm32f10x_dac",
+    "stm32f10x_dma",
+    "stm32f10x_usart",
+    "stm32f10x_i2c",
+    "stm32f10x_spi"
   ],
   "root": true
 }

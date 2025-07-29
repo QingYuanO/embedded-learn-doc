@@ -1,0 +1,816 @@
+---
+title: stm32f10x_spi
+description: STM32F10x SPI/I2S 外设标准库函数参考文档
+---
+
+## 数据类型定义
+
+### SPI_InitTypeDef - SPI初始化结构体
+
+```c
+typedef struct
+{
+  uint16_t SPI_Direction;           /* SPI单向或双向数据模式 */
+  uint16_t SPI_Mode;                /* SPI工作模式 */
+  uint16_t SPI_DataSize;            /* SPI数据大小 */
+  uint16_t SPI_CPOL;                /* 串行时钟稳定状态 */
+  uint16_t SPI_CPHA;                /* 位捕获的时钟有效边沿 */
+  uint16_t SPI_NSS;                 /* NSS信号管理方式 */
+  uint16_t SPI_BaudRatePrescaler;   /* 波特率预分频值 */
+  uint16_t SPI_FirstBit;            /* 数据传输起始位 */
+  uint16_t SPI_CRCPolynomial;       /* CRC计算多项式 */
+} SPI_InitTypeDef;
+```
+
+**成员说明：**
+- `SPI_Direction`：指定SPI单向或双向数据模式，可选值见SPI数据方向定义
+- `SPI_Mode`：指定SPI工作模式（主机/从机），可选值见SPI模式定义
+- `SPI_DataSize`：指定SPI数据大小（8位/16位），可选值见SPI数据大小定义
+- `SPI_CPOL`：指定串行时钟的稳定状态，可选值见SPI时钟极性定义
+- `SPI_CPHA`：指定位捕获的时钟有效边沿，可选值见SPI时钟相位定义
+- `SPI_NSS`：指定NSS信号是由硬件（NSS引脚）还是软件（SSI位）管理，可选值见SPI从机选择管理定义
+- `SPI_BaudRatePrescaler`：指定波特率预分频值，用于配置发送和接收的SCK时钟，可选值见SPI波特率预分频器定义
+- `SPI_FirstBit`：指定数据传输是从MSB还是LSB位开始，可选值见SPI MSB/LSB传输定义
+- `SPI_CRCPolynomial`：指定用于CRC计算的多项式
+
+### I2S_InitTypeDef - I2S初始化结构体
+
+```c
+typedef struct
+{
+  uint16_t I2S_Mode;         /* I2S工作模式 */
+  uint16_t I2S_Standard;     /* I2S通信标准 */
+  uint16_t I2S_DataFormat;   /* I2S通信数据格式 */
+  uint16_t I2S_MCLKOutput;   /* I2S MCLK输出控制 */
+  uint32_t I2S_AudioFreq;    /* I2S通信音频频率 */
+  uint16_t I2S_CPOL;         /* I2S时钟空闲状态 */
+} I2S_InitTypeDef;
+```
+
+**成员说明：**
+- `I2S_Mode`：指定I2S工作模式，可选值见I2S模式定义
+- `I2S_Standard`：指定I2S通信使用的标准，可选值见I2S标准定义
+- `I2S_DataFormat`：指定I2S通信的数据格式，可选值见I2S数据格式定义
+- `I2S_MCLKOutput`：指定是否启用I2S MCLK输出，可选值见I2S MCLK输出定义
+- `I2S_AudioFreq`：指定I2S通信的音频频率，可选值见I2S音频频率定义
+- `I2S_CPOL`：指定I2S时钟的空闲状态，可选值见I2S时钟极性定义
+
+## SPI常量定义
+
+### SPI数据方向定义
+
+```c
+#define SPI_Direction_2Lines_FullDuplex ((uint16_t)0x0000)  /* 双线全双工 */
+#define SPI_Direction_2Lines_RxOnly     ((uint16_t)0x0400)  /* 双线仅接收 */
+#define SPI_Direction_1Line_Rx          ((uint16_t)0x8000)  /* 单线接收 */
+#define SPI_Direction_1Line_Tx          ((uint16_t)0xC000)  /* 单线发送 */
+```
+
+### SPI模式定义
+
+```c
+#define SPI_Mode_Master                 ((uint16_t)0x0104)  /* 主机模式 */
+#define SPI_Mode_Slave                  ((uint16_t)0x0000)  /* 从机模式 */
+```
+
+### SPI数据大小定义
+
+```c
+#define SPI_DataSize_16b                ((uint16_t)0x0800)  /* 16位数据 */
+#define SPI_DataSize_8b                 ((uint16_t)0x0000)  /* 8位数据 */
+```
+
+### SPI时钟极性定义
+
+```c
+#define SPI_CPOL_Low                    ((uint16_t)0x0000)  /* 时钟空闲时为低电平 */
+#define SPI_CPOL_High                   ((uint16_t)0x0002)  /* 时钟空闲时为高电平 */
+```
+
+### SPI时钟相位定义
+
+```c
+#define SPI_CPHA_1Edge                  ((uint16_t)0x0000)  /* 第一个边沿采样 */
+#define SPI_CPHA_2Edge                  ((uint16_t)0x0001)  /* 第二个边沿采样 */
+```
+
+### SPI从机选择管理定义
+
+```c
+#define SPI_NSS_Soft                    ((uint16_t)0x0200)  /* 软件管理NSS */
+#define SPI_NSS_Hard                    ((uint16_t)0x0000)  /* 硬件管理NSS */
+```
+
+### SPI波特率预分频器定义
+
+```c
+#define SPI_BaudRatePrescaler_2         ((uint16_t)0x0000)  /* 2分频 */
+#define SPI_BaudRatePrescaler_4         ((uint16_t)0x0008)  /* 4分频 */
+#define SPI_BaudRatePrescaler_8         ((uint16_t)0x0010)  /* 8分频 */
+#define SPI_BaudRatePrescaler_16        ((uint16_t)0x0018)  /* 16分频 */
+#define SPI_BaudRatePrescaler_32        ((uint16_t)0x0020)  /* 32分频 */
+#define SPI_BaudRatePrescaler_64        ((uint16_t)0x0028)  /* 64分频 */
+#define SPI_BaudRatePrescaler_128       ((uint16_t)0x0030)  /* 128分频 */
+#define SPI_BaudRatePrescaler_256       ((uint16_t)0x0038)  /* 256分频 */
+```
+
+### SPI MSB/LSB传输定义
+
+```c
+#define SPI_FirstBit_MSB                ((uint16_t)0x0000)  /* MSB优先传输 */
+#define SPI_FirstBit_LSB                ((uint16_t)0x0080)  /* LSB优先传输 */
+```
+
+## I2S常量定义
+
+### I2S模式定义
+
+```c
+#define I2S_Mode_SlaveTx                ((uint16_t)0x0000)  /* 从机发送 */
+#define I2S_Mode_SlaveRx                ((uint16_t)0x0100)  /* 从机接收 */
+#define I2S_Mode_MasterTx               ((uint16_t)0x0200)  /* 主机发送 */
+#define I2S_Mode_MasterRx               ((uint16_t)0x0300)  /* 主机接收 */
+```
+
+### I2S标准定义
+
+```c
+#define I2S_Standard_Phillips           ((uint16_t)0x0000)  /* Phillips标准 */
+#define I2S_Standard_MSB                ((uint16_t)0x0010)  /* MSB对齐标准 */
+#define I2S_Standard_LSB                ((uint16_t)0x0020)  /* LSB对齐标准 */
+#define I2S_Standard_PCMShort           ((uint16_t)0x0030)  /* PCM短帧标准 */
+#define I2S_Standard_PCMLong            ((uint16_t)0x00B0)  /* PCM长帧标准 */
+```
+
+### I2S数据格式定义
+
+```c
+#define I2S_DataFormat_16b              ((uint16_t)0x0000)  /* 16位数据 */
+#define I2S_DataFormat_16bextended      ((uint16_t)0x0001)  /* 16位扩展数据 */
+#define I2S_DataFormat_24b              ((uint16_t)0x0003)  /* 24位数据 */
+#define I2S_DataFormat_32b              ((uint16_t)0x0005)  /* 32位数据 */
+```
+
+### I2S MCLK输出定义
+
+```c
+#define I2S_MCLKOutput_Enable           ((uint16_t)0x0200)  /* 启用MCLK输出 */
+#define I2S_MCLKOutput_Disable          ((uint16_t)0x0000)  /* 禁用MCLK输出 */
+```
+
+### I2S音频频率定义
+
+```c
+#define I2S_AudioFreq_192k               ((uint32_t)192000)  /* 192kHz */
+#define I2S_AudioFreq_96k                ((uint32_t)96000)   /* 96kHz */
+#define I2S_AudioFreq_48k                ((uint32_t)48000)   /* 48kHz */
+#define I2S_AudioFreq_44k                ((uint32_t)44100)   /* 44.1kHz */
+#define I2S_AudioFreq_32k                ((uint32_t)32000)   /* 32kHz */
+#define I2S_AudioFreq_22k                ((uint32_t)22050)   /* 22.05kHz */
+#define I2S_AudioFreq_16k                ((uint32_t)16000)   /* 16kHz */
+#define I2S_AudioFreq_11k                ((uint32_t)11025)   /* 11.025kHz */
+#define I2S_AudioFreq_8k                 ((uint32_t)8000)    /* 8kHz */
+#define I2S_AudioFreq_Default            ((uint32_t)2)       /* 默认频率 */
+```
+
+### I2S时钟极性定义
+
+```c
+#define I2S_CPOL_Low                    ((uint16_t)0x0000)  /* 时钟空闲时为低电平 */
+#define I2S_CPOL_High                   ((uint16_t)0x0008)  /* 时钟空闲时为高电平 */
+```
+
+## SPI/I2S中断标志定义
+
+### 基本中断类型
+
+```c
+#define SPI_I2S_IT_TXE                  ((uint8_t)0x71)  /* 发送缓冲区空中断 */
+#define SPI_I2S_IT_RXNE                 ((uint8_t)0x60)  /* 接收缓冲区非空中断 */
+#define SPI_I2S_IT_ERR                  ((uint8_t)0x50)  /* 错误中断 */
+```
+
+### 具体中断标志
+
+```c
+#define SPI_I2S_IT_OVR                  ((uint8_t)0x56)  /* 溢出错误中断 */
+#define SPI_IT_MODF                     ((uint8_t)0x55)  /* 模式错误中断 */
+#define SPI_IT_CRCERR                   ((uint8_t)0x54)  /* CRC错误中断 */
+#define I2S_IT_UDR                      ((uint8_t)0x53)  /* 下溢错误中断 */
+```
+
+## SPI/I2S状态标志定义
+
+```c
+#define SPI_I2S_FLAG_RXNE               ((uint16_t)0x0001)  /* 接收缓冲区非空标志 */
+#define SPI_I2S_FLAG_TXE                ((uint16_t)0x0002)  /* 发送缓冲区空标志 */
+#define I2S_FLAG_CHSIDE                 ((uint16_t)0x0004)  /* 通道边标志 */
+#define I2S_FLAG_UDR                    ((uint16_t)0x0008)  /* 下溢标志 */
+#define SPI_FLAG_CRCERR                 ((uint16_t)0x0010)  /* CRC错误标志 */
+#define SPI_FLAG_MODF                   ((uint16_t)0x0020)  /* 模式错误标志 */
+#define SPI_I2S_FLAG_OVR                ((uint16_t)0x0040)  /* 溢出标志 */
+#define SPI_I2S_FLAG_BSY                ((uint16_t)0x0080)  /* 忙标志 */
+```
+
+## 其他定义
+
+### DMA传输请求定义
+
+```c
+#define SPI_I2S_DMAReq_Tx               ((uint16_t)0x0002)  /* DMA发送请求 */
+#define SPI_I2S_DMAReq_Rx               ((uint16_t)0x0001)  /* DMA接收请求 */
+```
+
+### NSS内部软件管理定义
+
+```c
+#define SPI_NSSInternalSoft_Set         ((uint16_t)0x0100)  /* 设置内部NSS */
+#define SPI_NSSInternalSoft_Reset       ((uint16_t)0xFEFF)  /* 重置内部NSS */
+```
+
+### CRC发送接收定义
+
+```c
+#define SPI_CRC_Tx                      ((uint8_t)0x00)  /* 发送CRC */
+#define SPI_CRC_Rx                      ((uint8_t)0x01)  /* 接收CRC */
+```
+
+### 方向传输接收定义
+
+```c
+#define SPI_Direction_Rx                ((uint16_t)0xBFFF)  /* 接收方向 */
+#define SPI_Direction_Tx                ((uint16_t)0x4000)  /* 发送方向 */
+```
+
+## 标准库函数详解
+
+### 1. SPI_I2S_DeInit
+
+```c
+/**
+ * @brief  将SPIx外设寄存器复位为默认值
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @retval 无
+ * @example
+ *     SPI_I2S_DeInit(SPI1);  // 复位SPI1外设
+ */
+void SPI_I2S_DeInit(SPI_TypeDef* SPIx);
+```
+
+**功能说明：**
+将指定的SPI/I2S外设的所有寄存器复位为默认值，通常在重新配置外设前调用。
+
+### 2. SPI_Init
+
+```c
+/**
+ * @brief  根据SPI_InitStruct中的参数初始化SPIx外设
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @param  SPI_InitStruct: 指向SPI_InitTypeDef结构体的指针，包含SPI的配置信息
+ * @retval 无
+ * @example
+ *     SPI_InitTypeDef SPI_InitStructure;
+ *     SPI_InitStructure.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
+ *     SPI_InitStructure.SPI_Mode = SPI_Mode_Master;
+ *     SPI_Init(SPI1, &SPI_InitStructure);
+ */
+void SPI_Init(SPI_TypeDef* SPIx, SPI_InitTypeDef* SPI_InitStruct);
+```
+
+**功能说明：**
+根据SPI_InitStruct结构体中指定的参数初始化SPI外设，配置工作模式、数据大小、时钟参数等。
+
+### 3. I2S_Init
+
+```c
+/**
+ * @brief  根据I2S_InitStruct中的参数初始化SPIx外设的I2S功能
+ * @param  SPIx: 选择SPI外设，可以是SPI2或SPI3
+ * @param  I2S_InitStruct: 指向I2S_InitTypeDef结构体的指针，包含I2S的配置信息
+ * @retval 无
+ * @example
+ *     I2S_InitTypeDef I2S_InitStructure;
+ *     I2S_InitStructure.I2S_Mode = I2S_Mode_MasterTx;
+ *     I2S_InitStructure.I2S_Standard = I2S_Standard_Phillips;
+ *     I2S_Init(SPI2, &I2S_InitStructure);
+ */
+void I2S_Init(SPI_TypeDef* SPIx, I2S_InitTypeDef* I2S_InitStruct);
+```
+
+**功能说明：**
+根据I2S_InitStruct结构体中指定的参数初始化SPI外设的I2S功能，配置音频标准、数据格式、频率等。
+
+### 4. SPI_StructInit
+
+```c
+/**
+ * @brief  将SPI_InitStruct结构体各成员设置为默认值
+ * @param  SPI_InitStruct: 指向SPI_InitTypeDef结构体的指针
+ * @retval 无
+ * @example
+ *     SPI_InitTypeDef SPI_InitStructure;
+ *     SPI_StructInit(&SPI_InitStructure);
+ */
+void SPI_StructInit(SPI_InitTypeDef* SPI_InitStruct);
+```
+
+**功能说明：**
+将SPI初始化结构体的各个成员设置为默认值，可在自定义配置前调用。
+
+### 5. I2S_StructInit
+
+```c
+/**
+ * @brief  将I2S_InitStruct结构体各成员设置为默认值
+ * @param  I2S_InitStruct: 指向I2S_InitTypeDef结构体的指针
+ * @retval 无
+ * @example
+ *     I2S_InitTypeDef I2S_InitStructure;
+ *     I2S_StructInit(&I2S_InitStructure);
+ */
+void I2S_StructInit(I2S_InitTypeDef* I2S_InitStruct);
+```
+
+**功能说明：**
+将I2S初始化结构体的各个成员设置为默认值，可在自定义配置前调用。
+
+### 6. SPI_Cmd
+
+```c
+/**
+ * @brief  使能或禁用指定的SPI外设
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @param  NewState: SPI外设的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     SPI_Cmd(SPI1, ENABLE);   // 使能SPI1
+ *     SPI_Cmd(SPI1, DISABLE);  // 禁用SPI1
+ */
+void SPI_Cmd(SPI_TypeDef* SPIx, FunctionalState NewState);
+```
+
+**功能说明：**
+使能或禁用指定的SPI外设，在配置完成后需要调用此函数使能外设。
+
+### 7. I2S_Cmd
+
+```c
+/**
+ * @brief  使能或禁用指定的I2S外设
+ * @param  SPIx: 选择SPI外设，可以是SPI2或SPI3
+ * @param  NewState: I2S外设的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     I2S_Cmd(SPI2, ENABLE);   // 使能I2S功能
+ *     I2S_Cmd(SPI2, DISABLE);  // 禁用I2S功能
+ */
+void I2S_Cmd(SPI_TypeDef* SPIx, FunctionalState NewState);
+```
+
+**功能说明：**
+使能或禁用指定SPI外设的I2S功能，在I2S配置完成后需要调用此函数。
+
+### 8. SPI_I2S_ITConfig
+
+```c
+/**
+ * @brief  使能或禁用指定的SPI/I2S中断
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @param  SPI_I2S_IT: 指定要配置的SPI/I2S中断类型
+ * @param  NewState: 中断的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     SPI_I2S_ITConfig(SPI1, SPI_I2S_IT_RXNE, ENABLE);  // 使能接收中断
+ *     SPI_I2S_ITConfig(SPI1, SPI_I2S_IT_TXE, ENABLE);   // 使能发送中断
+ */
+void SPI_I2S_ITConfig(SPI_TypeDef* SPIx, uint8_t SPI_I2S_IT, FunctionalState NewState);
+```
+
+**功能说明：**
+使能或禁用指定的SPI/I2S中断，可配置发送缓冲区空中断、接收缓冲区非空中断等。
+
+### 9. SPI_I2S_DMACmd
+
+```c
+/**
+ * @brief  使能或禁用指定SPI/I2S的DMA传输请求
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @param  SPI_I2S_DMAReq: 指定要配置的DMA传输请求
+ * @param  NewState: DMA请求的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     SPI_I2S_DMACmd(SPI1, SPI_I2S_DMAReq_Tx, ENABLE);  // 使能DMA发送
+ *     SPI_I2S_DMACmd(SPI1, SPI_I2S_DMAReq_Rx, ENABLE);  // 使能DMA接收
+ */
+void SPI_I2S_DMACmd(SPI_TypeDef* SPIx, uint16_t SPI_I2S_DMAReq, FunctionalState NewState);
+```
+
+**功能说明：**
+使能或禁用指定SPI/I2S的DMA传输请求，可配置DMA发送和接收请求。
+
+### 10. SPI_I2S_SendData
+
+```c
+/**
+ * @brief  通过SPIx外设发送一个数据
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @param  Data: 要发送的数据
+ * @retval 无
+ * @example
+ *     SPI_I2S_SendData(SPI1, 0x55);  // 发送数据0x55
+ */
+void SPI_I2S_SendData(SPI_TypeDef* SPIx, uint16_t Data);
+```
+
+**功能说明：**
+通过指定的SPI/I2S外设发送一个数据，数据会被写入发送缓冲区。
+
+### 11. SPI_I2S_ReceiveData
+
+```c
+/**
+ * @brief  返回SPIx外设最近接收到的数据
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @retval 接收到的数据
+ * @example
+ *     uint16_t received_data = SPI_I2S_ReceiveData(SPI1);
+ */
+uint16_t SPI_I2S_ReceiveData(SPI_TypeDef* SPIx);
+```
+
+**功能说明：**
+返回指定SPI/I2S外设最近接收到的数据，从接收缓冲区读取数据。
+
+### 12. SPI_NSSInternalSoftwareConfig
+
+```c
+/**
+ * @brief  设置SPIx的内部NSS信号状态
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @param  SPI_NSSInternalSoft: 指定内部NSS信号状态
+ * @retval 无
+ * @example
+ *     SPI_NSSInternalSoftwareConfig(SPI1, SPI_NSSInternalSoft_Set);
+ */
+void SPI_NSSInternalSoftwareConfig(SPI_TypeDef* SPIx, uint16_t SPI_NSSInternalSoft);
+```
+
+**功能说明：**
+在软件NSS管理模式下，设置内部NSS信号的状态，用于主机模式的片选控制。
+
+### 13. SPI_SSOutputCmd
+
+```c
+/**
+ * @brief  使能或禁用指定SPI的SS输出
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @param  NewState: SS输出的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     SPI_SSOutputCmd(SPI1, ENABLE);  // 使能SS输出
+ */
+void SPI_SSOutputCmd(SPI_TypeDef* SPIx, FunctionalState NewState);
+```
+
+**功能说明：**
+使能或禁用指定SPI的SS输出功能，用于主机模式下的多从机管理。
+
+### 14. SPI_DataSizeConfig
+
+```c
+/**
+ * @brief  配置指定SPI的数据大小
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @param  SPI_DataSize: 指定SPI数据大小
+ * @retval 无
+ * @example
+ *     SPI_DataSizeConfig(SPI1, SPI_DataSize_8b);   // 设置为8位数据
+ *     SPI_DataSizeConfig(SPI1, SPI_DataSize_16b);  // 设置为16位数据
+ */
+void SPI_DataSizeConfig(SPI_TypeDef* SPIx, uint16_t SPI_DataSize);
+```
+
+**功能说明：**
+动态配置指定SPI的数据大小，可在运行时切换8位和16位数据模式。
+
+### 15. SPI_TransmitCRC
+
+```c
+/**
+ * @brief  发送SPIx的CRC值
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @retval 无
+ * @example
+ *     SPI_TransmitCRC(SPI1);  // 发送CRC值
+ */
+void SPI_TransmitCRC(SPI_TypeDef* SPIx);
+```
+
+**功能说明：**
+发送当前计算的CRC值，通常在数据传输完成后调用进行校验。
+
+### 16. SPI_CalculateCRC
+
+```c
+/**
+ * @brief  使能或禁用指定SPI的CRC计算
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @param  NewState: CRC计算的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     SPI_CalculateCRC(SPI1, ENABLE);   // 使能CRC计算
+ *     SPI_CalculateCRC(SPI1, DISABLE);  // 禁用CRC计算
+ */
+void SPI_CalculateCRC(SPI_TypeDef* SPIx, FunctionalState NewState);
+```
+
+**功能说明：**
+使能或禁用指定SPI的CRC计算功能，用于数据传输的完整性检查。
+
+### 17. SPI_GetCRC
+
+```c
+/**
+ * @brief  返回指定SPI的发送或接收CRC寄存器值
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @param  SPI_CRC: 指定要读取的CRC寄存器
+ * @retval CRC寄存器值
+ * @example
+ *     uint16_t tx_crc = SPI_GetCRC(SPI1, SPI_CRC_Tx);  // 获取发送CRC
+ *     uint16_t rx_crc = SPI_GetCRC(SPI1, SPI_CRC_Rx);  // 获取接收CRC
+ */
+uint16_t SPI_GetCRC(SPI_TypeDef* SPIx, uint8_t SPI_CRC);
+```
+
+**功能说明：**
+返回指定SPI的发送或接收CRC寄存器值，用于读取计算出的CRC校验码。
+
+### 18. SPI_GetCRCPolynomial
+
+```c
+/**
+ * @brief  返回指定SPI的CRC多项式寄存器值
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @retval CRC多项式寄存器值
+ * @example
+ *     uint16_t polynomial = SPI_GetCRCPolynomial(SPI1);
+ */
+uint16_t SPI_GetCRCPolynomial(SPI_TypeDef* SPIx);
+```
+
+**功能说明：**
+返回指定SPI的CRC多项式寄存器值，获取当前使用的CRC计算多项式。
+
+### 19. SPI_BiDirectionalLineConfig
+
+```c
+/**
+ * @brief  选择指定SPI单向模式的数据传输方向
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @param  SPI_Direction: 指定数据传输方向
+ * @retval 无
+ * @example
+ *     SPI_BiDirectionalLineConfig(SPI1, SPI_Direction_Tx);  // 设置为发送
+ *     SPI_BiDirectionalLineConfig(SPI1, SPI_Direction_Rx);  // 设置为接收
+ */
+void SPI_BiDirectionalLineConfig(SPI_TypeDef* SPIx, uint16_t SPI_Direction);
+```
+
+**功能说明：**
+在单线双向模式下，选择数据传输方向（发送或接收）。
+
+### 20. SPI_I2S_GetFlagStatus
+
+```c
+/**
+ * @brief  检查指定的SPI/I2S标志位状态
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @param  SPI_I2S_FLAG: 指定要检查的标志位
+ * @retval 标志位状态（SET或RESET）
+ * @example
+ *     if(SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_TXE) == SET)
+ *     {
+ *         // 发送缓冲区为空，可以发送数据
+ *     }
+ */
+FlagStatus SPI_I2S_GetFlagStatus(SPI_TypeDef* SPIx, uint16_t SPI_I2S_FLAG);
+```
+
+**功能说明：**
+检查指定SPI/I2S标志位的状态，用于查询外设当前状态。
+
+### 21. SPI_I2S_ClearFlag
+
+```c
+/**
+ * @brief  清除指定SPI/I2S的标志位
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @param  SPI_I2S_FLAG: 指定要清除的标志位
+ * @retval 无
+ * @example
+ *     SPI_I2S_ClearFlag(SPI1, SPI_FLAG_CRCERR);  // 清除CRC错误标志
+ */
+void SPI_I2S_ClearFlag(SPI_TypeDef* SPIx, uint16_t SPI_I2S_FLAG);
+```
+
+**功能说明：**
+清除指定SPI/I2S的标志位，通常用于清除错误标志。
+
+### 22. SPI_I2S_GetITStatus
+
+```c
+/**
+ * @brief  检查指定的SPI/I2S中断状态
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @param  SPI_I2S_IT: 指定要检查的中断类型
+ * @retval 中断状态（SET或RESET）
+ * @example
+ *     if(SPI_I2S_GetITStatus(SPI1, SPI_I2S_IT_RXNE) == SET)
+ *     {
+ *         // 处理接收中断
+ *     }
+ */
+ITStatus SPI_I2S_GetITStatus(SPI_TypeDef* SPIx, uint8_t SPI_I2S_IT);
+```
+
+**功能说明：**
+检查指定SPI/I2S中断的状态，在中断服务函数中使用以确定中断源。
+
+### 23. SPI_I2S_ClearITPendingBit
+
+```c
+/**
+ * @brief  清除指定SPI/I2S的中断挂起位
+ * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
+ * @param  SPI_I2S_IT: 指定要清除的中断类型
+ * @retval 无
+ * @example
+ *     SPI_I2S_ClearITPendingBit(SPI1, SPI_IT_CRCERR);  // 清除CRC错误中断
+ */
+void SPI_I2S_ClearITPendingBit(SPI_TypeDef* SPIx, uint8_t SPI_I2S_IT);
+```
+
+**功能说明：**
+清除指定SPI/I2S的中断挂起位，在中断服务函数中调用以清除中断标志。
+
+## 使用示例
+
+### SPI主机模式基本配置示例
+
+```c
+#include "stm32f10x.h"
+
+void SPI1_Init(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    SPI_InitTypeDef SPI_InitStructure;
+    
+    // 使能时钟
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_SPI1, ENABLE);
+    
+    // 配置SPI1引脚：SCK、MISO、MOSI
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5 | GPIO_Pin_6 | GPIO_Pin_7;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+    
+    // 配置NSS引脚为推挽输出
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+    
+    // SPI1配置
+    SPI_InitStructure.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
+    SPI_InitStructure.SPI_Mode = SPI_Mode_Master;
+    SPI_InitStructure.SPI_DataSize = SPI_DataSize_8b;
+    SPI_InitStructure.SPI_CPOL = SPI_CPOL_High;
+    SPI_InitStructure.SPI_CPHA = SPI_CPHA_2Edge;
+    SPI_InitStructure.SPI_NSS = SPI_NSS_Soft;
+    SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_256;
+    SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
+    SPI_InitStructure.SPI_CRCPolynomial = 7;
+    SPI_Init(SPI1, &SPI_InitStructure);
+    
+    // 使能SPI1
+    SPI_Cmd(SPI1, ENABLE);
+}
+
+uint8_t SPI1_ReadWriteByte(uint8_t TxData)
+{
+    uint8_t retry = 0;
+    
+    // 等待发送缓冲区空
+    while(SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_TXE) == RESET)
+    {
+        retry++;
+        if(retry > 200) return 0;
+    }
+    
+    // 发送数据
+    SPI_I2S_SendData(SPI1, TxData);
+    retry = 0;
+    
+    // 等待接收缓冲区非空
+    while(SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_RXNE) == RESET)
+    {
+        retry++;
+        if(retry > 200) return 0;
+    }
+    
+    // 读取接收到的数据
+    return SPI_I2S_ReceiveData(SPI1);
+}
+```
+
+### SPI中断模式示例
+
+```c
+void SPI1_IT_Init(void)
+{
+    NVIC_InitTypeDef NVIC_InitStructure;
+    
+    // 配置SPI1（同上面的配置）
+    SPI1_Init();
+    
+    // 配置SPI1中断
+    NVIC_InitStructure.NVIC_IRQChannel = SPI1_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+    
+    // 使能SPI1接收中断
+    SPI_I2S_ITConfig(SPI1, SPI_I2S_IT_RXNE, ENABLE);
+}
+
+void SPI1_IRQHandler(void)
+{
+    uint8_t received_data;
+    
+    if(SPI_I2S_GetITStatus(SPI1, SPI_I2S_IT_RXNE) == SET)
+    {
+        // 读取接收到的数据
+        received_data = SPI_I2S_ReceiveData(SPI1);
+        
+        // 处理接收到的数据
+        // ... 用户代码 ...
+    }
+}
+```
+
+### I2S音频配置示例
+
+```c
+void I2S2_Init(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    I2S_InitTypeDef I2S_InitStructure;
+    
+    // 使能时钟
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_SPI2, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+    
+    // 配置I2S2引脚
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12 | GPIO_Pin_13 | GPIO_Pin_15;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+    
+    // I2S2配置
+    I2S_InitStructure.I2S_Mode = I2S_Mode_MasterTx;
+    I2S_InitStructure.I2S_Standard = I2S_Standard_Phillips;
+    I2S_InitStructure.I2S_DataFormat = I2S_DataFormat_16b;
+    I2S_InitStructure.I2S_MCLKOutput = I2S_MCLKOutput_Enable;
+    I2S_InitStructure.I2S_AudioFreq = I2S_AudioFreq_44k;
+    I2S_InitStructure.I2S_CPOL = I2S_CPOL_Low;
+    I2S_Init(SPI2, &I2S_InitStructure);
+    
+    // 使能I2S2
+    I2S_Cmd(SPI2, ENABLE);
+}
+```
+
+## 注意事项
+
+1. **时钟配置**：使用SPI/I2S外设前必须先使能相应的时钟，包括外设时钟和GPIO时钟。
+
+2. **引脚配置**：SPI引脚必须配置为复用推挽输出模式，I2S引脚也需要正确的复用配置。
+
+3. **模式选择**：SPI1支持所有功能，SPI2和SPI3还支持I2S功能，但某些高级功能可能有限制。
+
+4. **波特率设置**：主机模式下需要合理设置波特率分频器，确保通信速率满足外设要求。
+
+5. **数据同步**：在查询模式下，必须检查相应的标志位再进行数据收发操作。
+
+6. **中断处理**：使用中断模式时，需要在中断服务函数中及时处理数据，避免溢出。
+
+7. **CRC功能**：使用CRC功能时，需要正确配置多项式并在数据传输完成后发送CRC值。
+
+8. **I2S音频**：I2S配置时需要根据具体的音频格式选择合适的标准和数据格式。
+
+## 总结
+
+STM32F10x的SPI/I2S外设提供了灵活而强大的串行通信功能。SPI支持主从模式、全双工/半双工通信、硬件CRC校验等特性，适用于与各种外设器件通信。I2S功能则专门针对音频应用优化，支持多种音频标准和采样率。
+
+通过合理配置相关寄存器和使用标准库函数，可以轻松实现高可靠性的串行通信。无论是简单的传感器数据读取，还是复杂的音频数据处理，SPI/I2S外设都能提供良好的解决方案。在实际应用中，建议根据具体需求选择合适的工作模式和参数配置，并充分利用中断和DMA功能提高系统效率。
+

@@ -1,0 +1,601 @@
+---
+title: stm32f10x_dac
+description: STM32F10x DAC 数字模拟转换器外设标准库函数参考文档
+---
+
+## 数据类型定义
+
+### DAC_InitTypeDef - DAC初始化结构体
+
+```c
+typedef struct
+{
+  uint32_t DAC_Trigger;                      /* 指定DAC通道的外部触发源 */
+  uint32_t DAC_WaveGeneration;               /* 指定DAC通道是否生成噪声波或三角波 */
+  uint32_t DAC_LFSRUnmask_TriangleAmplitude; /* 指定噪声波生成的LFSR掩码或三角波的最大幅值 */
+  uint32_t DAC_OutputBuffer;                 /* 指定DAC通道输出缓冲器的启用状态 */
+} DAC_InitTypeDef;
+```
+
+**成员说明：**
+- `DAC_Trigger`：配置DAC通道的触发源，可选值参见 @ref DAC_trigger_selection
+- `DAC_WaveGeneration`：配置波形生成模式，可选值参见 @ref DAC_wave_generation
+- `DAC_LFSRUnmask_TriangleAmplitude`：配置LFSR掩码或三角波幅值，可选值参见 @ref DAC_lfsrunmask_triangleamplitude
+- `DAC_OutputBuffer`：配置输出缓冲器状态，可选值参见 @ref DAC_output_buffer
+
+## DAC常量定义
+
+### 触发源选择
+
+```c
+#define DAC_Trigger_None         ((uint32_t)0x00000000)  /* 无外部触发，加载数据后自动转换 */
+#define DAC_Trigger_T6_TRGO      ((uint32_t)0x00000004)  /* 定时器6 TRGO触发 */
+#define DAC_Trigger_T8_TRGO      ((uint32_t)0x0000000C)  /* 定时器8 TRGO触发（高密度器件） */
+#define DAC_Trigger_T3_TRGO      ((uint32_t)0x0000000C)  /* 定时器3 TRGO触发（连接线、中低密度、低密度Value Line器件） */
+#define DAC_Trigger_T7_TRGO      ((uint32_t)0x00000014)  /* 定时器7 TRGO触发 */
+#define DAC_Trigger_T5_TRGO      ((uint32_t)0x0000001C)  /* 定时器5 TRGO触发 */
+#define DAC_Trigger_T15_TRGO     ((uint32_t)0x0000001C)  /* 定时器15 TRGO触发（中低密度Value Line器件） */
+#define DAC_Trigger_T2_TRGO      ((uint32_t)0x00000024)  /* 定时器2 TRGO触发 */
+#define DAC_Trigger_T4_TRGO      ((uint32_t)0x0000002C)  /* 定时器4 TRGO触发 */
+#define DAC_Trigger_Ext_IT9      ((uint32_t)0x00000034)  /* 外部中断线9事件触发 */
+#define DAC_Trigger_Software     ((uint32_t)0x0000003C)  /* 软件触发 */
+```
+
+### 波形生成模式
+
+```c
+#define DAC_WaveGeneration_None      ((uint32_t)0x00000000)  /* 不生成波形 */
+#define DAC_WaveGeneration_Noise     ((uint32_t)0x00000040)  /* 生成噪声波 */
+#define DAC_WaveGeneration_Triangle  ((uint32_t)0x00000080)  /* 生成三角波 */
+```
+
+### LFSR掩码和三角波幅值
+
+```c
+/* 噪声波LFSR掩码 */
+#define DAC_LFSRUnmask_Bit0      ((uint32_t)0x00000000)  /* 解除LFSR第0位掩码 */
+#define DAC_LFSRUnmask_Bits1_0   ((uint32_t)0x00000100)  /* 解除LFSR第[1:0]位掩码 */
+#define DAC_LFSRUnmask_Bits2_0   ((uint32_t)0x00000200)  /* 解除LFSR第[2:0]位掩码 */
+#define DAC_LFSRUnmask_Bits3_0   ((uint32_t)0x00000300)  /* 解除LFSR第[3:0]位掩码 */
+#define DAC_LFSRUnmask_Bits4_0   ((uint32_t)0x00000400)  /* 解除LFSR第[4:0]位掩码 */
+#define DAC_LFSRUnmask_Bits5_0   ((uint32_t)0x00000500)  /* 解除LFSR第[5:0]位掩码 */
+#define DAC_LFSRUnmask_Bits6_0   ((uint32_t)0x00000600)  /* 解除LFSR第[6:0]位掩码 */
+#define DAC_LFSRUnmask_Bits7_0   ((uint32_t)0x00000700)  /* 解除LFSR第[7:0]位掩码 */
+#define DAC_LFSRUnmask_Bits8_0   ((uint32_t)0x00000800)  /* 解除LFSR第[8:0]位掩码 */
+#define DAC_LFSRUnmask_Bits9_0   ((uint32_t)0x00000900)  /* 解除LFSR第[9:0]位掩码 */
+#define DAC_LFSRUnmask_Bits10_0  ((uint32_t)0x00000A00)  /* 解除LFSR第[10:0]位掩码 */
+#define DAC_LFSRUnmask_Bits11_0  ((uint32_t)0x00000B00)  /* 解除LFSR第[11:0]位掩码 */
+
+/* 三角波最大幅值 */
+#define DAC_TriangleAmplitude_1     ((uint32_t)0x00000000)  /* 三角波最大幅值为1 */
+#define DAC_TriangleAmplitude_3     ((uint32_t)0x00000100)  /* 三角波最大幅值为3 */
+#define DAC_TriangleAmplitude_7     ((uint32_t)0x00000200)  /* 三角波最大幅值为7 */
+#define DAC_TriangleAmplitude_15    ((uint32_t)0x00000300)  /* 三角波最大幅值为15 */
+#define DAC_TriangleAmplitude_31    ((uint32_t)0x00000400)  /* 三角波最大幅值为31 */
+#define DAC_TriangleAmplitude_63    ((uint32_t)0x00000500)  /* 三角波最大幅值为63 */
+#define DAC_TriangleAmplitude_127   ((uint32_t)0x00000600)  /* 三角波最大幅值为127 */
+#define DAC_TriangleAmplitude_255   ((uint32_t)0x00000700)  /* 三角波最大幅值为255 */
+#define DAC_TriangleAmplitude_511   ((uint32_t)0x00000800)  /* 三角波最大幅值为511 */
+#define DAC_TriangleAmplitude_1023  ((uint32_t)0x00000900)  /* 三角波最大幅值为1023 */
+#define DAC_TriangleAmplitude_2047  ((uint32_t)0x00000A00)  /* 三角波最大幅值为2047 */
+#define DAC_TriangleAmplitude_4095  ((uint32_t)0x00000B00)  /* 三角波最大幅值为4095 */
+```
+
+### 输出缓冲器配置
+
+```c
+#define DAC_OutputBuffer_Enable   ((uint32_t)0x00000000)  /* 启用输出缓冲器 */
+#define DAC_OutputBuffer_Disable  ((uint32_t)0x00000002)  /* 禁用输出缓冲器 */
+```
+
+### 通道选择
+
+```c
+#define DAC_Channel_1  ((uint32_t)0x00000000)  /* DAC通道1 */
+#define DAC_Channel_2  ((uint32_t)0x00000010)  /* DAC通道2 */
+```
+
+### 数据对齐方式
+
+```c
+#define DAC_Align_12b_R  ((uint32_t)0x00000000)  /* 12位右对齐 */
+#define DAC_Align_12b_L  ((uint32_t)0x00000004)  /* 12位左对齐 */
+#define DAC_Align_8b_R   ((uint32_t)0x00000008)  /* 8位右对齐 */
+```
+
+### 波形生成类型
+
+```c
+#define DAC_Wave_Noise     ((uint32_t)0x00000040)  /* 噪声波 */
+#define DAC_Wave_Triangle  ((uint32_t)0x00000080)  /* 三角波 */
+```
+
+## 中断标志定义
+
+仅在STM32F10X Value Line器件中可用：
+
+```c
+#define DAC_IT_DMAUDR    ((uint32_t)0x00002000)  /* DMA下溢中断 */
+#define DAC_FLAG_DMAUDR  ((uint32_t)0x00002000)  /* DMA下溢标志 */
+```
+
+## 标准库函数详解
+
+### 1. DAC_DeInit
+
+```c
+/**
+ * @brief  将DAC外设寄存器重置为默认复位值
+ * @param  无
+ * @retval 无
+ * @example
+ *     DAC_DeInit();  // 复位DAC外设
+ */
+void DAC_DeInit(void);
+```
+
+**功能说明：**
+将DAC外设的所有寄存器恢复到复位状态的默认值。
+
+### 2. DAC_Init
+
+```c
+/**
+ * @brief  根据DAC_InitStruct中指定的参数初始化DAC外设
+ * @param  DAC_Channel: 要配置的DAC通道，可选值：
+ *         - DAC_Channel_1: DAC通道1
+ *         - DAC_Channel_2: DAC通道2
+ * @param  DAC_InitStruct: 指向DAC_InitTypeDef结构的指针，包含DAC的配置信息
+ * @retval 无
+ * @example
+ *     DAC_InitTypeDef DAC_InitStructure;
+ *     DAC_InitStructure.DAC_Trigger = DAC_Trigger_None;
+ *     DAC_InitStructure.DAC_WaveGeneration = DAC_WaveGeneration_None;
+ *     DAC_InitStructure.DAC_OutputBuffer = DAC_OutputBuffer_Enable;
+ *     DAC_Init(DAC_Channel_1, &DAC_InitStructure);
+ */
+void DAC_Init(uint32_t DAC_Channel, DAC_InitTypeDef* DAC_InitStruct);
+```
+
+**功能说明：**
+根据指定的参数初始化DAC通道，包括触发源、波形生成、输出缓冲器等配置。
+
+### 3. DAC_StructInit
+
+```c
+/**
+ * @brief  将DAC_InitStruct中的每个参数填入默认值
+ * @param  DAC_InitStruct: 指向DAC_InitTypeDef结构的指针，将被初始化
+ * @retval 无
+ * @example
+ *     DAC_InitTypeDef DAC_InitStructure;
+ *     DAC_StructInit(&DAC_InitStructure);  // 填入默认值
+ */
+void DAC_StructInit(DAC_InitTypeDef* DAC_InitStruct);
+```
+
+**功能说明：**
+使用默认值初始化DAC_InitTypeDef结构体，方便用户快速配置。
+
+### 4. DAC_Cmd
+
+```c
+/**
+ * @brief  启用或禁用指定的DAC通道
+ * @param  DAC_Channel: 要控制的DAC通道，可选值：
+ *         - DAC_Channel_1: DAC通道1
+ *         - DAC_Channel_2: DAC通道2
+ * @param  NewState: DAC通道的新状态，可选值：
+ *         - ENABLE: 启用DAC通道
+ *         - DISABLE: 禁用DAC通道
+ * @retval 无
+ * @example
+ *     DAC_Cmd(DAC_Channel_1, ENABLE);   // 启用DAC通道1
+ *     DAC_Cmd(DAC_Channel_2, DISABLE);  // 禁用DAC通道2
+ */
+void DAC_Cmd(uint32_t DAC_Channel, FunctionalState NewState);
+```
+
+**功能说明：**
+控制指定DAC通道的启用或禁用状态。
+
+### 5. DAC_ITConfig
+
+```c
+/**
+ * @brief  启用或禁用指定的DAC中断（仅Value Line器件）
+ * @param  DAC_Channel: 要配置的DAC通道，可选值：
+ *         - DAC_Channel_1: DAC通道1
+ *         - DAC_Channel_2: DAC通道2
+ * @param  DAC_IT: 要配置的DAC中断，可选值：
+ *         - DAC_IT_DMAUDR: DMA下溢中断
+ * @param  NewState: 中断的新状态，可选值：
+ *         - ENABLE: 启用中断
+ *         - DISABLE: 禁用中断
+ * @retval 无
+ * @example
+ *     DAC_ITConfig(DAC_Channel_1, DAC_IT_DMAUDR, ENABLE);
+ */
+void DAC_ITConfig(uint32_t DAC_Channel, uint32_t DAC_IT, FunctionalState NewState);
+```
+
+**功能说明：**
+配置DAC中断的启用状态，仅在STM32F10X Value Line器件中可用。
+
+### 6. DAC_DMACmd
+
+```c
+/**
+ * @brief  启用或禁用指定DAC通道的DMA请求
+ * @param  DAC_Channel: 要配置的DAC通道，可选值：
+ *         - DAC_Channel_1: DAC通道1
+ *         - DAC_Channel_2: DAC通道2
+ * @param  NewState: DMA请求的新状态，可选值：
+ *         - ENABLE: 启用DMA请求
+ *         - DISABLE: 禁用DMA请求
+ * @retval 无
+ * @example
+ *     DAC_DMACmd(DAC_Channel_1, ENABLE);  // 启用通道1的DMA请求
+ */
+void DAC_DMACmd(uint32_t DAC_Channel, FunctionalState NewState);
+```
+
+**功能说明：**
+控制指定DAC通道的DMA请求启用状态，用于DMA传输模式。
+
+### 7. DAC_SoftwareTriggerCmd
+
+```c
+/**
+ * @brief  启用或禁用指定DAC通道的软件触发
+ * @param  DAC_Channel: 要配置的DAC通道，可选值：
+ *         - DAC_Channel_1: DAC通道1
+ *         - DAC_Channel_2: DAC通道2
+ * @param  NewState: 软件触发的新状态，可选值：
+ *         - ENABLE: 启用软件触发
+ *         - DISABLE: 禁用软件触发
+ * @retval 无
+ * @example
+ *     DAC_SoftwareTriggerCmd(DAC_Channel_1, ENABLE);  // 触发通道1转换
+ */
+void DAC_SoftwareTriggerCmd(uint32_t DAC_Channel, FunctionalState NewState);
+```
+
+**功能说明：**
+通过软件触发指定DAC通道开始数模转换。
+
+### 8. DAC_DualSoftwareTriggerCmd
+
+```c
+/**
+ * @brief  启用或禁用双通道软件触发
+ * @param  NewState: 双通道软件触发的新状态，可选值：
+ *         - ENABLE: 启用双通道软件触发
+ *         - DISABLE: 禁用双通道软件触发
+ * @retval 无
+ * @example
+ *     DAC_DualSoftwareTriggerCmd(ENABLE);  // 同时触发两个通道
+ */
+void DAC_DualSoftwareTriggerCmd(FunctionalState NewState);
+```
+
+**功能说明：**
+同时触发DAC通道1和通道2开始数模转换。
+
+### 9. DAC_WaveGenerationCmd
+
+```c
+/**
+ * @brief  启用或禁用指定DAC通道的波形生成
+ * @param  DAC_Channel: 要配置的DAC通道，可选值：
+ *         - DAC_Channel_1: DAC通道1
+ *         - DAC_Channel_2: DAC通道2
+ * @param  DAC_Wave: 要配置的波形类型，可选值：
+ *         - DAC_Wave_Noise: 噪声波
+ *         - DAC_Wave_Triangle: 三角波
+ * @param  NewState: 波形生成的新状态，可选值：
+ *         - ENABLE: 启用波形生成
+ *         - DISABLE: 禁用波形生成
+ * @retval 无
+ * @example
+ *     DAC_WaveGenerationCmd(DAC_Channel_1, DAC_Wave_Triangle, ENABLE);
+ */
+void DAC_WaveGenerationCmd(uint32_t DAC_Channel, uint32_t DAC_Wave, FunctionalState NewState);
+```
+
+**功能说明：**
+控制指定DAC通道的波形生成功能，可生成噪声波或三角波。
+
+### 10. DAC_SetChannel1Data
+
+```c
+/**
+ * @brief  设置DAC通道1的数据保持寄存器值
+ * @param  DAC_Align: 数据对齐方式，可选值：
+ *         - DAC_Align_12b_R: 12位右对齐
+ *         - DAC_Align_12b_L: 12位左对齐
+ *         - DAC_Align_8b_R: 8位右对齐
+ * @param  Data: 要写入数据保持寄存器的数据值
+ * @retval 无
+ * @example
+ *     DAC_SetChannel1Data(DAC_Align_12b_R, 2048);  // 设置通道1输出约1.65V
+ */
+void DAC_SetChannel1Data(uint32_t DAC_Align, uint16_t Data);
+```
+
+**功能说明：**
+设置DAC通道1的数字输入值，该值将被转换为相应的模拟电压输出。
+
+### 11. DAC_SetChannel2Data
+
+```c
+/**
+ * @brief  设置DAC通道2的数据保持寄存器值
+ * @param  DAC_Align: 数据对齐方式，可选值：
+ *         - DAC_Align_12b_R: 12位右对齐
+ *         - DAC_Align_12b_L: 12位左对齐
+ *         - DAC_Align_8b_R: 8位右对齐
+ * @param  Data: 要写入数据保持寄存器的数据值
+ * @retval 无
+ * @example
+ *     DAC_SetChannel2Data(DAC_Align_12b_R, 1024);  // 设置通道2输出约0.82V
+ */
+void DAC_SetChannel2Data(uint32_t DAC_Align, uint16_t Data);
+```
+
+**功能说明：**
+设置DAC通道2的数字输入值，该值将被转换为相应的模拟电压输出。
+
+### 12. DAC_SetDualChannelData
+
+```c
+/**
+ * @brief  设置双通道DAC的数据保持寄存器值
+ * @param  DAC_Align: 数据对齐方式，可选值：
+ *         - DAC_Align_12b_R: 12位右对齐
+ *         - DAC_Align_12b_L: 12位左对齐
+ *         - DAC_Align_8b_R: 8位右对齐
+ * @param  Data2: 通道2的数据值
+ * @param  Data1: 通道1的数据值
+ * @retval 无
+ * @example
+ *     DAC_SetDualChannelData(DAC_Align_12b_R, 1024, 2048);
+ */
+void DAC_SetDualChannelData(uint32_t DAC_Align, uint16_t Data2, uint16_t Data1);
+```
+
+**功能说明：**
+同时设置DAC通道1和通道2的数据值，用于双通道同步输出。
+
+### 13. DAC_GetDataOutputValue
+
+```c
+/**
+ * @brief  返回指定DAC通道的数据输出寄存器值
+ * @param  DAC_Channel: 要读取的DAC通道，可选值：
+ *         - DAC_Channel_1: DAC通道1
+ *         - DAC_Channel_2: DAC通道2
+ * @retval 指定DAC通道的数据输出寄存器值
+ * @example
+ *     uint16_t dac_value = DAC_GetDataOutputValue(DAC_Channel_1);
+ */
+uint16_t DAC_GetDataOutputValue(uint32_t DAC_Channel);
+```
+
+**功能说明：**
+读取指定DAC通道当前的数据输出寄存器值。
+
+### 14. DAC_GetFlagStatus
+
+```c
+/**
+ * @brief  检查指定的DAC标志位是否被设置（仅Value Line器件）
+ * @param  DAC_Channel: 要检查的DAC通道，可选值：
+ *         - DAC_Channel_1: DAC通道1
+ *         - DAC_Channel_2: DAC通道2
+ * @param  DAC_FLAG: 要检查的DAC标志，可选值：
+ *         - DAC_FLAG_DMAUDR: DMA下溢标志
+ * @retval 标志状态（SET或RESET）
+ * @example
+ *     if(DAC_GetFlagStatus(DAC_Channel_1, DAC_FLAG_DMAUDR) == SET)
+ *     {
+ *         // 处理DMA下溢
+ *     }
+ */
+FlagStatus DAC_GetFlagStatus(uint32_t DAC_Channel, uint32_t DAC_FLAG);
+```
+
+**功能说明：**
+检查指定DAC通道的标志位状态，仅在Value Line器件中可用。
+
+### 15. DAC_ClearFlag
+
+```c
+/**
+ * @brief  清除指定的DAC标志位（仅Value Line器件）
+ * @param  DAC_Channel: 要清除标志的DAC通道，可选值：
+ *         - DAC_Channel_1: DAC通道1
+ *         - DAC_Channel_2: DAC通道2
+ * @param  DAC_FLAG: 要清除的DAC标志，可选值：
+ *         - DAC_FLAG_DMAUDR: DMA下溢标志
+ * @retval 无
+ * @example
+ *     DAC_ClearFlag(DAC_Channel_1, DAC_FLAG_DMAUDR);
+ */
+void DAC_ClearFlag(uint32_t DAC_Channel, uint32_t DAC_FLAG);
+```
+
+**功能说明：**
+清除指定DAC通道的标志位，仅在Value Line器件中可用。
+
+### 16. DAC_GetITStatus
+
+```c
+/**
+ * @brief  检查指定的DAC中断是否发生（仅Value Line器件）
+ * @param  DAC_Channel: 要检查的DAC通道，可选值：
+ *         - DAC_Channel_1: DAC通道1
+ *         - DAC_Channel_2: DAC通道2
+ * @param  DAC_IT: 要检查的DAC中断，可选值：
+ *         - DAC_IT_DMAUDR: DMA下溢中断
+ * @retval 中断状态（SET或RESET）
+ * @example
+ *     if(DAC_GetITStatus(DAC_Channel_1, DAC_IT_DMAUDR) == SET)
+ *     {
+ *         // 处理中断
+ *     }
+ */
+ITStatus DAC_GetITStatus(uint32_t DAC_Channel, uint32_t DAC_IT);
+```
+
+**功能说明：**
+检查指定DAC中断的状态，仅在Value Line器件中可用。
+
+### 17. DAC_ClearITPendingBit
+
+```c
+/**
+ * @brief  清除指定的DAC中断挂起位（仅Value Line器件）
+ * @param  DAC_Channel: 要清除中断的DAC通道，可选值：
+ *         - DAC_Channel_1: DAC通道1
+ *         - DAC_Channel_2: DAC通道2
+ * @param  DAC_IT: 要清除的DAC中断，可选值：
+ *         - DAC_IT_DMAUDR: DMA下溢中断
+ * @retval 无
+ * @example
+ *     DAC_ClearITPendingBit(DAC_Channel_1, DAC_IT_DMAUDR);
+ */
+void DAC_ClearITPendingBit(uint32_t DAC_Channel, uint32_t DAC_IT);
+```
+
+**功能说明：**
+清除指定DAC中断的挂起位，仅在Value Line器件中可用。
+
+## 使用示例
+
+### 基本DAC输出
+
+```c
+#include "stm32f10x.h"
+
+void DAC_Configuration(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    DAC_InitTypeDef DAC_InitStructure;
+    
+    // 使能GPIOA和DAC时钟
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_DAC, ENABLE);
+    
+    // 配置PA4为模拟输入（DAC通道1输出）
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+    
+    // 配置DAC通道1
+    DAC_InitStructure.DAC_Trigger = DAC_Trigger_None;
+    DAC_InitStructure.DAC_WaveGeneration = DAC_WaveGeneration_None;
+    DAC_InitStructure.DAC_OutputBuffer = DAC_OutputBuffer_Enable;
+    DAC_Init(DAC_Channel_1, &DAC_InitStructure);
+    
+    // 启用DAC通道1
+    DAC_Cmd(DAC_Channel_1, ENABLE);
+    
+    // 设置输出电压为VDD/2（约1.65V，假设VDD=3.3V）
+    DAC_SetChannel1Data(DAC_Align_12b_R, 2048);
+}
+```
+
+### DAC三角波生成
+
+```c
+void DAC_TriangleWave_Configuration(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    DAC_InitTypeDef DAC_InitStructure;
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    
+    // 使能时钟
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_DAC | RCC_APB1Periph_TIM6, ENABLE);
+    
+    // 配置GPIO
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+    
+    // 配置TIM6作为DAC触发源
+    TIM_TimeBaseStructure.TIM_Period = 100;  // 更新周期
+    TIM_TimeBaseStructure.TIM_Prescaler = 720;  // 预分频
+    TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM6, &TIM_TimeBaseStructure);
+    TIM_SelectOutputTrigger(TIM6, TIM_TRGOSource_Update);
+    TIM_Cmd(TIM6, ENABLE);
+    
+    // 配置DAC
+    DAC_InitStructure.DAC_Trigger = DAC_Trigger_T6_TRGO;
+    DAC_InitStructure.DAC_WaveGeneration = DAC_WaveGeneration_Triangle;
+    DAC_InitStructure.DAC_LFSRUnmask_TriangleAmplitude = DAC_TriangleAmplitude_1023;
+    DAC_InitStructure.DAC_OutputBuffer = DAC_OutputBuffer_Enable;
+    DAC_Init(DAC_Channel_1, &DAC_InitStructure);
+    
+    // 启用DAC通道1
+    DAC_Cmd(DAC_Channel_1, ENABLE);
+    
+    // 设置三角波基准值
+    DAC_SetChannel1Data(DAC_Align_12b_R, 2048);
+}
+```
+
+### DAC双通道同步输出
+
+```c
+void DAC_DualChannel_Configuration(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    DAC_InitTypeDef DAC_InitStructure;
+    
+    // 使能时钟
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_DAC, ENABLE);
+    
+    // 配置PA4（DAC_OUT1）和PA5（DAC_OUT2）
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4 | GPIO_Pin_5;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+    
+    // 配置DAC通道1和通道2
+    DAC_InitStructure.DAC_Trigger = DAC_Trigger_Software;
+    DAC_InitStructure.DAC_WaveGeneration = DAC_WaveGeneration_None;
+    DAC_InitStructure.DAC_OutputBuffer = DAC_OutputBuffer_Enable;
+    DAC_Init(DAC_Channel_1, &DAC_InitStructure);
+    DAC_Init(DAC_Channel_2, &DAC_InitStructure);
+    
+    // 启用两个通道
+    DAC_Cmd(DAC_Channel_1, ENABLE);
+    DAC_Cmd(DAC_Channel_2, ENABLE);
+    
+    // 同时设置两个通道的输出值
+    DAC_SetDualChannelData(DAC_Align_12b_R, 1024, 3072);  // 通道2: 1V, 通道1: 2.5V
+    
+    // 软件触发转换
+    DAC_DualSoftwareTriggerCmd(ENABLE);
+}
+```
+
+## 注意事项
+
+1. **时钟配置**：使用DAC前必须先使能APB1上的DAC时钟
+2. **GPIO配置**：DAC输出引脚（PA4/PA5）必须配置为模拟输入模式
+3. **数据范围**：12位DAC的有效数据范围是0-4095，对应输出电压0-VREF+
+4. **输出缓冲器**：启用输出缓冲器可以提供更好的驱动能力，但会增加输出阻抗
+5. **触发源选择**：根据应用需求选择合适的触发源，软件触发适用于静态输出，定时器触发适用于动态波形
+6. **波形生成**：使用波形生成功能时，数据寄存器的值作为基准值，实际输出在此基础上叠加波形
+7. **中断功能**：仅在STM32F10X Value Line器件中支持DAC中断功能
+8. **双通道同步**：使用双通道时，可以通过双通道软件触发实现精确的同步输出
+
+## 总结
+
+STM32F10x DAC外设提供了强大的数字模拟转换功能，支持两个独立的12位DAC通道。通过合理配置触发源、波形生成和输出缓冲器等参数，可以实现多种应用场景，包括静态电压输出、动态波形生成和双通道同步输出。该外设特别适用于音频信号生成、传感器偏置电压提供、波形发生器等应用。
+

@@ -1,0 +1,461 @@
+---
+title: stm32f10x_dma
+description: STM32F10x DMA 外设标准库函数参考文档
+---
+
+## 数据类型定义
+
+#### DMA_InitTypeDef - DMA初始化结构体
+
+```c
+typedef struct
+{
+  uint32_t DMA_PeripheralBaseAddr;  /* 外设基地址 */
+  uint32_t DMA_MemoryBaseAddr;      /* 存储器基地址 */
+  uint32_t DMA_DIR;                 /* 传输方向 */
+  uint32_t DMA_BufferSize;          /* 缓冲区大小 */
+  uint32_t DMA_PeripheralInc;       /* 外设地址递增模式 */
+  uint32_t DMA_MemoryInc;           /* 存储器地址递增模式 */
+  uint32_t DMA_PeripheralDataSize;  /* 外设数据宽度 */
+  uint32_t DMA_MemoryDataSize;      /* 存储器数据宽度 */
+  uint32_t DMA_Mode;                /* 传输模式 */
+  uint32_t DMA_Priority;            /* 通道优先级 */
+  uint32_t DMA_M2M;                 /* 存储器到存储器模式 */
+} DMA_InitTypeDef;
+```
+
+**成员说明：**
+- `DMA_PeripheralBaseAddr`：指定DMA通道的外设基地址
+- `DMA_MemoryBaseAddr`：指定DMA通道的存储器基地址
+- `DMA_DIR`：指定传输方向，可选值见 @ref DMA_data_transfer_direction
+- `DMA_BufferSize`：指定缓冲区大小，以数据单元为单位（1-65535）
+- `DMA_PeripheralInc`：外设地址是否递增，可选值见 @ref DMA_peripheral_incremented_mode
+- `DMA_MemoryInc`：存储器地址是否递增，可选值见 @ref DMA_memory_incremented_mode
+- `DMA_PeripheralDataSize`：外设数据宽度，可选值见 @ref DMA_peripheral_data_size
+- `DMA_MemoryDataSize`：存储器数据宽度，可选值见 @ref DMA_memory_data_size
+- `DMA_Mode`：传输模式，可选值见 @ref DMA_circular_normal_mode
+- `DMA_Priority`：通道优先级，可选值见 @ref DMA_priority_level
+- `DMA_M2M`：存储器到存储器传输使能，可选值见 @ref DMA_memory_to_memory
+
+## 枚举类型定义
+
+#### DMA传输方向
+
+```c
+#define DMA_DIR_PeripheralDST    ((uint32_t)0x00000010)  /* 存储器到外设 */
+#define DMA_DIR_PeripheralSRC    ((uint32_t)0x00000000)  /* 外设到存储器 */
+```
+
+**说明：**
+- `DMA_DIR_PeripheralDST`：数据从存储器传输到外设
+- `DMA_DIR_PeripheralSRC`：数据从外设传输到存储器
+
+#### DMA外设地址递增模式
+
+```c
+#define DMA_PeripheralInc_Enable     ((uint32_t)0x00000040)  /* 外设地址递增使能 */
+#define DMA_PeripheralInc_Disable    ((uint32_t)0x00000000)  /* 外设地址递增禁用 */
+```
+
+#### DMA存储器地址递增模式
+
+```c
+#define DMA_MemoryInc_Enable     ((uint32_t)0x00000080)  /* 存储器地址递增使能 */
+#define DMA_MemoryInc_Disable    ((uint32_t)0x00000000)  /* 存储器地址递增禁用 */
+```
+
+#### DMA外设数据宽度
+
+```c
+#define DMA_PeripheralDataSize_Byte      ((uint32_t)0x00000000)  /* 8位数据宽度 */
+#define DMA_PeripheralDataSize_HalfWord  ((uint32_t)0x00000100)  /* 16位数据宽度 */
+#define DMA_PeripheralDataSize_Word      ((uint32_t)0x00000200)  /* 32位数据宽度 */
+```
+
+#### DMA存储器数据宽度
+
+```c
+#define DMA_MemoryDataSize_Byte      ((uint32_t)0x00000000)  /* 8位数据宽度 */
+#define DMA_MemoryDataSize_HalfWord  ((uint32_t)0x00000400)  /* 16位数据宽度 */
+#define DMA_MemoryDataSize_Word      ((uint32_t)0x00000800)  /* 32位数据宽度 */
+```
+
+#### DMA传输模式
+
+```c
+#define DMA_Mode_Circular    ((uint32_t)0x00000020)  /* 循环传输模式 */
+#define DMA_Mode_Normal      ((uint32_t)0x00000000)  /* 正常传输模式 */
+```
+
+**说明：**
+- `DMA_Mode_Circular`：循环传输模式，传输完成后自动重新开始
+- `DMA_Mode_Normal`：正常传输模式，传输完成后停止
+
+#### DMA通道优先级
+
+```c
+#define DMA_Priority_VeryHigh    ((uint32_t)0x00003000)  /* 非常高优先级 */
+#define DMA_Priority_High        ((uint32_t)0x00002000)  /* 高优先级 */
+#define DMA_Priority_Medium      ((uint32_t)0x00001000)  /* 中等优先级 */
+#define DMA_Priority_Low         ((uint32_t)0x00000000)  /* 低优先级 */
+```
+
+#### DMA存储器到存储器模式
+
+```c
+#define DMA_M2M_Enable     ((uint32_t)0x00004000)  /* 存储器到存储器模式使能 */
+#define DMA_M2M_Disable    ((uint32_t)0x00000000)  /* 存储器到存储器模式禁用 */
+```
+
+## DMA中断标志定义
+
+### 基本中断类型
+
+```c
+#define DMA_IT_TC    ((uint32_t)0x00000002)  /* 传输完成中断 */
+#define DMA_IT_HT    ((uint32_t)0x00000004)  /* 半传输中断 */
+#define DMA_IT_TE    ((uint32_t)0x00000008)  /* 传输错误中断 */
+```
+
+### DMA1具体中断标志
+
+```c
+#define DMA1_IT_GL1    ((uint32_t)0x00000001)  /* DMA1通道1全局中断 */
+#define DMA1_IT_TC1    ((uint32_t)0x00000002)  /* DMA1通道1传输完成中断 */
+#define DMA1_IT_HT1    ((uint32_t)0x00000004)  /* DMA1通道1半传输中断 */
+#define DMA1_IT_TE1    ((uint32_t)0x00000008)  /* DMA1通道1传输错误中断 */
+/* ... 其他通道中断标志 ... */
+```
+
+### DMA2具体中断标志
+
+```c
+#define DMA2_IT_GL1    ((uint32_t)0x10000001)  /* DMA2通道1全局中断 */
+#define DMA2_IT_TC1    ((uint32_t)0x10000002)  /* DMA2通道1传输完成中断 */
+#define DMA2_IT_HT1    ((uint32_t)0x10000004)  /* DMA2通道1半传输中断 */
+#define DMA2_IT_TE1    ((uint32_t)0x10000008)  /* DMA2通道1传输错误中断 */
+/* ... 其他通道中断标志 ... */
+```
+
+## DMA状态标志定义
+
+### DMA1状态标志
+
+```c
+#define DMA1_FLAG_GL1    ((uint32_t)0x00000001)  /* DMA1通道1全局标志 */
+#define DMA1_FLAG_TC1    ((uint32_t)0x00000002)  /* DMA1通道1传输完成标志 */
+#define DMA1_FLAG_HT1    ((uint32_t)0x00000004)  /* DMA1通道1半传输标志 */
+#define DMA1_FLAG_TE1    ((uint32_t)0x00000008)  /* DMA1通道1传输错误标志 */
+/* ... 其他通道状态标志 ... */
+```
+
+### DMA2状态标志
+
+```c
+#define DMA2_FLAG_GL1    ((uint32_t)0x10000001)  /* DMA2通道1全局标志 */
+#define DMA2_FLAG_TC1    ((uint32_t)0x10000002)  /* DMA2通道1传输完成标志 */
+#define DMA2_FLAG_HT1    ((uint32_t)0x10000004)  /* DMA2通道1半传输标志 */
+#define DMA2_FLAG_TE1    ((uint32_t)0x10000008)  /* DMA2通道1传输错误标志 */
+/* ... 其他通道状态标志 ... */
+```
+
+## 标准库函数详解
+
+### 1. DMA_DeInit
+
+```c
+/**
+ * @brief  将DMA通道寄存器复位为默认值
+ * @param  DMAy_Channelx: 指定的DMA通道，可以是DMA1_Channel1到DMA1_Channel7或DMA2_Channel1到DMA2_Channel5
+ * @retval 无
+ * @example
+ *     DMA_DeInit(DMA1_Channel1);  // 复位DMA1通道1
+ */
+void DMA_DeInit(DMA_Channel_TypeDef* DMAy_Channelx);
+```
+
+**功能说明：**
+将指定的DMA通道寄存器复位为默认值，清除所有配置。
+
+### 2. DMA_Init
+
+```c
+/**
+ * @brief  根据DMA_InitStruct中的参数初始化DMA通道
+ * @param  DMAy_Channelx: 指定的DMA通道
+ * @param  DMA_InitStruct: 指向DMA_InitTypeDef结构体的指针，包含配置信息
+ * @retval 无
+ * @example
+ *     DMA_InitTypeDef DMA_InitStructure;
+ *     DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)&USART1->DR;
+ *     DMA_InitStructure.DMA_MemoryBaseAddr = (uint32_t)buffer;
+ *     DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;
+ *     DMA_InitStructure.DMA_BufferSize = 100;
+ *     DMA_Init(DMA1_Channel5, &DMA_InitStructure);
+ */
+void DMA_Init(DMA_Channel_TypeDef* DMAy_Channelx, DMA_InitTypeDef* DMA_InitStruct);
+```
+
+**功能说明：**
+根据指定的参数初始化DMA通道，配置传输方向、数据宽度、传输模式等。
+
+### 3. DMA_StructInit
+
+```c
+/**
+ * @brief  将DMA_InitStruct的每个成员设置为默认值
+ * @param  DMA_InitStruct: 指向DMA_InitTypeDef结构体的指针
+ * @retval 无
+ * @example
+ *     DMA_InitTypeDef DMA_InitStructure;
+ *     DMA_StructInit(&DMA_InitStructure);
+ */
+void DMA_StructInit(DMA_InitTypeDef* DMA_InitStruct);
+```
+
+**功能说明：**
+用默认值填充DMA_InitTypeDef结构体，为后续配置提供基础。
+
+### 4. DMA_Cmd
+
+```c
+/**
+ * @brief  使能或禁用指定的DMA通道
+ * @param  DMAy_Channelx: 指定的DMA通道
+ * @param  NewState: DMA通道的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     DMA_Cmd(DMA1_Channel1, ENABLE);   // 启动DMA传输
+ *     DMA_Cmd(DMA1_Channel1, DISABLE);  // 停止DMA传输
+ */
+void DMA_Cmd(DMA_Channel_TypeDef* DMAy_Channelx, FunctionalState NewState);
+```
+
+**功能说明：**
+使能或禁用指定的DMA通道，控制DMA传输的开始和停止。
+
+### 5. DMA_ITConfig
+
+```c
+/**
+ * @brief  使能或禁用指定DMA通道的中断
+ * @param  DMAy_Channelx: 指定的DMA通道
+ * @param  DMA_IT: 指定的DMA中断源，可以是DMA_IT_TC、DMA_IT_HT、DMA_IT_TE的组合
+ * @param  NewState: 中断的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     DMA_ITConfig(DMA1_Channel1, DMA_IT_TC, ENABLE);  // 使能传输完成中断
+ */
+void DMA_ITConfig(DMA_Channel_TypeDef* DMAy_Channelx, uint32_t DMA_IT, FunctionalState NewState);
+```
+
+**功能说明：**
+配置DMA通道的中断功能，可以同时使能多个中断源。
+
+### 6. DMA_SetCurrDataCounter
+
+```c
+/**
+ * @brief  设置指定DMA通道当前数据传输数量
+ * @param  DMAy_Channelx: 指定的DMA通道
+ * @param  DataNumber: 要传输的数据数量（1-65535）
+ * @retval 无
+ * @example
+ *     DMA_SetCurrDataCounter(DMA1_Channel1, 1024);  // 设置传输1024个数据单元
+ */
+void DMA_SetCurrDataCounter(DMA_Channel_TypeDef* DMAy_Channelx, uint16_t DataNumber); 
+```
+
+**功能说明：**
+设置DMA通道当前要传输的数据数量，仅在通道禁用时可以设置。
+
+### 7. DMA_GetCurrDataCounter
+
+```c
+/**
+ * @brief  获取指定DMA通道当前剩余的数据传输数量
+ * @param  DMAy_Channelx: 指定的DMA通道
+ * @retval 剩余的数据传输数量
+ * @example
+ *     uint16_t remaining = DMA_GetCurrDataCounter(DMA1_Channel1);
+ */
+uint16_t DMA_GetCurrDataCounter(DMA_Channel_TypeDef* DMAy_Channelx);
+```
+
+**功能说明：**
+返回DMA通道当前剩余的数据传输数量，可用于监控传输进度。
+
+### 8. DMA_GetFlagStatus
+
+```c
+/**
+ * @brief  检查指定的DMA标志位是否设置
+ * @param  DMAy_FLAG: 指定的DMA标志位
+ * @retval FlagStatus: 标志位状态（SET或RESET）
+ * @example
+ *     if (DMA_GetFlagStatus(DMA1_FLAG_TC1) == SET) {
+ *         // 传输完成处理
+ *     }
+ */
+FlagStatus DMA_GetFlagStatus(uint32_t DMAy_FLAG);
+```
+
+**功能说明：**
+检查指定DMA标志位的状态，用于判断传输状态和错误情况。
+
+### 9. DMA_ClearFlag
+
+```c
+/**
+ * @brief  清除指定的DMA标志位
+ * @param  DMAy_FLAG: 指定要清除的DMA标志位
+ * @retval 无
+ * @example
+ *     DMA_ClearFlag(DMA1_FLAG_TC1);  // 清除传输完成标志
+ */
+void DMA_ClearFlag(uint32_t DMAy_FLAG);
+```
+
+**功能说明：**
+清除指定的DMA标志位，通常在中断服务程序中使用。
+
+### 10. DMA_GetITStatus
+
+```c
+/**
+ * @brief  检查指定的DMA中断是否发生
+ * @param  DMAy_IT: 指定的DMA中断标志
+ * @retval ITStatus: 中断状态（SET或RESET）
+ * @example
+ *     if (DMA_GetITStatus(DMA1_IT_TC1) == SET) {
+ *         // 处理传输完成中断
+ *     }
+ */
+ITStatus DMA_GetITStatus(uint32_t DMAy_IT);
+```
+
+**功能说明：**
+检查指定DMA中断标志的状态，用于中断服务程序中判断中断源。
+
+### 11. DMA_ClearITPendingBit
+
+```c
+/**
+ * @brief  清除指定的DMA中断挂起位
+ * @param  DMAy_IT: 指定要清除的DMA中断挂起位
+ * @retval 无
+ * @example
+ *     DMA_ClearITPendingBit(DMA1_IT_TC1);  // 清除传输完成中断挂起位
+ */
+void DMA_ClearITPendingBit(uint32_t DMAy_IT);
+```
+
+**功能说明：**
+清除指定的DMA中断挂起位，必须在中断服务程序中调用以清除中断。
+
+## 使用示例
+
+### USART接收DMA配置示例
+
+```c
+#include "stm32f10x.h"
+
+#define BUFFER_SIZE 100
+uint8_t rx_buffer[BUFFER_SIZE];
+
+void DMA_USART_RX_Config(void)
+{
+    DMA_InitTypeDef DMA_InitStructure;
+    
+    // 使能DMA1时钟
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+    
+    // 复位DMA通道
+    DMA_DeInit(DMA1_Channel5);
+    
+    // 配置DMA初始化结构体
+    DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)&USART1->DR;
+    DMA_InitStructure.DMA_MemoryBaseAddr = (uint32_t)rx_buffer;
+    DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;
+    DMA_InitStructure.DMA_BufferSize = BUFFER_SIZE;
+    DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+    DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
+    DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Byte;
+    DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_Byte;
+    DMA_InitStructure.DMA_Mode = DMA_Mode_Circular;
+    DMA_InitStructure.DMA_Priority = DMA_Priority_High;
+    DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
+    
+    // 初始化DMA通道
+    DMA_Init(DMA1_Channel5, &DMA_InitStructure);
+    
+    // 使能DMA传输完成中断
+    DMA_ITConfig(DMA1_Channel5, DMA_IT_TC, ENABLE);
+    
+    // 启动DMA传输
+    DMA_Cmd(DMA1_Channel5, ENABLE);
+}
+```
+
+### 存储器到存储器传输示例
+
+```c
+#define DATA_SIZE 1024
+uint32_t src_buffer[DATA_SIZE];
+uint32_t dst_buffer[DATA_SIZE];
+
+void DMA_M2M_Transfer(void)
+{
+    DMA_InitTypeDef DMA_InitStructure;
+    
+    // 使能DMA1时钟
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+    
+    // 复位DMA通道
+    DMA_DeInit(DMA1_Channel1);
+    
+    // 配置存储器到存储器传输
+    DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)src_buffer;
+    DMA_InitStructure.DMA_MemoryBaseAddr = (uint32_t)dst_buffer;
+    DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;
+    DMA_InitStructure.DMA_BufferSize = DATA_SIZE;
+    DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Enable;
+    DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
+    DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Word;
+    DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_Word;
+    DMA_InitStructure.DMA_Mode = DMA_Mode_Normal;
+    DMA_InitStructure.DMA_Priority = DMA_Priority_VeryHigh;
+    DMA_InitStructure.DMA_M2M = DMA_M2M_Enable;
+    
+    // 初始化并启动DMA传输
+    DMA_Init(DMA1_Channel1, &DMA_InitStructure);
+    DMA_Cmd(DMA1_Channel1, ENABLE);
+    
+    // 等待传输完成
+    while (DMA_GetFlagStatus(DMA1_FLAG_TC1) == RESET);
+    DMA_ClearFlag(DMA1_FLAG_TC1);
+}
+```
+
+## 注意事项
+
+1. **通道选择**：不同外设对应特定的DMA通道，需要查阅参考手册确认正确的通道映射
+
+2. **数据对齐**：确保外设和存储器的数据宽度配置正确，避免数据对齐错误
+
+3. **缓冲区大小**：DMA_BufferSize的有效范围是1-65535，超出范围会导致不可预期的行为
+
+4. **循环模式限制**：存储器到存储器传输不能使用循环模式
+
+5. **中断处理**：使用中断时，必须在中断服务程序中清除相应的中断标志位
+
+6. **优先级冲突**：多个DMA通道同时工作时，硬件优先级为DMA1 > DMA2，通道号小的优先级高
+
+7. **地址递增**：根据实际需求配置地址递增模式，FIFO类外设通常不递增地址
+
+8. **传输监控**：可以通过DMA_GetCurrDataCounter()函数实时监控传输进度
+
+## 总结
+
+STM32F10x DMA外设提供了强大的数据传输功能，支持外设到存储器、存储器到外设以及存储器到存储器的传输。通过合理配置DMA参数，可以大大减轻CPU负担，提高系统整体性能。DMA的关键特性包括多种传输模式、可配置的优先级、灵活的数据宽度支持以及完善的中断机制，是高效数据传输的理想选择。
+
