@@ -3,9 +3,11 @@
   "icon": "BookCheck",
   "pages": [
     "introduction",
+    "stm32f10x_rcc",
     "stm32f10x_gpio",
     "stm32f10x_exti",
     "stm32f10x_tim",
+    "stm32f10x_adc",
     "stm32f10x_i2c"
   ],
   "root": true

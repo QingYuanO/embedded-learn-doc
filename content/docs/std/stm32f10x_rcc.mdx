@@ -1,0 +1,728 @@
+---
+title: stm32f10x_rcc
+description: STM32F10x RCC（复位和时钟控制）外设标准库函数参考文档
+---
+
+## 数据类型定义
+
+### 结构体类型
+
+#### RCC_ClocksTypeDef - 时钟频率信息结构体
+
+```c
+typedef struct
+{
+  uint32_t SYSCLK_Frequency;  /* 系统时钟频率，单位Hz */
+  uint32_t HCLK_Frequency;    /* AHB时钟频率，单位Hz */
+  uint32_t PCLK1_Frequency;   /* APB1时钟频率，单位Hz */
+  uint32_t PCLK2_Frequency;   /* APB2时钟频率，单位Hz */
+  uint32_t ADCCLK_Frequency;  /* ADC时钟频率，单位Hz */
+} RCC_ClocksTypeDef;
+```
+
+**成员说明：**
+- `SYSCLK_Frequency`：系统时钟频率值
+- `HCLK_Frequency`：AHB总线时钟频率值
+- `PCLK1_Frequency`：APB1总线时钟频率值
+- `PCLK2_Frequency`：APB2总线时钟频率值
+- `ADCCLK_Frequency`：ADC时钟频率值
+
+## 时钟源配置常量
+
+### HSE配置选项
+
+```c
+#define RCC_HSE_OFF                      ((uint32_t)0x00000000)  /* 关闭HSE */
+#define RCC_HSE_ON                       ((uint32_t)0x00010000)  /* 开启HSE */
+#define RCC_HSE_Bypass                   ((uint32_t)0x00040000)  /* HSE旁路模式 */
+```
+
+### PLL时钟源配置
+
+```c
+#define RCC_PLLSource_HSI_Div2           ((uint32_t)0x00000000)  /* HSI/2作为PLL输入 */
+#define RCC_PLLSource_HSE_Div1           ((uint32_t)0x00010000)  /* HSE作为PLL输入 */
+#define RCC_PLLSource_HSE_Div2           ((uint32_t)0x00030000)  /* HSE/2作为PLL输入 */
+```
+
+### PLL倍频系数
+
+```c
+#define RCC_PLLMul_2                     ((uint32_t)0x00000000)  /* PLL 2倍频 */
+#define RCC_PLLMul_3                     ((uint32_t)0x00040000)  /* PLL 3倍频 */
+#define RCC_PLLMul_4                     ((uint32_t)0x00080000)  /* PLL 4倍频 */
+/* ... 其他倍频系数 ... */
+#define RCC_PLLMul_16                    ((uint32_t)0x00380000)  /* PLL 16倍频 */
+```
+
+### 系统时钟源选择
+
+```c
+#define RCC_SYSCLKSource_HSI             ((uint32_t)0x00000000)  /* HSI作为系统时钟 */
+#define RCC_SYSCLKSource_HSE             ((uint32_t)0x00000001)  /* HSE作为系统时钟 */
+#define RCC_SYSCLKSource_PLLCLK          ((uint32_t)0x00000002)  /* PLL作为系统时钟 */
+```
+
+### AHB时钟分频系数
+
+```c
+#define RCC_SYSCLK_Div1                  ((uint32_t)0x00000000)  /* AHB = SYSCLK */
+#define RCC_SYSCLK_Div2                  ((uint32_t)0x00000080)  /* AHB = SYSCLK/2 */
+#define RCC_SYSCLK_Div4                  ((uint32_t)0x00000090)  /* AHB = SYSCLK/4 */
+#define RCC_SYSCLK_Div8                  ((uint32_t)0x000000A0)  /* AHB = SYSCLK/8 */
+#define RCC_SYSCLK_Div16                 ((uint32_t)0x000000B0)  /* AHB = SYSCLK/16 */
+#define RCC_SYSCLK_Div64                 ((uint32_t)0x000000C0)  /* AHB = SYSCLK/64 */
+#define RCC_SYSCLK_Div128                ((uint32_t)0x000000D0)  /* AHB = SYSCLK/128 */
+#define RCC_SYSCLK_Div256                ((uint32_t)0x000000E0)  /* AHB = SYSCLK/256 */
+#define RCC_SYSCLK_Div512                ((uint32_t)0x000000F0)  /* AHB = SYSCLK/512 */
+```
+
+### APB时钟分频系数
+
+```c
+#define RCC_HCLK_Div1                    ((uint32_t)0x00000000)  /* APB = HCLK */
+#define RCC_HCLK_Div2                    ((uint32_t)0x00000400)  /* APB = HCLK/2 */
+#define RCC_HCLK_Div4                    ((uint32_t)0x00000500)  /* APB = HCLK/4 */
+#define RCC_HCLK_Div8                    ((uint32_t)0x00000600)  /* APB = HCLK/8 */
+#define RCC_HCLK_Div16                   ((uint32_t)0x00000700)  /* APB = HCLK/16 */
+```
+
+### ADC时钟分频系数
+
+```c
+#define RCC_PCLK2_Div2                   ((uint32_t)0x00000000)  /* ADCCLK = PCLK2/2 */
+#define RCC_PCLK2_Div4                   ((uint32_t)0x00004000)  /* ADCCLK = PCLK2/4 */
+#define RCC_PCLK2_Div6                   ((uint32_t)0x00008000)  /* ADCCLK = PCLK2/6 */
+#define RCC_PCLK2_Div8                   ((uint32_t)0x0000C000)  /* ADCCLK = PCLK2/8 */
+```
+
+### 外设时钟控制
+
+#### AHB外设时钟
+
+```c
+#define RCC_AHBPeriph_DMA1               ((uint32_t)0x00000001)  /* DMA1时钟 */
+#define RCC_AHBPeriph_DMA2               ((uint32_t)0x00000002)  /* DMA2时钟 */
+#define RCC_AHBPeriph_SRAM               ((uint32_t)0x00000004)  /* SRAM时钟 */
+#define RCC_AHBPeriph_FLITF              ((uint32_t)0x00000010)  /* FLITF时钟 */
+#define RCC_AHBPeriph_CRC                ((uint32_t)0x00000040)  /* CRC时钟 */
+#define RCC_AHBPeriph_FSMC               ((uint32_t)0x00000100)  /* FSMC时钟 */
+#define RCC_AHBPeriph_SDIO               ((uint32_t)0x00000400)  /* SDIO时钟 */
+```
+
+#### APB2外设时钟
+
+```c
+#define RCC_APB2Periph_AFIO              ((uint32_t)0x00000001)  /* AFIO时钟 */
+#define RCC_APB2Periph_GPIOA             ((uint32_t)0x00000004)  /* GPIOA时钟 */
+#define RCC_APB2Periph_GPIOB             ((uint32_t)0x00000008)  /* GPIOB时钟 */
+#define RCC_APB2Periph_GPIOC             ((uint32_t)0x00000010)  /* GPIOC时钟 */
+#define RCC_APB2Periph_GPIOD             ((uint32_t)0x00000020)  /* GPIOD时钟 */
+#define RCC_APB2Periph_GPIOE             ((uint32_t)0x00000040)  /* GPIOE时钟 */
+#define RCC_APB2Periph_ADC1              ((uint32_t)0x00000200)  /* ADC1时钟 */
+#define RCC_APB2Periph_ADC2              ((uint32_t)0x00000400)  /* ADC2时钟 */
+#define RCC_APB2Periph_TIM1              ((uint32_t)0x00000800)  /* TIM1时钟 */
+#define RCC_APB2Periph_SPI1              ((uint32_t)0x00001000)  /* SPI1时钟 */
+#define RCC_APB2Periph_USART1            ((uint32_t)0x00004000)  /* USART1时钟 */
+```
+
+#### APB1外设时钟
+
+```c
+#define RCC_APB1Periph_TIM2              ((uint32_t)0x00000001)  /* TIM2时钟 */
+#define RCC_APB1Periph_TIM3              ((uint32_t)0x00000002)  /* TIM3时钟 */
+#define RCC_APB1Periph_TIM4              ((uint32_t)0x00000004)  /* TIM4时钟 */
+#define RCC_APB1Periph_WWDG              ((uint32_t)0x00000800)  /* WWDG时钟 */
+#define RCC_APB1Periph_SPI2              ((uint32_t)0x00004000)  /* SPI2时钟 */
+#define RCC_APB1Periph_USART2            ((uint32_t)0x00020000)  /* USART2时钟 */
+#define RCC_APB1Periph_USART3            ((uint32_t)0x00040000)  /* USART3时钟 */
+#define RCC_APB1Periph_I2C1              ((uint32_t)0x00200000)  /* I2C1时钟 */
+#define RCC_APB1Periph_I2C2              ((uint32_t)0x00400000)  /* I2C2时钟 */
+#define RCC_APB1Periph_PWR               ((uint32_t)0x10000000)  /* PWR时钟 */
+```
+
+## 标准库函数详解
+
+### 1. RCC_DeInit
+
+```c
+/**
+ * @brief  将RCC寄存器重设为默认值
+ * @param  无
+ * @retval 无
+ * @example
+ *     RCC_DeInit();
+ */
+void RCC_DeInit(void);
+```
+
+### 2. RCC_HSEConfig
+
+```c
+/**
+ * @brief  配置外部高速时钟(HSE)
+ * @param  RCC_HSE: 指定HSE的新状态
+ * @retval 无
+ * @example
+ *     RCC_HSEConfig(RCC_HSE_ON);
+ */
+void RCC_HSEConfig(uint32_t RCC_HSE);
+```
+
+### 3. RCC_WaitForHSEStartUp
+
+```c
+/**
+ * @brief  等待HSE启动
+ * @param  无
+ * @retval HSE启动状态，SUCCESS或ERROR
+ * @example
+ *     if(RCC_WaitForHSEStartUp() == SUCCESS)
+ *     {
+ *         // HSE启动成功
+ *     }
+ */
+ErrorStatus RCC_WaitForHSEStartUp(void);
+```
+
+### 4. RCC_AdjustHSICalibrationValue
+
+```c
+/**
+ * @brief  调整内部高速时钟(HSI)校准值
+ * @param  HSICalibrationValue: 指定校准微调值
+ * @retval 无
+ * @example
+ *     RCC_AdjustHSICalibrationValue(0x10);
+ */
+void RCC_AdjustHSICalibrationValue(uint8_t HSICalibrationValue);
+```
+
+### 5. RCC_HSICmd
+
+```c
+/**
+ * @brief  使能或失能内部高速时钟(HSI)
+ * @param  NewState: HSI的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     RCC_HSICmd(ENABLE);
+ */
+void RCC_HSICmd(FunctionalState NewState);
+```
+
+### 6. RCC_PLLConfig
+
+```c
+/**
+ * @brief  配置PLL时钟源和倍频系数
+ * @param  RCC_PLLSource: 指定PLL入口时钟源
+ * @param  RCC_PLLMul: 指定PLL倍频系数
+ * @retval 无
+ * @example
+ *     RCC_PLLConfig(RCC_PLLSource_HSE_Div1, RCC_PLLMul_9);
+ */
+void RCC_PLLConfig(uint32_t RCC_PLLSource, uint32_t RCC_PLLMul);
+```
+
+### 7. RCC_PLLCmd
+
+```c
+/**
+ * @brief  使能或失能PLL
+ * @param  NewState: PLL的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     RCC_PLLCmd(ENABLE);
+ */
+void RCC_PLLCmd(FunctionalState NewState);
+```
+
+### 8. RCC_SYSCLKConfig
+
+```c
+/**
+ * @brief  配置系统时钟
+ * @param  RCC_SYSCLKSource: 指定用作系统时钟的时钟源
+ * @retval 无
+ * @example
+ *     RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK);
+ */
+void RCC_SYSCLKConfig(uint32_t RCC_SYSCLKSource);
+```
+
+### 9. RCC_GetSYSCLKSource
+
+```c
+/**
+ * @brief  返回用作系统时钟的时钟源
+ * @param  无
+ * @retval 系统时钟源
+ * @example
+ *     uint8_t clockSource = RCC_GetSYSCLKSource();
+ */
+uint8_t RCC_GetSYSCLKSource(void);
+```
+
+### 10. RCC_HCLKConfig
+
+```c
+/**
+ * @brief  配置AHB时钟(HCLK)
+ * @param  RCC_SYSCLK: 定义AHB时钟分频器
+ * @retval 无
+ * @example
+ *     RCC_HCLKConfig(RCC_SYSCLK_Div1);
+ */
+void RCC_HCLKConfig(uint32_t RCC_SYSCLK);
+```
+
+### 11. RCC_PCLK1Config
+
+```c
+/**
+ * @brief  配置低速APB时钟(PCLK1)
+ * @param  RCC_HCLK: 定义APB1时钟分频器
+ * @retval 无
+ * @example
+ *     RCC_PCLK1Config(RCC_HCLK_Div2);
+ */
+void RCC_PCLK1Config(uint32_t RCC_HCLK);
+```
+
+### 12. RCC_PCLK2Config
+
+```c
+/**
+ * @brief  配置高速APB时钟(PCLK2)
+ * @param  RCC_HCLK: 定义APB2时钟分频器
+ * @retval 无
+ * @example
+ *     RCC_PCLK2Config(RCC_HCLK_Div1);
+ */
+void RCC_PCLK2Config(uint32_t RCC_HCLK);
+```
+
+### 13. RCC_ITConfig
+
+```c
+/**
+ * @brief  使能或失能指定的RCC中断
+ * @param  RCC_IT: 指定要使能或失能的RCC中断源
+ * @param  NewState: 指定RCC中断的新状态
+ * @retval 无
+ * @example
+ *     RCC_ITConfig(RCC_IT_HSERDY, ENABLE);
+ */
+void RCC_ITConfig(uint8_t RCC_IT, FunctionalState NewState);
+```
+
+### 14. RCC_USBCLKConfig
+
+```c
+/**
+ * @brief  配置USB时钟(USBCLK)
+ * @param  RCC_USBCLKSource: 指定USB时钟的时钟源
+ * @retval 无
+ * @example
+ *     RCC_USBCLKConfig(RCC_USBCLKSource_PLLCLK_1Div5);
+ */
+void RCC_USBCLKConfig(uint32_t RCC_USBCLKSource);
+```
+
+### 15. RCC_ADCCLKConfig
+
+```c
+/**
+ * @brief  配置ADC时钟(ADCCLK)
+ * @param  RCC_PCLK2: 定义ADC时钟分频器
+ * @retval 无
+ * @example
+ *     RCC_ADCCLKConfig(RCC_PCLK2_Div6);
+ */
+void RCC_ADCCLKConfig(uint32_t RCC_PCLK2);
+```
+
+### 16. RCC_LSEConfig
+
+```c
+/**
+ * @brief  配置外部低速时钟(LSE)
+ * @param  RCC_LSE: 指定LSE的新状态
+ * @retval 无
+ * @example
+ *     RCC_LSEConfig(RCC_LSE_ON);
+ */
+void RCC_LSEConfig(uint8_t RCC_LSE);
+```
+
+### 17. RCC_LSICmd
+
+```c
+/**
+ * @brief  使能或失能内部低速时钟(LSI)
+ * @param  NewState: LSI的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     RCC_LSICmd(ENABLE);
+ */
+void RCC_LSICmd(FunctionalState NewState);
+```
+
+### 18. RCC_RTCCLKConfig
+
+```c
+/**
+ * @brief  配置RTC时钟(RTCCLK)
+ * @param  RCC_RTCCLKSource: 指定RTC时钟的时钟源
+ * @retval 无
+ * @example
+ *     RCC_RTCCLKConfig(RCC_RTCCLKSource_LSE);
+ */
+void RCC_RTCCLKConfig(uint32_t RCC_RTCCLKSource);
+```
+
+### 19. RCC_RTCCLKCmd
+
+```c
+/**
+ * @brief  使能或失能RTC时钟
+ * @param  NewState: RTC时钟的新状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     RCC_RTCCLKCmd(ENABLE);
+ */
+void RCC_RTCCLKCmd(FunctionalState NewState);
+```
+
+### 20. RCC_GetClocksFreq
+
+```c
+/**
+ * @brief  返回不同片上时钟的频率
+ * @param  RCC_Clocks: 指向RCC_ClocksTypeDef结构的指针
+ * @retval 无
+ * @example
+ *     RCC_ClocksTypeDef RCC_ClockFreq;
+ *     RCC_GetClocksFreq(&RCC_ClockFreq);
+ */
+void RCC_GetClocksFreq(RCC_ClocksTypeDef* RCC_Clocks);
+```
+
+### 21. RCC_AHBPeriphClockCmd
+
+```c
+/**
+ * @brief  使能或失能AHB外设时钟
+ * @param  RCC_AHBPeriph: 指定要设置时钟的AHB外设
+ * @param  NewState: 指定外设时钟的新状态
+ * @retval 无
+ * @example
+ *     RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+ */
+void RCC_AHBPeriphClockCmd(uint32_t RCC_AHBPeriph, FunctionalState NewState);
+```
+
+### 22. RCC_APB2PeriphClockCmd
+
+```c
+/**
+ * @brief  使能或失能高速APB(APB2)外设时钟
+ * @param  RCC_APB2Periph: 指定要设置时钟的APB2外设
+ * @param  NewState: 指定外设时钟的新状态
+ * @retval 无
+ * @example
+ *     RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+ */
+void RCC_APB2PeriphClockCmd(uint32_t RCC_APB2Periph, FunctionalState NewState);
+```
+
+### 23. RCC_APB1PeriphClockCmd
+
+```c
+/**
+ * @brief  使能或失能低速APB(APB1)外设时钟
+ * @param  RCC_APB1Periph: 指定要设置时钟的APB1外设
+ * @param  NewState: 指定外设时钟的新状态
+ * @retval 无
+ * @example
+ *     RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+ */
+void RCC_APB1PeriphClockCmd(uint32_t RCC_APB1Periph, FunctionalState NewState);
+```
+
+### 24. RCC_APB2PeriphResetCmd
+
+```c
+/**
+ * @brief  强制或释放高速APB(APB2)外设复位
+ * @param  RCC_APB2Periph: 指定要复位的APB2外设
+ * @param  NewState: 指定外设复位状态
+ * @retval 无
+ * @example
+ *     RCC_APB2PeriphResetCmd(RCC_APB2Periph_GPIOA, ENABLE);
+ */
+void RCC_APB2PeriphResetCmd(uint32_t RCC_APB2Periph, FunctionalState NewState);
+```
+
+### 25. RCC_APB1PeriphResetCmd
+
+```c
+/**
+ * @brief  强制或释放低速APB(APB1)外设复位
+ * @param  RCC_APB1Periph: 指定要复位的APB1外设
+ * @param  NewState: 指定外设复位状态
+ * @retval 无
+ * @example
+ *     RCC_APB1PeriphResetCmd(RCC_APB1Periph_TIM2, ENABLE);
+ */
+void RCC_APB1PeriphResetCmd(uint32_t RCC_APB1Periph, FunctionalState NewState);
+```
+
+### 26. RCC_BackupResetCmd
+
+```c
+/**
+ * @brief  强制或释放备份域复位
+ * @param  NewState: 备份域复位状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     RCC_BackupResetCmd(ENABLE);
+ */
+void RCC_BackupResetCmd(FunctionalState NewState);
+```
+
+### 27. RCC_ClockSecuritySystemCmd
+
+```c
+/**
+ * @brief  使能或失能时钟安全系统
+ * @param  NewState: 时钟安全系统状态，可以是ENABLE或DISABLE
+ * @retval 无
+ * @example
+ *     RCC_ClockSecuritySystemCmd(ENABLE);
+ */
+void RCC_ClockSecuritySystemCmd(FunctionalState NewState);
+```
+
+### 28. RCC_MCOConfig
+
+```c
+/**
+ * @brief  选择在MCO引脚上输出的时钟源
+ * @param  RCC_MCO: 指定要输出的时钟源
+ * @retval 无
+ * @example
+ *     RCC_MCOConfig(RCC_MCO_SYSCLK);
+ */
+void RCC_MCOConfig(uint8_t RCC_MCO);
+```
+
+### 29. RCC_GetFlagStatus
+
+```c
+/**
+ * @brief  检查指定的RCC标志位是否设置
+ * @param  RCC_FLAG: 指定要检查的标志
+ * @retval 标志状态，SET或RESET
+ * @example
+ *     if(RCC_GetFlagStatus(RCC_FLAG_HSERDY) == SET)
+ *     {
+ *         // HSE就绪
+ *     }
+ */
+FlagStatus RCC_GetFlagStatus(uint8_t RCC_FLAG);
+```
+
+### 30. RCC_ClearFlag
+
+```c
+/**
+ * @brief  清除RCC复位标志
+ * @param  无
+ * @retval 无
+ * @example
+ *     RCC_ClearFlag();
+ */
+void RCC_ClearFlag(void);
+```
+
+### 31. RCC_GetITStatus
+
+```c
+/**
+ * @brief  检查指定的RCC中断是否发生
+ * @param  RCC_IT: 指定要检查的RCC中断源
+ * @retval 中断状态，SET或RESET
+ * @example
+ *     if(RCC_GetITStatus(RCC_IT_HSERDY) == SET)
+ *     {
+ *         // HSE就绪中断
+ *     }
+ */
+ITStatus RCC_GetITStatus(uint8_t RCC_IT);
+```
+
+### 32. RCC_ClearITPendingBit
+
+```c
+/**
+ * @brief  清除RCC中断待处理位
+ * @param  RCC_IT: 指定要清除的RCC中断待处理位
+ * @retval 无
+ * @example
+ *     RCC_ClearITPendingBit(RCC_IT_HSERDY);
+ */
+void RCC_ClearITPendingBit(uint8_t RCC_IT);
+```
+
+## 使用示例
+
+### 系统时钟配置示例（使用HSE + PLL到72MHz）
+
+```c
+void SystemClock_Config(void)
+{
+    ErrorStatus HSEStartUpStatus;
+    
+    /* RCC系统复位 */
+    RCC_DeInit();
+    
+    /* 使能HSE */
+    RCC_HSEConfig(RCC_HSE_ON);
+    
+    /* 等待HSE就绪 */
+    HSEStartUpStatus = RCC_WaitForHSEStartUp();
+    
+    if(HSEStartUpStatus == SUCCESS)
+    {
+        /* 使能Prefetch Buffer */
+        FLASH_PrefetchBufferCmd(FLASH_PrefetchBuffer_Enable);
+        
+        /* Flash延迟设置 */
+        FLASH_SetLatency(FLASH_Latency_2);
+        
+        /* HCLK = SYSCLK */
+        RCC_HCLKConfig(RCC_SYSCLK_Div1);
+        
+        /* PCLK2 = HCLK */
+        RCC_PCLK2Config(RCC_HCLK_Div1);
+        
+        /* PCLK1 = HCLK/2 */
+        RCC_PCLK1Config(RCC_HCLK_Div2);
+        
+        /* ADCCLK = PCLK2/6 */
+        RCC_ADCCLKConfig(RCC_PCLK2_Div6);
+        
+        /* 配置PLL: PLLCLK = HSE * 9 = 72 MHz */
+        RCC_PLLConfig(RCC_PLLSource_HSE_Div1, RCC_PLLMul_9);
+        
+        /* 使能PLL */
+        RCC_PLLCmd(ENABLE);
+        
+        /* 等待PLL就绪 */
+        while(RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET);
+        
+        /* 选择PLL作为系统时钟源 */
+        RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK);
+        
+        /* 等待PLL被用作系统时钟源 */
+        while(RCC_GetSYSCLKSource() != 0x08);
+    }
+}
+```
+
+### 外设时钟使能示例
+
+```c
+void PeriphClock_Config(void)
+{
+    /* 使能GPIO时钟 */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | 
+                          RCC_APB2Periph_GPIOB | 
+                          RCC_APB2Periph_GPIOC, ENABLE);
+    
+    /* 使能USART1时钟 */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
+    
+    /* 使能TIM2时钟 */
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+    
+    /* 使能I2C1时钟 */
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1, ENABLE);
+    
+    /* 使能ADC1时钟 */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+    
+    /* 使能DMA1时钟 */
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+}
+```
+
+### 获取系统时钟频率示例
+
+```c
+void GetClockFrequencies(void)
+{
+    RCC_ClocksTypeDef RCC_ClockFreq;
+    
+    /* 获取系统时钟频率 */
+    RCC_GetClocksFreq(&RCC_ClockFreq);
+    
+    /* 打印时钟频率信息 */
+    printf("SYSCLK频率: %d Hz\n", RCC_ClockFreq.SYSCLK_Frequency);
+    printf("HCLK频率: %d Hz\n", RCC_ClockFreq.HCLK_Frequency);
+    printf("PCLK1频率: %d Hz\n", RCC_ClockFreq.PCLK1_Frequency);
+    printf("PCLK2频率: %d Hz\n", RCC_ClockFreq.PCLK2_Frequency);
+    printf("ADCCLK频率: %d Hz\n", RCC_ClockFreq.ADCCLK_Frequency);
+}
+```
+
+### RTC时钟配置示例
+
+```c
+void RTC_Clock_Config(void)
+{
+    /* 使能PWR和BKP时钟 */
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+    
+    /* 允许访问BKP域 */
+    PWR_BackupAccessCmd(ENABLE);
+    
+    /* 复位BKP域 */
+    RCC_BackupResetCmd(ENABLE);
+    RCC_BackupResetCmd(DISABLE);
+    
+    /* 使能LSE */
+    RCC_LSEConfig(RCC_LSE_ON);
+    
+    /* 等待LSE就绪 */
+    while(RCC_GetFlagStatus(RCC_FLAG_LSERDY) == RESET);
+    
+    /* 选择LSE作为RTC时钟源 */
+    RCC_RTCCLKConfig(RCC_RTCCLKSource_LSE);
+    
+    /* 使能RTC时钟 */
+    RCC_RTCCLKCmd(ENABLE);
+}
+```
+
+## 注意事项
+
+1. **时钟配置顺序**：配置系统时钟时要按照正确的顺序进行，先配置时钟源，再配置分频器，最后切换系统时钟
+
+2. **Flash等待周期**：当系统时钟超过24MHz时，必须配置Flash等待周期
+
+3. **外设时钟**：使用外设前必须先使能相应的时钟
+
+4. **时钟安全系统**：建议启用CSS功能以提高系统可靠性
+
+5. **低功耗考虑**：不使用的外设应关闭其时钟以降低功耗
+
+6. **PLL配置**：PLL使能后不能修改其配置，需要先失能PLL
+
+7. **备份域**：访问备份域寄存器前需要使能PWR时钟并允许访问
+
+## 总结
+
+STM32F10x RCC标准库提供了完整的时钟和复位控制功能，通过合理配置这些函数，可以实现灵活的时钟管理和外设控制。掌握RCC的使用对于STM32系统优化和功耗管理至关重要。正确的时钟配置是整个系统稳定运行的基础。
