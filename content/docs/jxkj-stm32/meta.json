@@ -9,7 +9,8 @@
     "adc",
     "dma",
     "uart",
-    "i2c"
+    "i2c",
+    "spi"
   ],
   "defaultOpen": true,
   "root": true
