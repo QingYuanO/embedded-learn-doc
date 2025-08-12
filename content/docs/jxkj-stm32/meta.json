@@ -10,7 +10,8 @@
     "dma",
     "uart",
     "i2c",
-    "spi"
+    "spi",
+    "sh1106"
   ],
   "defaultOpen": true,
   "root": true
