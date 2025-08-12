@@ -349,14 +349,34 @@ description: ""
 <Image src="/tim/tim4.png" alt="定时中断基本结构" />
 
 ## 预分频器时序
+Prescaler(PSC -16 bits value):预分频器
+
+简写PSC，16位，可设置的值范围是0--65535。在STM32F103中，计数器的时钟源可以是内部时钟源或外部时钟源。
+
+当使用内部时钟源时，PSC可以将时钟信号频率除以一个固定的分频系数，以降低计数器的时钟频率，从而扩大计数器的计时范围。
+
+例如，如果使用内部时钟源，并将PSC设置为7199，则定时器的时钟频率将为72 MHz / (7199 + 1) = 10 kHz。
+
+这意味着计数器每计数10次，就会过去1毫秒。如果需要更长的计时范围，可以将PSC设置为更大的值。
 
 <Image src="/tim/tim5.png" alt="预分频器时序" />
 计数器计数频率：`CK_CNT = CK_PSC / (PSC + 1)`
 
+
+
 ## 计数器时序
+Counter Period（Auto Reload Register - 16 bit value）：计数周期
+
+Auto Reload寄存器用于设置定时器的计数周期。
+
+当定时器的计数器达到ARR的值时，定时器会自动重新加载ARR的值并继续计数。
+
+这样可以实现定时器的周期性计数，从而实现定时和计时的功能。
 
 <Image src="/tim/tim6.png" alt="计数器时序" />
+
 计数器溢出频率：`K_CNT_OV = CK_CNT / (ARR + 1) = CK_PSC / (PSC + 1) / (ARR + 1)`
+<br/>取倒数就是计数一个周期所用时间：`T_CNT_OV = 1 / K_CNT_OV = (PSC + 1) * (ARR + 1) / CK_PSC`
 
 ## 计数器无预装时序
 
