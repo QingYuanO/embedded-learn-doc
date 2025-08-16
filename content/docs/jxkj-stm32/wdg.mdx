@@ -1,0 +1,304 @@
+---
+title: WDG
+description: WDG（Watchdog）看门狗
+---
+
+<iframe class="w-full aspect-video" src="//player.bilibili.com/player.html?isOutside=true&aid=206940155&bvid=BV1th411z7sn&cid=1260999250&p=46" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe>
+
+## WDG简介
+
+- WDG（Watchdog）看门狗
+- 看门狗可以监控程序的运行状态，当程序因为设计漏洞、硬件故障、电磁干扰等原因，出现卡死或跑飞现象时，看门狗能及时复位程序，避免程序陷入长时间的罢工状态，保证系统的可靠性和安全性
+- 看门狗本质上是一个定时器，当指定时间范围内，程序没有执行喂狗（重置计数器）操作时，看门狗硬件电路就自动产生复位信号
+- STM32内置两个看门狗
+	- 独立看门狗（IWDG）：独立工作，对时间精度要求较低
+	- 窗口看门狗（WWDG）：要求看门狗在精确计时窗口起作用
+
+## IWDG框图
+
+<Image src="/wdg/wdg1.png" alt="独立看门狗框图" />
+**IWDG框图解析：**
+
+STM32独立看门狗（IWDG）是一个完全独立的安全监控模块：
+
+### 时钟源
+- **LSI振荡器**：40kHz的内部低速时钟
+- **独立时钟源**：即使主时钟系统出现故障，IWDG仍能正常工作
+- **VDD供电区域**：由主电源VDD供电，不受1.8V内核区域影响
+
+### 核心组件
+
+1. **预分频器（IWDG_PR）**：
+   - 将40kHz的LSI时钟进行分频
+   - 分频系数可选：4、8、16、32、64、128、256
+   - 降低计数频率，延长看门狗超时时间
+
+2. **重载寄存器（IWDG_RLR）**：
+   - 12位寄存器，存储重载值（0-4095）
+   - 当执行喂狗操作时，此值会重新加载到计数器
+
+3. **递减计数器**：
+   - 12位递减计数器，从重载值开始递减
+   - 当计数器减到0时，产生系统复位信号
+   - 每个时钟周期递减1
+
+4. **状态寄存器（IWDG_SR）**：
+   - **PVU位**：预分频器值更新标志
+   - **RVU位**：重载值更新标志
+   - 用于检查寄存器是否更新完成
+
+5. **键寄存器（IWDG_KR）**：
+   - 通过写入特定值来控制IWDG的操作
+   - 提供写保护机制，防止意外修改
+
+### 工作流程
+1. 配置预分频器和重载值
+2. 启动独立看门狗
+3. 在程序正常运行时定期喂狗
+4. 如果程序异常未能及时喂狗，IWDG自动复位系统
+
+
+### 独立看门狗初始化
+
+## IWDG键寄存器
+
+- 键寄存器本质上是控制寄存器，用于控制硬件电路的工作
+- 在可能存在干扰的情况下，一般通过在整个键寄存器写入特定值来代替控制寄存器写入一位的功能，以降低硬件电路受到干扰的概率
+
+| 写入键寄存器的值         | 作用                                   |
+|----------------------|--------------------------------------|
+| 0xCCCC               | 启用独立看门狗                            |
+| 0xAAAA               | IWDG_RLR中的值重新加载到计数器（喂狗）         |
+| 0x5555               | 解除IWDG_PR和IWDG_RLR的写保护                |
+| 0x5555之外的其他值        | 启用IWDG_PR和IWDG_RLR的写保护                |
+
+## IWDG超时时间
+
+- 超时时间计算公式：  
+  $$
+  T_{IWDG} = \dfrac{PR \times (RL + 1)}{F_{LSI}}
+  $$
+  其中：  
+  - $T_{IWDG}$：看门狗超时时间  
+  - $PR$：预分频系数  
+  - $RL$：重载值  
+  - $F_{LSI}$：LSI时钟频率40kHz，1/40kHz = 0.025ms
+  - 超时时间 = 0.025 * PR * (RL + 1)
+
+- 超时时间计算示例：
+  - 预分频系数PR = 16，重载值RL = 2499
+  - 超时时间 = 0.025 * 16 * (2499 + 1) = 1000ms
+
+<Image src="/wdg/wdg2.png" alt="IWDG超时时间" />
+
+## WWDG框图
+<Image src="/wdg/wdg3.png" alt="WWDG框图" />
+**WWDG框图解析：**
+
+WWDG（窗口看门狗）的框图展示了其内部工作原理和控制机制：
+
+### 时钟源和预分频
+1. **时钟输入**：
+   - **PCLK1**：来自APB1的时钟，通常为36MHz
+   - 经过内部的**4096预分频器**，将时钟频率降到较低的水平
+
+2. **可编程预分频器（WDGTB）**：
+   - 位于WWDG_CFR寄存器的W1、W0位
+   - 提供1、2、4、8四种预分频系数
+   - 进一步降低计数器的工作频率
+
+### 核心计数器
+3. **7位递减计数器**：
+   - **T[6:0]**：存储在WWDG_CR寄存器中
+   - **T6位**：看门狗激活位，必须置1才能启动WWDG
+   - **T[5:0]**：6位有效计数值，从设定值开始递减计数
+   - 当T[6:0]的值小于0x40（即T6=0）时，产生系统复位
+
+### 窗口比较机制
+4. **窗口值寄存器（W[6:0]）**：
+   - 存储在WWDG_CFR寄存器中
+   - 定义了允许喂狗的时间窗口下限
+   - 只有当T[6:0] < W[6:0]时，才允许重新装载计数器
+
+5. **比较器逻辑**：
+   - **上限检查**：如果在T[6:0] ≥ W[6:0]时尝试喂狗，会立即产生复位
+   - **下限检查**：如果T[6:0]减到0x40以下，也会产生复位
+   - 形成了一个"窗口"，只有在窗口内喂狗才安全
+
+### 中断和复位机制
+6. **早期唤醒中断（EWI）**：
+   - 当T[6:0] = 0x40时触发
+   - 给程序最后一次喂狗的机会
+   - 通过WWDG_CFR寄存器的EWI位使能
+
+7. **复位输出**：
+   - 当违反窗口规则或计数器溢出时
+   - 向系统发送复位信号
+
+### 控制寄存器
+8. **WWDG_CR（控制寄存器）**：
+   - 包含7位计数器值T[6:0]
+   - T6位同时作为WWDG使能位
+
+9. **WWDG_CFR（配置寄存器）**：
+   - W[6:0]：窗口值设置
+   - WDGTB[1:0]：预分频器设置
+   - EWI：早期唤醒中断使能
+
+**工作原理总结**：
+WWDG要求程序必须在指定的时间窗口内喂狗，既不能太早（会触发窗口违规复位），也不能太晚（会触发计数器溢出复位）。这种机制可以更精确地监控程序的执行时序，确保程序按照预期的时间间隔运行。
+
+
+## WWDG工作特性
+- 递减计数器T[6:0]的值小于0x40时，WWDG产生复位
+- 递减计数器T[6:0]在窗口W[6:0]外被重新装载时，WWDG产生复位
+- 递减计数器T[6:0]等于0x40时可以产生早期唤醒中断（EWI），用于重装载计数器以避免WWDG复位
+- 定期写入WWDG_CR寄存器（喂狗）以避免WWDG复位
+<Image src="/wdg/wdg4.png" alt="WWDG工作特性" />
+
+## WWDG超时时间
+将公式转换为如下形式：
+
+- 超时时间：
+  $$
+  T_{WWDG} = \frac{4096 \times WDGTB \times (T[5:0] + 1)}{F_{PCLK1}}
+  $$
+- 窗口时间：
+  $$
+  T_{WIN} = \frac{4096 \times WDGTB \times (T[5:0] - W[5:0])}{F_{PCLK1}}
+  $$
+
+其中：$F_{PCLK1}$ 为 PCLK1 时钟频率，$WDGTB$ 为预分频系数。
+<Image src="/wdg/wdg5.png" alt="WWDG超时时间" />
+
+## IWDG和WWDG对比
+
+| 对比项         | IWDG独立看门狗                   | WWDG窗口看门狗                         |
+| -------------- | ------------------------------- | -------------------------------------- |
+| 复位           | 计数器减到0后                    | 计数器T[5:0]减到0后、过早重装计数器     |
+| 中断           | 无                              | 早期唤醒中断                            |
+| 时钟源         | LSI（40KHz）                    | PCLK1（36MHz）                         |
+| 预分频系数     | 4、8、32、64、128、256           | 1、2、4、8                             |
+| 计数器         | 12位                            | 6位（有效计数）                        |
+| 超时时间       | 0.1ms~26214.4ms                 | 113us~58.25ms                          |
+| 喂狗方式       | 写入键寄存器，重装固定值RLR      | 直接写入计数器，写多少重装多少           |
+| 防误操作       | 键寄存器和写保护                 | 无                                     |
+| 用途           | 独立工作，对时间精度要求较低     | 要求看门狗在精确计时窗口起作用           |
+
+
+## 例子
+
+### 独立看门狗
+
+```c title="main.c"
+#include "stm32f10x.h"                  // Device header
+#include "Delay.h"
+#include "OLED.h"
+#include "Key.h"
+
+int main(void)
+{
+	/*模块初始化*/
+	OLED_Init();						//OLED初始化
+	Key_Init();							//按键初始化
+	
+	/*显示静态字符串*/
+	OLED_ShowString(1, 1, "IWDG TEST");
+	
+	/*判断复位信号来源*/
+	if (RCC_GetFlagStatus(RCC_FLAG_IWDGRST) == SET)	//如果是独立看门狗复位
+	{
+		OLED_ShowString(2, 1, "IWDGRST");			//OLED闪烁IWDGRST字符串
+		Delay_ms(500);
+		OLED_ShowString(2, 1, "       ");
+		Delay_ms(100);
+		
+		RCC_ClearFlag();							//清除标志位
+	}
+	else											//否则，即为其他复位
+	{
+		OLED_ShowString(3, 1, "RST");				//OLED闪烁RST字符串
+		Delay_ms(500);
+		OLED_ShowString(3, 1, "   ");
+		Delay_ms(100);
+	}
+	
+	/*IWDG初始化*/
+	IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);	//独立看门狗写使能
+	IWDG_SetPrescaler(IWDG_Prescaler_16);			//设置预分频为16
+	IWDG_SetReload(2499);							//设置重装值为2499，独立看门狗的超时时间为1000ms
+	IWDG_ReloadCounter();							//重装计数器，喂狗
+	IWDG_Enable();									//独立看门狗使能
+	
+	while (1)
+	{
+		Key_GetNum();								//调用阻塞式的按键扫描函数，模拟主循环卡死
+		
+		IWDG_ReloadCounter();						//重装计数器，喂狗
+		
+		OLED_ShowString(4, 1, "FEED");				//OLED闪烁FEED字符串
+		Delay_ms(200);								//喂狗间隔为200+600=800ms
+		OLED_ShowString(4, 1, "    ");
+		Delay_ms(600);
+	}
+}
+
+```
+
+### 窗口看门狗
+
+```c title="main.c"
+#include "stm32f10x.h"                  // Device header
+#include "Delay.h"
+#include "OLED.h"
+#include "Key.h"
+
+int main(void)
+{
+	/*模块初始化*/
+	OLED_Init();						//OLED初始化
+	Key_Init();							//按键初始化
+	
+	/*显示静态字符串*/
+	OLED_ShowString(1, 1, "WWDG TEST");
+	
+	/*判断复位信号来源*/
+	if (RCC_GetFlagStatus(RCC_FLAG_WWDGRST) == SET)	//如果是窗口看门狗复位
+	{
+		OLED_ShowString(2, 1, "WWDGRST");			//OLED闪烁WWDGRST字符串
+		Delay_ms(500);
+		OLED_ShowString(2, 1, "       ");
+		Delay_ms(100);
+		
+		RCC_ClearFlag();							//清除标志位
+	}
+	else											//否则，即为其他复位
+	{
+		OLED_ShowString(3, 1, "RST");				//OLED闪烁RST字符串
+		Delay_ms(500);
+		OLED_ShowString(3, 1, "   ");
+		Delay_ms(100);
+	}
+	
+	/*开启时钟*/
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_WWDG, ENABLE);	//开启WWDG的时钟
+	
+	/*WWDG初始化*/
+	WWDG_SetPrescaler(WWDG_Prescaler_8);			//设置预分频为8
+	WWDG_SetWindowValue(0x40 | 21);					//设置窗口值，窗口时间为30ms
+	WWDG_Enable(0x40 | 54);							//使能并第一次喂狗，超时时间为50ms
+	
+	while (1)
+	{
+		Key_GetNum();								//调用阻塞式的按键扫描函数，模拟主循环卡死
+		
+		OLED_ShowString(4, 1, "FEED");				//OLED闪烁FEED字符串
+		Delay_ms(20);								//喂狗间隔为20+20=40ms
+		OLED_ShowString(4, 1, "    ");
+		Delay_ms(20);
+		
+		WWDG_SetCounter(0x40 | 54);					//重装计数器，喂狗
+	}
+}
+
+```

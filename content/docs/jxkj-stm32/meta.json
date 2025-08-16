@@ -11,6 +11,9 @@
     "uart",
     "i2c",
     "spi",
+    "rtc",
+    "pwr",
+    "wdg",
     "sh1106"
   ],
   "defaultOpen": true,

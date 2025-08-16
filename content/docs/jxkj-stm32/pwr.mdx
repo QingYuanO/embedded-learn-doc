@@ -1,0 +1,254 @@
+---
+title: PWR
+description: PWR（Power Control）电源控制
+---
+
+<iframe class="w-full aspect-video" src="//player.bilibili.com/player.html?isOutside=true&aid=206940155&bvid=BV1th411z7sn&cid=1238492185&p=44" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe>
+
+## PWR简介
+- PWR（Power Control）电源控制
+- PWR负责管理STM32内部的电源供电部分，可以实现可编程电压监测器和低功耗模式的功能
+- 可编程电压监测器（PVD）可以监控VDD电源电压，当VDD下降到PVD阀值以下或上升到PVD阀值之上时，PVD会触发中断，用于执行紧急关闭任务
+- 低功耗模式包括睡眠模式（Sleep）、停机模式（Stop）和待机模式（Standby），可在系统空闲时，降低STM32的功耗，延长设备使用时间
+
+## 电源框图
+
+<Image src="/pwr/pwr1.png" alt="电源框图" />
+**电源框图解析：**
+
+STM32的电源系统采用多级供电架构，确保系统的稳定运行和低功耗需求：
+
+### 外部电源输入
+- **VDD/VDDA（主电源域）**：2.0~3.6V
+  - **VDD**：为数字电路供电，包括I/O电路、存储器电路、数字外设等
+  - **VDDA**：为模拟电路供电，包括AD转换器、温度传感器、复位电路、PLL等
+  - 通常VDD和VDDA连接在一起使用同一电源
+
+- **VSS/VSSA**：系统地线
+  - **VSS**：数字地
+  - **VSSA**：模拟地
+  - 为了减少干扰，建议在PCB设计时分开布线，最后在一点汇合
+
+### 内部电源域
+
+1. **1.8V供电区域**：
+   - 由内部**电压调节器**将VDD转换为1.8V
+   - 为**CPU核心**、**存储器**、**数字外设**等核心电路供电
+   - 在停止模式下，电压调节器可切换到低功耗模式
+   - 在待机模式下，此区域完全断电以实现最低功耗
+
+2. **VDD供电区域**：
+   - 直接由外部VDD供电
+   - 为**I/O电路**供电，保证I/O引脚的正常工作
+   - 包含**待机电路**和**IWDG（独立看门狗）**，确保系统安全
+
+
+
+
+## 上电复位和掉电复位
+
+<Image src="/pwr/pwr2.png" alt="上电复位和掉电复位" />
+
+
+## 可编程电压监测器
+
+<Image src="/pwr/pwr3.png" alt="可编程电压监测器" />
+
+## 低功耗模式
+
+<Image src="/pwr/pwr4.png" alt="低功耗模式" />
+
+## 模式选择
+
+执行WFI（Wait For Interrupt）或者WFE（Wait For Event）指令后，STM32进入低功耗模式
+
+<Image src="/pwr/pwr5.png" alt="模式选择" />
+
+## 睡眠模式
+
+- 执行完WFI/WFE指令后，STM32进入睡眠模式，程序暂停运行，唤醒后程序从暂停的地方继续运行
+- SLEEPONEXIT位决定STM32执行完WFI或WFE后，是立刻进入睡眠，还是等STM32从最低优先级的中断处理程序中退出时进入睡眠
+- 在睡眠模式下，所有的I/O引脚都保持它们在运行模式时的状态
+- WFI指令进入睡眠模式，可被任意一个NVIC响应的中断唤醒
+- WFE指令进入睡眠模式，可被唤醒事件唤醒
+
+## 停止模式
+
+- 执行完WFI/WFE指令后，STM32进入停止模式，程序暂停运行，唤醒后程序从暂停的地方继续运行
+- 1.8V供电区域的所有时钟都被停止，PLL、HSI和HSE被禁止，SRAM和寄存器内容被保留下来
+- 在停止模式下，所有的I/O引脚都保持它们在运行模式时的状态
+- 当一个中断或唤醒事件导致退出停止模式时，HSI被选为系统时钟
+- 当电压调节器处于低功耗模式下，系统从停止模式退出时，会有一段额外的启动延时
+- WFI指令进入停止模式，可被任意一个EXTI中断唤醒
+- WFE指令进入停止模式，可被任意一个EXTI事件唤醒
+
+## 待机模式
+
+- 执行完WFI/WFE指令后，STM32进入待机模式，唤醒后程序从头开始运行
+- 整个1.8V供电区域被断电，PLL、HSI和HSE也被断电，SRAM和寄存器内容丢失，只有备份的寄存器和待机电路维持供电
+- 在待机模式下，所有的I/O引脚变为高阻态（浮空输入）
+- WKUP引脚的上升沿、RTC闹钟事件的上升沿、NRST引脚上外部复位、IWDG复位退出待机模式
+
+
+## 例子
+
+### 修改主频
+
+```c title="main.c"
+#include "stm32f10x.h"                  // Device header
+#include "Delay.h"
+#include "OLED.h"
+
+int main(void)
+{
+	OLED_Init();							//OLED初始化
+	
+	OLED_ShowString(1, 1, "SYSCLK:");		//显示静态字符串
+	OLED_ShowNum(1, 8, SystemCoreClock, 8);	//显示SystemCoreClock变量
+											//SystemCoreClock的值表示当前的系统主频频率
+	
+	while (1)
+	{
+		OLED_ShowString(2, 1, "Running");	//闪烁Running，指示当前主循环运行的快慢
+		Delay_ms(500);
+		OLED_ShowString(2, 1, "       ");
+		Delay_ms(500);
+	}
+}
+
+```
+
+### 睡眠模式+串口发送+接收
+
+[Serial.h](/docs/jxkj-stm32/uart#串口发送接收)
+
+```c title="main.c"
+#include "stm32f10x.h"                  // Device header
+#include "Delay.h"
+#include "OLED.h"
+#include "Serial.h"
+
+uint8_t RxData;			//定义用于接收串口数据的变量
+
+int main(void)
+{
+	OLED_Init();		//OLED初始化
+	OLED_ShowString(1, 1, "RxData:");	//显示静态字符串
+	
+	Serial_Init();		//串口初始化
+	
+	while (1)
+	{
+		if (Serial_GetRxFlag() == 1)			//检查串口接收数据的标志位
+		{
+			RxData = Serial_GetRxData();		//获取串口接收的数据
+			Serial_SendByte(RxData);			//串口将收到的数据回传回去，用于测试
+			OLED_ShowHexNum(1, 8, RxData, 2);	//显示串口接收的数据
+		}
+		
+		OLED_ShowString(2, 1, "Running");		//OLED闪烁Running，指示当前主循环正在运行
+		Delay_ms(100);
+		OLED_ShowString(2, 1, "       ");
+		Delay_ms(100);
+		
+		__WFI();								//执行WFI指令，CPU睡眠，并等待中断唤醒
+	}
+}
+
+```
+
+### 停止模式+对射式红外传感器计次
+
+[CountSensor.h](/docs/jxkj-stm32/exti#对射式红外传感器计次)
+
+```c title="main.c"
+#include "stm32f10x.h"                  // Device header
+#include "Delay.h"
+#include "OLED.h"
+#include "CountSensor.h"
+
+int main(void)
+{
+	/*模块初始化*/
+	OLED_Init();			//OLED初始化
+	CountSensor_Init();		//计数传感器初始化
+	
+	/*开启时钟*/
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);		//开启PWR的时钟
+															//停止模式和待机模式一定要记得开启
+	
+	/*显示静态字符串*/
+	OLED_ShowString(1, 1, "Count:");
+	
+	while (1)
+	{
+		OLED_ShowNum(1, 7, CountSensor_Get(), 5);			//OLED不断刷新显示CountSensor_Get的返回值
+		
+		OLED_ShowString(2, 1, "Running");					//OLED闪烁Running，指示当前主循环正在运行
+		Delay_ms(100);
+		OLED_ShowString(2, 1, "       ");
+		Delay_ms(100);
+		
+		PWR_EnterSTOPMode(PWR_Regulator_ON, PWR_STOPEntry_WFI);	//STM32进入停止模式，并等待中断唤醒
+		SystemInit();										//唤醒后，要重新配置时钟
+	}
+}
+
+```
+
+### 待机模式+实时时钟
+
+[MyRTC.h](/docs/jxkj-stm32/rtc#实时时钟)
+
+```c title="main.c"
+#include "stm32f10x.h"                  // Device header
+#include "Delay.h"
+#include "OLED.h"
+#include "MyRTC.h"
+
+int main(void)
+{
+	/*模块初始化*/
+	OLED_Init();		//OLED初始化
+	MyRTC_Init();		//RTC初始化
+	
+	/*开启时钟*/
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);		//开启PWR的时钟
+															//停止模式和待机模式一定要记得开启
+	
+	/*显示静态字符串*/
+	OLED_ShowString(1, 1, "CNT :");
+	OLED_ShowString(2, 1, "ALR :");
+	OLED_ShowString(3, 1, "ALRF:");
+	
+	/*使能WKUP引脚*/
+	PWR_WakeUpPinCmd(ENABLE);						//使能位于PA0的WKUP引脚，WKUP引脚上升沿唤醒待机模式
+	
+	/*设定闹钟*/
+	uint32_t Alarm = RTC_GetCounter() + 10;			//闹钟为唤醒后当前时间的后10s
+	RTC_SetAlarm(Alarm);							//写入闹钟值到RTC的ALR寄存器
+	OLED_ShowNum(2, 6, Alarm, 10);					//显示闹钟值
+	
+	while (1)
+	{
+		OLED_ShowNum(1, 6, RTC_GetCounter(), 10);	//显示32位的秒计数器
+		OLED_ShowNum(3, 6, RTC_GetFlagStatus(RTC_FLAG_ALR), 1);		//显示闹钟标志位
+		
+		OLED_ShowString(4, 1, "Running");			//OLED闪烁Running，指示当前主循环正在运行
+		Delay_ms(100);
+		OLED_ShowString(4, 1, "       ");
+		Delay_ms(100);
+		
+		OLED_ShowString(4, 9, "STANDBY");			//OLED闪烁STANDBY，指示即将进入待机模式
+		Delay_ms(1000);
+		OLED_ShowString(4, 9, "       ");
+		Delay_ms(100);
+		
+		OLED_Clear();								//OLED清屏，模拟关闭外部所有的耗电设备，以达到极度省电
+		
+		PWR_EnterSTANDBYMode();						//STM32进入停止模式，并等待指定的唤醒事件（WKUP上升沿或RTC闹钟）
+		/*待机模式唤醒后，程序会重头开始运行*/
+	}
+}
+
+```

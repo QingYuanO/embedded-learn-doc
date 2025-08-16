@@ -1,0 +1,372 @@
+---
+title: RTC
+description: 实时时钟（Real-Time Clock）
+---
+
+<iframe class="w-full aspect-video" src="//player.bilibili.com/player.html?isOutside=true&aid=206940155&bvid=BV1th411z7sn&cid=1175391823&p=42" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe>
+
+
+## BKP简介
+- BKP（Backup Registers）备份寄存器
+- BKP可用于存储用户应用程序数据。当VDD（2.0~3.6V）电源被切断，他们仍然由VBAT（1.8~3.6V）维持供电。当系统在待机模式下被唤醒，或系统复位或电源复位时，他们也不会被复位
+- TAMPER引脚产生的侵入事件将所有备份寄存器内容清除
+- RTC引脚输出RTC校准时钟、RTC闹钟脉冲或者秒脉冲
+- 存储RTC时钟校准寄存器
+- 用户数据存储容量：
+	- 20字节（中容量和小容量）/ 84字节（大容量和互联型）
+
+## BKP基本结构
+
+<Image src="/rtc/rtc1.png" alt="BKP基本结构 " />
+- 左侧绿色部分：
+  - **VBAT**：备份电池供电（1.8~3.6V），当主电源VDD断电时，通过VBAT维持备份寄存器和RTC的供电
+  - **侵入检测**：TAMPER引脚检测到侵入事件时，会清除所有备份寄存器的内容
+  - **时钟输出**：RTC引脚可输出RTC校准时钟、闹钟脉冲或秒脉冲信号
+
+- 右侧橙色部分（备份寄存器区域）：
+  - **DR1 [15:0]到DR42 [15:0]**：用户数据存储寄存器，每个寄存器16位
+  - **状态寄存器**：存储系统状态信息  
+  - **RTC时钟校准寄存器**：用于RTC时钟精度校准
+  - **大容量和互联型**：提供更多的备份寄存器空间（84字节 vs 20字节）
+
+这些备份寄存器的特点是：即使在系统复位、电源复位或待机模式下，只要VBAT有电，数据就不会丢失，非常适合存储重要的配置参数和RTC相关数据。
+
+
+
+## RTC简介
+
+- RTC（Real Time Clock）实时时钟
+- RTC是一个独立的定时器，可为系统提供时钟和日历的功能
+- RTC和时钟配置系统处于后备区域，系统复位时数据不清零，VDD（2.0~3.6V）断电后可借助VBAT（1.8~3.6V）供电继续走时
+- 32位的可编程计数器，可对应Unix时间戳的秒计数器
+- 20位的可编程预分频器，可适配不同频率的输入时钟
+- 可选择三种RTC时钟源：
+	- HSE时钟除以128（通常为8MHz/128）
+	- LSE振荡器时钟（通常为32.768KHz）
+	- LSI振荡器时钟（40KHz）
+
+## RTC框图
+
+<Image src="/rtc/rtc2.png" alt="RTC框图" />
+**RTC框图解析：**
+
+1. **时钟源选择（左侧）**：
+   - **RTCCLK**：RTC时钟源输入，可以选择三种时钟源
+   - **后备区域**：整个RTC模块位于后备区域，由VBAT供电维持
+
+2. **预分频器（RTC_PRL）**：
+   - **20位可编程预分频器**：将输入时钟分频到1Hz
+   - **RTC_DIV**：预分频器的分频值寄存器
+   - 例如：32.768KHz晶振需要设置预分频器为32767，得到1Hz的秒脉冲
+
+3. **计数器（RTC_CNT）**：
+   - **32位计数器**：记录从设定时间开始的秒数
+   - 每秒递增1，可对应Unix时间戳
+   - **RTC_Second**：秒中断信号
+
+4. **闹钟寄存器（RTC_ALR）**：
+   - **闹钟比较器**：将当前计数值与设定的闹钟值比较
+   - **RTC_Alarm**：闹钟中断信号
+   - 当计数器值等于闹钟值时触发中断
+
+5. **控制和状态（右侧）**：
+   - **RTC_CR（控制寄存器）**：
+     - **SECIE**：秒中断使能
+     - **ALRIE**：闹钟中断使能  
+     - **OWIE**：溢出中断使能
+   
+6. **中断控制**：
+   - **NVIC中断控制器**：处理RTC产生的中断
+   - **唤醒控制**：RTC_Alarm可用于从待机模式唤醒系统
+   - **WKP_STDBY**：待机模式唤醒信号
+
+**工作流程**：
+1. 选择合适的时钟源（通常是32.768KHz的LSE）
+2. 配置预分频器将时钟分频到1Hz
+3. 设置初始计数值（时间戳）
+4. 可选设置闹钟值和中断使能
+5. RTC开始计时，每秒递增计数器
+6. 当需要时可读取计数器获得当前时间戳
+
+
+## RTC基本结构
+
+<Image src="/rtc/rtc3.png" alt="RTC基本结构" />
+
+## 硬件电路
+
+<div className="flex flex-col items-center  gap-4">
+  <Image src="/rtc/rtc4.png" alt="硬件电路1" />
+  <div className="flex items-center gap-4">
+    <Image src="/rtc/rtc5.png" alt="硬件电路2" width={300} />
+    <Image src="/rtc/rtc6.png" alt="硬件电路3" width={300} />
+  </div>
+</div>
+
+## RTC操作注意事项
+
+- 执行以下操作将使能对BKP和RTC的访问：
+	- 设置RCC_APB1ENR的PWREN和BKPEN，使能PWR和BKP时钟
+		- 使用`RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE)`
+		- 使用`RCC_APB1PeriphClockCmd(RCC_APB1Periph_BKP, ENABLE)`
+	- 设置PWR_CR的DBP，使能对BKP和RTC的访问
+		- 使用`PWR_BackupAccessCmd(ENABLE)`
+- 若在读取RTC寄存器时，RTC的APB1接口曾经处于禁止状态，则软件首先必须等待RTC_CRL寄存器中的RSF位（寄存器同步标志）被硬件置1
+	- 使用`RTC_WaitForSynchro()`函数等待同步
+- 必须设置RTC_CRL寄存器中的CNF位，使RTC进入配置模式后，才能写入RTC_PRL、RTC_CNT、RTC_ALR寄存器
+	- 使用`RTC_EnterConfigMode()`进入配置模式
+	- 配置完成后使用`RTC_ExitConfigMode()`退出配置模式
+	- 库函数内部已处理，不需要手动调用
+- 对RTC任何寄存器的写操作，都必须在前一次写操作结束后进行。可以通过查询RTC_CR寄存器中的RTOFF状态位，判断RTC寄存器是否处于更新中。仅当RTOFF状态位是1时，才可以写入RTC寄存器
+	- 使用`RTC_WaitForLastTask()`函数等待上一次操作完成
+
+## 例子
+
+### 读写备份寄存器
+
+```c title="main.c"
+#include "stm32f10x.h"                  // Device header
+#include "Delay.h"
+#include "OLED.h"
+#include "Key.h"
+
+uint8_t KeyNum;					//定义用于接收按键键码的变量
+
+uint16_t ArrayWrite[] = {0x1234, 0x5678};	//定义要写入数据的测试数组
+uint16_t ArrayRead[2];						//定义要读取数据的测试数组
+
+int main(void)
+{
+	/*模块初始化*/
+	OLED_Init();				//OLED初始化
+	Key_Init();					//按键初始化
+	
+	/*显示静态字符串*/
+	OLED_ShowString(1, 1, "W:");
+	OLED_ShowString(2, 1, "R:");
+	
+	/*开启时钟*/
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);		//开启PWR的时钟
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_BKP, ENABLE);		//开启BKP的时钟
+	
+	/*备份寄存器访问使能*/
+	PWR_BackupAccessCmd(ENABLE);							//使用PWR开启对备份寄存器的访问
+	
+	while (1)
+	{
+		KeyNum = Key_GetNum();		//获取按键键码
+		
+		if (KeyNum == 1)			//按键1按下
+		{
+			ArrayWrite[0] ++;		//测试数据自增
+			ArrayWrite[1] ++;
+			
+			BKP_WriteBackupRegister(BKP_DR1, ArrayWrite[0]);	//写入测试数据到备份寄存器
+			BKP_WriteBackupRegister(BKP_DR2, ArrayWrite[1]);
+			
+			OLED_ShowHexNum(1, 3, ArrayWrite[0], 4);		//显示写入的测试数据
+			OLED_ShowHexNum(1, 8, ArrayWrite[1], 4);
+		}
+		
+		ArrayRead[0] = BKP_ReadBackupRegister(BKP_DR1);		//读取备份寄存器的数据
+		ArrayRead[1] = BKP_ReadBackupRegister(BKP_DR2);
+		
+		OLED_ShowHexNum(2, 3, ArrayRead[0], 4);				//显示读取的备份寄存器数据
+		OLED_ShowHexNum(2, 8, ArrayRead[1], 4);
+	}
+}
+
+```
+### 实时时钟
+
+```c title="MyRTC.h"
+#ifndef __MYRTC_H
+#define __MYRTC_H
+
+extern uint16_t MyRTC_Time[];
+
+void MyRTC_Init(void);
+void MyRTC_SetTime(void);
+void MyRTC_ReadTime(void);
+
+#endif
+
+```
+
+
+```c title="MyRTC.c"
+#include "stm32f10x.h"                  // Device header
+#include <time.h>
+
+uint16_t MyRTC_Time[] = {2023, 1, 1, 23, 59, 55};	//定义全局的时间数组，数组内容分别为年、月、日、时、分、秒
+
+void MyRTC_SetTime(void);				//函数声明
+
+/**
+  * 函    数：RTC初始化
+  * 参    数：无
+  * 返 回 值：无
+  */
+void MyRTC_Init(void)
+{
+	/*开启时钟*/
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);		//开启PWR的时钟
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_BKP, ENABLE);		//开启BKP的时钟
+	
+	/*备份寄存器访问使能*/
+	PWR_BackupAccessCmd(ENABLE);							//使用PWR开启对备份寄存器的访问
+	
+	if (BKP_ReadBackupRegister(BKP_DR1) != 0xA5A5)			//通过写入备份寄存器的标志位，判断RTC是否是第一次配置
+															//if成立则执行第一次的RTC配置
+	{
+		RCC_LSEConfig(RCC_LSE_ON);							//开启LSE时钟
+		while (RCC_GetFlagStatus(RCC_FLAG_LSERDY) != SET);	//等待LSE准备就绪
+		
+		RCC_RTCCLKConfig(RCC_RTCCLKSource_LSE);				//选择RTCCLK来源为LSE
+		RCC_RTCCLKCmd(ENABLE);								//RTCCLK使能
+		
+		RTC_WaitForSynchro();								//等待同步
+		RTC_WaitForLastTask();								//等待上一次操作完成
+		
+		RTC_SetPrescaler(32768 - 1);						//设置RTC预分频器，预分频后的计数频率为1Hz
+		RTC_WaitForLastTask();								//等待上一次操作完成
+		
+		MyRTC_SetTime();									//设置时间，调用此函数，全局数组里时间值刷新到RTC硬件电路
+		
+		BKP_WriteBackupRegister(BKP_DR1, 0xA5A5);			//在备份寄存器写入自己规定的标志位，用于判断RTC是不是第一次执行配置
+	}
+	else													//RTC不是第一次配置
+	{
+		RTC_WaitForSynchro();								//等待同步
+		RTC_WaitForLastTask();								//等待上一次操作完成
+	}
+}
+
+//如果LSE无法起振导致程序卡死在初始化函数中
+//可将初始化函数替换为下述代码，使用LSI当作RTCCLK
+//LSI无法由备用电源供电，故主电源掉电时，RTC走时会暂停
+/* 
+void MyRTC_Init(void)
+{
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_BKP, ENABLE);
+	
+	PWR_BackupAccessCmd(ENABLE);
+	
+	if (BKP_ReadBackupRegister(BKP_DR1) != 0xA5A5)
+	{
+		RCC_LSICmd(ENABLE);
+		while (RCC_GetFlagStatus(RCC_FLAG_LSIRDY) != SET);
+		
+		RCC_RTCCLKConfig(RCC_RTCCLKSource_LSI);
+		RCC_RTCCLKCmd(ENABLE);
+		
+		RTC_WaitForSynchro();
+		RTC_WaitForLastTask();
+		
+		RTC_SetPrescaler(40000 - 1);
+		RTC_WaitForLastTask();
+		
+		MyRTC_SetTime();
+		
+		BKP_WriteBackupRegister(BKP_DR1, 0xA5A5);
+	}
+	else
+	{
+		RCC_LSICmd(ENABLE);				//即使不是第一次配置，也需要再次开启LSI时钟
+		while (RCC_GetFlagStatus(RCC_FLAG_LSIRDY) != SET);
+		
+		RCC_RTCCLKConfig(RCC_RTCCLKSource_LSI);
+		RCC_RTCCLKCmd(ENABLE);
+		
+		RTC_WaitForSynchro();
+		RTC_WaitForLastTask();
+	}
+}*/
+
+/**
+  * 函    数：RTC设置时间
+  * 参    数：无
+  * 返 回 值：无
+  * 说    明：调用此函数后，全局数组里时间值将刷新到RTC硬件电路
+  */
+void MyRTC_SetTime(void)
+{
+	time_t time_cnt;		//定义秒计数器数据类型
+	struct tm time_date;	//定义日期时间数据类型
+	
+	time_date.tm_year = MyRTC_Time[0] - 1900;		//将数组的时间赋值给日期时间结构体
+	time_date.tm_mon = MyRTC_Time[1] - 1;
+	time_date.tm_mday = MyRTC_Time[2];
+	time_date.tm_hour = MyRTC_Time[3];
+	time_date.tm_min = MyRTC_Time[4];
+	time_date.tm_sec = MyRTC_Time[5];
+	
+	time_cnt = mktime(&time_date) - 8 * 60 * 60;	//调用mktime函数，将日期时间转换为秒计数器格式
+													//- 8 * 60 * 60为东八区的时区调整
+	
+	RTC_SetCounter(time_cnt);						//将秒计数器写入到RTC的CNT中
+	RTC_WaitForLastTask();							//等待上一次操作完成
+}
+
+/**
+  * 函    数：RTC读取时间
+  * 参    数：无
+  * 返 回 值：无
+  * 说    明：调用此函数后，RTC硬件电路里时间值将刷新到全局数组
+  */
+void MyRTC_ReadTime(void)
+{
+	time_t time_cnt;		//定义秒计数器数据类型
+	struct tm time_date;	//定义日期时间数据类型
+	
+	time_cnt = RTC_GetCounter() + 8 * 60 * 60;		//读取RTC的CNT，获取当前的秒计数器
+													//+ 8 * 60 * 60为东八区的时区调整
+	
+	time_date = *localtime(&time_cnt);				//使用localtime函数，将秒计数器转换为日期时间格式
+	
+	MyRTC_Time[0] = time_date.tm_year + 1900;		//将日期时间结构体赋值给数组的时间
+	MyRTC_Time[1] = time_date.tm_mon + 1;
+	MyRTC_Time[2] = time_date.tm_mday;
+	MyRTC_Time[3] = time_date.tm_hour;
+	MyRTC_Time[4] = time_date.tm_min;
+	MyRTC_Time[5] = time_date.tm_sec;
+}
+
+```
+
+```c title="main.c"
+#include "stm32f10x.h"                  // Device header
+#include "Delay.h"
+#include "OLED.h"
+#include "MyRTC.h"
+
+int main(void)
+{
+	/*模块初始化*/
+	OLED_Init();		//OLED初始化
+	MyRTC_Init();		//RTC初始化
+	
+	/*显示静态字符串*/
+	OLED_ShowString(1, 1, "Date:XXXX-XX-XX");
+	OLED_ShowString(2, 1, "Time:XX:XX:XX");
+	OLED_ShowString(3, 1, "CNT :");
+	OLED_ShowString(4, 1, "DIV :");
+	
+	while (1)
+	{
+		MyRTC_ReadTime();							//RTC读取时间，最新的时间存储到MyRTC_Time数组中
+		
+		OLED_ShowNum(1, 6, MyRTC_Time[0], 4);		//显示MyRTC_Time数组中的时间值，年
+		OLED_ShowNum(1, 11, MyRTC_Time[1], 2);		//月
+		OLED_ShowNum(1, 14, MyRTC_Time[2], 2);		//日
+		OLED_ShowNum(2, 6, MyRTC_Time[3], 2);		//时
+		OLED_ShowNum(2, 9, MyRTC_Time[4], 2);		//分
+		OLED_ShowNum(2, 12, MyRTC_Time[5], 2);		//秒
+		
+		OLED_ShowNum(3, 6, RTC_GetCounter(), 10);	//显示32位的秒计数器
+		OLED_ShowNum(4, 6, RTC_GetDivider(), 10);	//显示余数寄存器
+	}
+}
+
+```
