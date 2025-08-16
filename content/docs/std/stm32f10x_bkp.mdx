@@ -1,0 +1,418 @@
+---
+title: stm32f10x_bkp
+description: BKP（Backup）外设是STM32F10x系列微控制器中的备份寄存器模块，主要用于数据备份和侵入检测功能。该外设包含42个16位备份数据寄存器，在系统掉电或复位后数据仍然保持，同时支持侵入引脚检测功能。
+---
+
+
+## 数据类型定义
+
+### 侵入引脚电平定义
+
+```c
+#define BKP_TamperPinLevel_High           ((uint16_t)0x0000)  /* 侵入引脚高电平有效 */
+#define BKP_TamperPinLevel_Low            ((uint16_t)0x0001)  /* 侵入引脚低电平有效 */
+```
+
+**说明：**
+- `BKP_TamperPinLevel_High`：侵入引脚高电平触发侵入检测
+- `BKP_TamperPinLevel_Low`：侵入引脚低电平触发侵入检测
+
+### RTC输出源定义
+
+```c
+#define BKP_RTCOutputSource_None          ((uint16_t)0x0000)  /* 无RTC输出 */
+#define BKP_RTCOutputSource_CalibClock    ((uint16_t)0x0080)  /* RTC校准时钟输出 */
+#define BKP_RTCOutputSource_Alarm         ((uint16_t)0x0100)  /* RTC闹钟输出 */
+#define BKP_RTCOutputSource_Second        ((uint16_t)0x0300)  /* RTC秒脉冲输出 */
+```
+
+**说明：**
+- `BKP_RTCOutputSource_None`：侵入引脚不输出RTC信号
+- `BKP_RTCOutputSource_CalibClock`：侵入引脚输出RTC校准时钟信号
+- `BKP_RTCOutputSource_Alarm`：侵入引脚输出RTC闹钟信号
+- `BKP_RTCOutputSource_Second`：侵入引脚输出RTC秒脉冲信号
+
+## BKP寄存器定义
+
+STM32F10x BKP外设包含以下寄存器：
+
+```c
+#define BKP_DR1                           ((uint16_t)0x0004)  /* 备份数据寄存器1 */
+#define BKP_DR2                           ((uint16_t)0x0008)  /* 备份数据寄存器2 */
+#define BKP_DR3                           ((uint16_t)0x000C)  /* 备份数据寄存器3 */
+#define BKP_DR4                           ((uint16_t)0x0010)  /* 备份数据寄存器4 */
+#define BKP_DR5                           ((uint16_t)0x0014)  /* 备份数据寄存器5 */
+#define BKP_DR6                           ((uint16_t)0x0018)  /* 备份数据寄存器6 */
+#define BKP_DR7                           ((uint16_t)0x001C)  /* 备份数据寄存器7 */
+#define BKP_DR8                           ((uint16_t)0x0020)  /* 备份数据寄存器8 */
+#define BKP_DR9                           ((uint16_t)0x0024)  /* 备份数据寄存器9 */
+#define BKP_DR10                          ((uint16_t)0x0028)  /* 备份数据寄存器10 */
+#define BKP_DR11                          ((uint16_t)0x0040)  /* 备份数据寄存器11 */
+#define BKP_DR12                          ((uint16_t)0x0044)  /* 备份数据寄存器12 */
+#define BKP_DR13                          ((uint16_t)0x0048)  /* 备份数据寄存器13 */
+#define BKP_DR14                          ((uint16_t)0x004C)  /* 备份数据寄存器14 */
+#define BKP_DR15                          ((uint16_t)0x0050)  /* 备份数据寄存器15 */
+#define BKP_DR16                          ((uint16_t)0x0054)  /* 备份数据寄存器16 */
+#define BKP_DR17                          ((uint16_t)0x0058)  /* 备份数据寄存器17 */
+#define BKP_DR18                          ((uint16_t)0x005C)  /* 备份数据寄存器18 */
+#define BKP_DR19                          ((uint16_t)0x0060)  /* 备份数据寄存器19 */
+#define BKP_DR20                          ((uint16_t)0x0064)  /* 备份数据寄存器20 */
+#define BKP_DR21                          ((uint16_t)0x0068)  /* 备份数据寄存器21 */
+#define BKP_DR22                          ((uint16_t)0x006C)  /* 备份数据寄存器22 */
+#define BKP_DR23                          ((uint16_t)0x0070)  /* 备份数据寄存器23 */
+#define BKP_DR24                          ((uint16_t)0x0074)  /* 备份数据寄存器24 */
+#define BKP_DR25                          ((uint16_t)0x0078)  /* 备份数据寄存器25 */
+#define BKP_DR26                          ((uint16_t)0x007C)  /* 备份数据寄存器26 */
+#define BKP_DR27                          ((uint16_t)0x0080)  /* 备份数据寄存器27 */
+#define BKP_DR28                          ((uint16_t)0x0084)  /* 备份数据寄存器28 */
+#define BKP_DR29                          ((uint16_t)0x0088)  /* 备份数据寄存器29 */
+#define BKP_DR30                          ((uint16_t)0x008C)  /* 备份数据寄存器30 */
+#define BKP_DR31                          ((uint16_t)0x0090)  /* 备份数据寄存器31 */
+#define BKP_DR32                          ((uint16_t)0x0094)  /* 备份数据寄存器32 */
+#define BKP_DR33                          ((uint16_t)0x0098)  /* 备份数据寄存器33 */
+#define BKP_DR34                          ((uint16_t)0x009C)  /* 备份数据寄存器34 */
+#define BKP_DR35                          ((uint16_t)0x00A0)  /* 备份数据寄存器35 */
+#define BKP_DR36                          ((uint16_t)0x00A4)  /* 备份数据寄存器36 */
+#define BKP_DR37                          ((uint16_t)0x00A8)  /* 备份数据寄存器37 */
+#define BKP_DR38                          ((uint16_t)0x00AC)  /* 备份数据寄存器38 */
+#define BKP_DR39                          ((uint16_t)0x00B0)  /* 备份数据寄存器39 */
+#define BKP_DR40                          ((uint16_t)0x00B4)  /* 备份数据寄存器40 */
+#define BKP_DR41                          ((uint16_t)0x00B8)  /* 备份数据寄存器41 */
+#define BKP_DR42                          ((uint16_t)0x00BC)  /* 备份数据寄存器42 */
+```
+
+## 标准库函数详解
+
+### 1. BKP_DeInit
+
+```c
+/**
+ * @brief  将BKP外设寄存器重置为默认值
+ * @param  无
+ * @retval 无
+ * @example
+ *     BKP_DeInit();
+ *     将BKP外设恢复到初始状态
+ */
+void BKP_DeInit(void);
+```
+
+**功能说明：**
+将BKP外设的所有寄存器重置为默认值，包括侵入引脚配置、RTC输出配置等。
+
+### 2. BKP_TamperPinLevelConfig
+
+```c
+/**
+ * @brief  配置侵入引脚的有效电平
+ * @param  BKP_TamperPinLevel: 侵入引脚电平配置
+ *         该参数可以是以下值之一：
+ *           @arg BKP_TamperPinLevel_High: 高电平有效
+ *           @arg BKP_TamperPinLevel_Low: 低电平有效
+ * @retval 无
+ * @example
+ *     BKP_TamperPinLevelConfig(BKP_TamperPinLevel_High);
+ *     配置侵入引脚为高电平有效
+ */
+void BKP_TamperPinLevelConfig(uint16_t BKP_TamperPinLevel);
+```
+
+**功能说明：**
+配置侵入引脚的有效触发电平，当引脚电平达到设定值时将触发侵入检测。
+
+### 3. BKP_TamperPinCmd
+
+```c
+/**
+ * @brief  使能或禁用侵入引脚功能
+ * @param  NewState: 侵入引脚功能的新状态
+ *         该参数可以是以下值之一：
+ *           @arg ENABLE: 使能侵入引脚功能
+ *           @arg DISABLE: 禁用侵入引脚功能
+ * @retval 无
+ * @example
+ *     BKP_TamperPinCmd(ENABLE);
+ *     使能侵入引脚功能
+ */
+void BKP_TamperPinCmd(FunctionalState NewState);
+```
+
+**功能说明：**
+控制侵入引脚功能的使能状态，使能后可以检测侵入事件。
+
+### 4. BKP_ITConfig
+
+```c
+/**
+ * @brief  使能或禁用BKP中断
+ * @param  NewState: BKP中断的新状态
+ *         该参数可以是以下值之一：
+ *           @arg ENABLE: 使能BKP中断
+ *           @arg DISABLE: 禁用BKP中断
+ * @retval 无
+ * @example
+ *     BKP_ITConfig(ENABLE);
+ *     使能BKP中断
+ */
+void BKP_ITConfig(FunctionalState NewState);
+```
+
+**功能说明：**
+控制BKP中断的使能状态，使能后当发生侵入事件时会产生中断。
+
+### 5. BKP_RTCOutputConfig
+
+```c
+/**
+ * @brief  配置RTC输出到侵入引脚
+ * @param  BKP_RTCOutputSource: RTC输出源选择
+ *         该参数可以是以下值之一：
+ *           @arg BKP_RTCOutputSource_None: 无输出
+ *           @arg BKP_RTCOutputSource_CalibClock: 在侵入引脚上输出分频64的RTC时钟
+ *           @arg BKP_RTCOutputSource_Alarm: 闹钟输出
+ *           @arg BKP_RTCOutputSource_Second: 秒脉冲输出
+ * @retval 无
+ * @example
+ *     BKP_RTCOutputConfig(BKP_RTCOutputSource_Second);
+ *     配置侵入引脚输出RTC秒脉冲
+ */
+void BKP_RTCOutputConfig(uint16_t BKP_RTCOutputSource);
+```
+
+**功能说明：**
+配置侵入引脚作为RTC信号的输出引脚，可以输出校准时钟、闹钟或秒脉冲信号。
+
+### 6. BKP_SetRTCCalibrationValue
+
+```c
+/**
+ * @brief  设置RTC校准值
+ * @param  CalibrationValue: RTC校准值，范围0-127
+ * @retval 无
+ * @example
+ *     BKP_SetRTCCalibrationValue(64);
+ *     设置RTC校准值为64
+ */
+void BKP_SetRTCCalibrationValue(uint8_t CalibrationValue);
+```
+
+**功能说明：**
+设置RTC时钟的校准值，用于补偿时钟频率偏差，提高时间精度。
+
+### 7. BKP_WriteBackupRegister
+
+```c
+/**
+ * @brief  写入备份数据寄存器
+ * @param  BKP_DR: 备份数据寄存器地址
+ *         该参数可以是BKP_DR1到BKP_DR42中的任意一个
+ * @param  Data: 要写入的16位数据
+ * @retval 无
+ * @example
+ *     BKP_WriteBackupRegister(BKP_DR1, 0x1234);
+ *     将数据0x1234写入备份寄存器1
+ */
+void BKP_WriteBackupRegister(uint16_t BKP_DR, uint16_t Data);
+```
+
+**功能说明：**
+向指定的备份数据寄存器写入16位数据，数据在系统掉电或复位后仍然保持。
+
+### 8. BKP_ReadBackupRegister
+
+```c
+/**
+ * @brief  读取备份数据寄存器
+ * @param  BKP_DR: 备份数据寄存器地址
+ *         该参数可以是BKP_DR1到BKP_DR42中的任意一个
+ * @retval 备份数据寄存器的16位值
+ * @example
+ *     uint16_t data = BKP_ReadBackupRegister(BKP_DR1);
+ *     读取备份寄存器1的值
+ */
+uint16_t BKP_ReadBackupRegister(uint16_t BKP_DR);
+```
+
+**功能说明：**
+从指定的备份数据寄存器读取16位数据。
+
+### 9. BKP_GetFlagStatus
+
+```c
+/**
+ * @brief  获取侵入标志状态
+ * @param  无
+ * @retval 侵入标志状态
+ *         该返回值可以是以下值之一：
+ *           @arg SET: 检测到侵入事件
+ *           @arg RESET: 未检测到侵入事件
+ * @example
+ *     FlagStatus flag = BKP_GetFlagStatus();
+ *     获取侵入标志状态
+ */
+FlagStatus BKP_GetFlagStatus(void);
+```
+
+**功能说明：**
+检查是否发生了侵入事件，返回侵入标志的状态。
+
+### 10. BKP_ClearFlag
+
+```c
+/**
+ * @brief  清除侵入标志
+ * @param  无
+ * @retval 无
+ * @example
+ *     BKP_ClearFlag();
+ *     清除侵入标志
+ */
+void BKP_ClearFlag(void);
+```
+
+**功能说明：**
+清除侵入标志位，通常在处理完侵入事件后调用。
+
+### 11. BKP_GetITStatus
+
+```c
+/**
+ * @brief  获取BKP中断状态
+ * @param  无
+ * @retval BKP中断状态
+ *         该返回值可以是以下值之一：
+ *           @arg SET: BKP中断已挂起
+ *           @arg RESET: BKP中断未挂起
+ * @example
+ *     ITStatus status = BKP_GetITStatus();
+ *     获取BKP中断状态
+ */
+ITStatus BKP_GetITStatus(void);
+```
+
+**功能说明：**
+检查BKP中断是否已挂起，用于中断服务程序中判断中断源。
+
+### 12. BKP_ClearITPendingBit
+
+```c
+/**
+ * @brief  清除BKP中断挂起位
+ * @param  无
+ * @retval 无
+ * @example
+ *     BKP_ClearITPendingBit();
+ *     清除BKP中断挂起位
+ */
+void BKP_ClearITPendingBit(void);
+```
+
+**功能说明：**
+清除BKP中断的挂起位，通常在中断服务程序中调用。
+
+## 使用示例
+
+### 基本数据备份示例
+
+```c
+#include "stm32f10x.h"
+
+void BKP_DataBackup_Example(void)
+{
+    // 使能PWR和BKP时钟
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+    
+    // 使能对备份寄存器和RTC的访问
+    PWR_BackupAccessCmd(ENABLE);
+    
+    // 写入备份数据
+    BKP_WriteBackupRegister(BKP_DR1, 0x1234);
+    BKP_WriteBackupRegister(BKP_DR2, 0x5678);
+    BKP_WriteBackupRegister(BKP_DR3, 0x9ABC);
+    
+    // 读取备份数据
+    uint16_t data1 = BKP_ReadBackupRegister(BKP_DR1);
+    uint16_t data2 = BKP_ReadBackupRegister(BKP_DR2);
+    uint16_t data3 = BKP_ReadBackupRegister(BKP_DR3);
+}
+```
+
+### 侵入检测示例
+
+```c
+#include "stm32f10x.h"
+
+void BKP_TamperDetection_Example(void)
+{
+    // 使能PWR和BKP时钟
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+    
+    // 使能对备份寄存器的访问
+    PWR_BackupAccessCmd(ENABLE);
+    
+    // 配置侵入引脚为低电平有效
+    BKP_TamperPinLevelConfig(BKP_TamperPinLevel_Low);
+    
+    // 使能侵入引脚功能
+    BKP_TamperPinCmd(ENABLE);
+    
+    // 使能BKP中断
+    BKP_ITConfig(ENABLE);
+    
+    // 使能NVIC中断
+    NVIC_EnableIRQ(TAMPER_IRQn);
+    
+    // 写入一些初始数据
+    BKP_WriteBackupRegister(BKP_DR1, 0x1234);
+}
+
+// 侵入中断服务程序
+void TAMPER_IRQHandler(void)
+{
+    if(BKP_GetITStatus() == SET)
+    {
+        // 检测到侵入事件，清除所有备份数据
+        for(int i = 1; i <= 42; i++)
+        {
+            BKP_WriteBackupRegister(i * 4, 0x0000);
+        }
+        
+        // 清除中断挂起位
+        BKP_ClearITPendingBit();
+    }
+}
+```
+
+### RTC输出配置示例
+
+```c
+#include "stm32f10x.h"
+
+void BKP_RTCOutput_Example(void)
+{
+    // 使能PWR和BKP时钟
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR | RCC_APB1Periph_BKP, ENABLE);
+    
+    // 使能对备份寄存器的访问
+    PWR_BackupAccessCmd(ENABLE);
+    
+    // 配置侵入引脚输出RTC秒脉冲
+    BKP_RTCOutputConfig(BKP_RTCOutputSource_Second);
+    
+    // 设置RTC校准值
+    BKP_SetRTCCalibrationValue(64);
+}
+```
+
+## 注意事项
+
+1. **时钟使能**：使用BKP外设前必须先使能PWR和BKP时钟
+2. **访问权限**：写入备份寄存器前必须调用`PWR_BackupAccessCmd(ENABLE)`使能访问权限
+3. **侵入检测**：侵入事件会清除所有备份寄存器的内容，使用时需谨慎
+4. **中断处理**：在中断服务程序中必须清除中断挂起位
+5. **校准值范围**：RTC校准值必须在0-127范围内
+6. **寄存器地址**：备份寄存器地址是固定的，不能随意修改
+
+## 总结
+
+STM32F10x BKP外设提供了强大的数据备份和侵入检测功能。通过42个备份数据寄存器，可以在系统掉电或复位后保持重要数据。侵入检测功能可以检测外部干扰并自动清除备份数据，提高系统安全性。RTC输出功能可以将RTC信号输出到侵入引脚，方便外部设备同步。在使用时需要注意正确的初始化顺序和权限设置，确保功能的正常使用。

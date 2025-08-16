@@ -1,0 +1,457 @@
+---
+title: stm32f10x_pwr
+description: PWR（Power Control）外设是STM32F10x系列微控制器中的电源控制模块，负责管理系统的电源状态和低功耗模式。该外设支持多种低功耗模式，包括STOP模式和STANDBY模式，同时提供电源电压检测（PVD）功能，用于监控系统电源状态。
+---
+
+## 数据类型定义
+
+### PVD检测电平定义
+
+```c
+#define PWR_PVDLevel_2V2          ((uint32_t)0x00000000)  /* 2.2V检测电平 */
+#define PWR_PVDLevel_2V3          ((uint32_t)0x00000020)  /* 2.3V检测电平 */
+#define PWR_PVDLevel_2V4          ((uint32_t)0x00000040)  /* 2.4V检测电平 */
+#define PWR_PVDLevel_2V5          ((uint32_t)0x00000060)  /* 2.5V检测电平 */
+#define PWR_PVDLevel_2V6          ((uint32_t)0x00000080)  /* 2.6V检测电平 */
+#define PWR_PVDLevel_2V7          ((uint32_t)0x000000A0)  /* 2.7V检测电平 */
+#define PWR_PVDLevel_2V8          ((uint32_t)0x000000C0)  /* 2.8V检测电平 */
+#define PWR_PVDLevel_2V9          ((uint32_t)0x000000E0)  /* 2.9V检测电平 */
+```
+
+**说明：**
+- `PWR_PVDLevel_2V2`：电源电压低于2.2V时触发PVD事件
+- `PWR_PVDLevel_2V3`：电源电压低于2.3V时触发PVD事件
+- `PWR_PVDLevel_2V4`：电源电压低于2.4V时触发PVD事件
+- `PWR_PVDLevel_2V5`：电源电压低于2.5V时触发PVD事件
+- `PWR_PVDLevel_2V6`：电源电压低于2.6V时触发PVD事件
+- `PWR_PVDLevel_2V7`：电源电压低于2.7V时触发PVD事件
+- `PWR_PVDLevel_2V8`：电源电压低于2.8V时触发PVD事件
+- `PWR_PVDLevel_2V9`：电源电压低于2.9V时触发PVD事件
+
+### 稳压器状态定义
+
+```c
+#define PWR_Regulator_ON          ((uint32_t)0x00000000)  /* 稳压器开启 */
+#define PWR_Regulator_LowPower    ((uint32_t)0x00000001)  /* 稳压器低功耗模式 */
+```
+
+**说明：**
+- `PWR_Regulator_ON`：稳压器正常工作模式，功耗较高但响应速度快
+- `PWR_Regulator_LowPower`：稳压器低功耗模式，功耗较低但响应速度较慢
+
+### STOP模式入口定义
+
+```c
+#define PWR_STOPEntry_WFI         ((uint8_t)0x01)  /* 使用WFI指令进入STOP模式 */
+#define PWR_STOPEntry_WFE         ((uint8_t)0x02)  /* 使用WFE指令进入STOP模式 */
+```
+
+**说明：**
+- `PWR_STOPEntry_WFI`：使用WFI（Wait For Interrupt）指令进入STOP模式
+- `PWR_STOPEntry_WFE`：使用WFE（Wait For Event）指令进入STOP模式
+
+### PWR标志位定义
+
+```c
+#define PWR_FLAG_WU               ((uint32_t)0x00000001)  /* 唤醒标志 */
+#define PWR_FLAG_SB               ((uint32_t)0x00000002)  /* 待机标志 */
+#define PWR_FLAG_PVDO             ((uint32_t)0x00000004)  /* PVD输出标志 */
+```
+
+**说明：**
+- `PWR_FLAG_WU`：唤醒标志，表示系统从STOP模式唤醒
+- `PWR_FLAG_SB`：待机标志，表示系统从STANDBY模式唤醒
+- `PWR_FLAG_PVDO`：PVD输出标志，表示电源电压检测结果
+
+## PWR寄存器定义
+
+STM32F10x PWR外设包含以下主要寄存器：
+
+```c
+// PWR控制寄存器
+#define PWR_CR                   ((uint16_t)0x0000)  /* PWR控制寄存器 */
+
+// PWR控制/状态寄存器
+#define PWR_CSR                  ((uint16_t)0x0001)  /* PWR控制/状态寄存器 */
+```
+
+## 标准库函数详解
+
+### 1. PWR_DeInit
+
+```c
+/**
+ * @brief  将PWR外设寄存器重置为默认值
+ * @param  无
+ * @retval 无
+ * @example
+ *     PWR_DeInit();
+ *     将PWR外设恢复到初始状态
+ */
+void PWR_DeInit(void);
+```
+
+**功能说明：**
+将PWR外设的所有寄存器重置为默认值，包括PVD配置、唤醒引脚配置等。
+
+### 2. PWR_BackupAccessCmd
+
+```c
+/**
+ * @brief  使能或禁用对备份寄存器和RTC的访问
+ * @param  NewState: 备份域访问的新状态
+ *         该参数可以是以下值之一：
+ *           @arg ENABLE: 使能备份域访问
+ *           @arg DISABLE: 禁用备份域访问
+ * @retval 无
+ * @example
+ *     PWR_BackupAccessCmd(ENABLE);
+ *     使能对备份寄存器和RTC的访问
+ */
+void PWR_BackupAccessCmd(FunctionalState NewState);
+```
+
+**功能说明：**
+控制对备份寄存器和RTC的访问权限，使用备份域功能前必须使能访问权限。
+
+### 3. PWR_PVDCmd
+
+```c
+/**
+ * @brief  使能或禁用PVD（电源电压检测器）
+ * @param  NewState: PVD功能的新状态
+ *         该参数可以是以下值之一：
+ *           @arg ENABLE: 使能PVD功能
+ *           @arg DISABLE: 禁用PVD功能
+ * @retval 无
+ * @example
+ *     PWR_PVDCmd(ENABLE);
+ *     使能PVD功能
+ */
+void PWR_PVDCmd(FunctionalState NewState);
+```
+
+**功能说明：**
+控制PVD功能的使能状态，使能后可以检测电源电压是否低于设定阈值。
+
+### 4. PWR_PVDLevelConfig
+
+```c
+/**
+ * @brief  配置PVD检测电平
+ * @param  PWR_PVDLevel: PVD检测电平
+ *         该参数可以是以下值之一：
+ *           @arg PWR_PVDLevel_2V2: 2.2V检测电平
+ *           @arg PWR_PVDLevel_2V3: 2.3V检测电平
+ *           @arg PWR_PVDLevel_2V4: 2.4V检测电平
+ *           @arg PWR_PVDLevel_2V5: 2.5V检测电平
+ *           @arg PWR_PVDLevel_2V6: 2.6V检测电平
+ *           @arg PWR_PVDLevel_2V7: 2.7V检测电平
+ *           @arg PWR_PVDLevel_2V8: 2.8V检测电平
+ *           @arg PWR_PVDLevel_2V9: 2.9V检测电平
+ * @retval 无
+ * @example
+ *     PWR_PVDLevelConfig(PWR_PVDLevel_2V5);
+ *     设置PVD检测电平为2.5V
+ */
+void PWR_PVDLevelConfig(uint32_t PWR_PVDLevel);
+```
+
+**功能说明：**
+设置PVD的检测电平，当电源电压低于设定值时将触发PVD事件。
+
+### 5. PWR_WakeUpPinCmd
+
+```c
+/**
+ * @brief  使能或禁用唤醒引脚功能
+ * @param  NewState: 唤醒引脚功能的新状态
+ *         该参数可以是以下值之一：
+ *           @arg ENABLE: 使能唤醒引脚功能
+ *           @arg DISABLE: 禁用唤醒引脚功能
+ * @retval 无
+ * @example
+ *     PWR_WakeUpPinCmd(ENABLE);
+ *     使能唤醒引脚功能
+ */
+void PWR_WakeUpPinCmd(FunctionalState NewState);
+```
+
+**功能说明：**
+控制唤醒引脚功能的使能状态，使能后可以通过唤醒引脚从STOP模式唤醒。
+
+### 6. PWR_EnterSTOPMode
+
+```c
+/**
+ * @brief  进入STOP模式
+ * @param  PWR_Regulator: 稳压器状态
+ *         该参数可以是以下值之一：
+ *           @arg PWR_Regulator_ON: 稳压器开启
+ *           @arg PWR_Regulator_LowPower: 稳压器低功耗模式
+ * @param  PWR_STOPEntry: STOP模式入口方式
+ *         该参数可以是以下值之一：
+ *           @arg PWR_STOPEntry_WFI: 使用WFI指令进入
+ *           @arg PWR_STOPEntry_WFE: 使用WFE指令进入
+ * @retval 无
+ * @example
+ *     PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
+ *     进入低功耗STOP模式
+ */
+void PWR_EnterSTOPMode(uint32_t PWR_Regulator, uint8_t PWR_STOPEntry);
+```
+
+**功能说明：**
+使系统进入STOP模式，在此模式下大部分外设停止工作，但SRAM和寄存器内容保持。
+
+### 7. PWR_EnterSTANDBYMode
+
+```c
+/**
+ * @brief  进入STANDBY模式
+ * @param  无
+ * @retval 无
+ * @example
+ *     PWR_EnterSTANDBYMode();
+ *     进入STANDBY模式
+ */
+void PWR_EnterSTANDBYMode(void);
+```
+
+**功能说明：**
+使系统进入STANDBY模式，在此模式下SRAM和寄存器内容丢失，系统完全停止。
+
+### 8. PWR_GetFlagStatus
+
+```c
+/**
+ * @brief  获取指定的PWR标志状态
+ * @param  PWR_FLAG: 要检查的PWR标志
+ *         该参数可以是以下值之一：
+ *           @arg PWR_FLAG_WU: 唤醒标志
+ *           @arg PWR_FLAG_SB: 待机标志
+ *           @arg PWR_FLAG_PVDO: PVD输出标志
+ * @retval 标志状态
+ *         该返回值可以是以下值之一：
+ *           @arg SET: 标志已设置
+ *           @arg RESET: 标志已清除
+ * @example
+ *     FlagStatus flag = PWR_GetFlagStatus(PWR_FLAG_WU);
+ *     检查唤醒标志状态
+ */
+FlagStatus PWR_GetFlagStatus(uint32_t PWR_FLAG);
+```
+
+**功能说明：**
+检查指定的PWR标志状态，用于判断各种电源事件是否发生。
+
+### 9. PWR_ClearFlag
+
+```c
+/**
+ * @brief  清除指定的PWR标志
+ * @param  PWR_FLAG: 要清除的PWR标志
+ *         该参数可以是以下值之一：
+ *           @arg PWR_FLAG_WU: 唤醒标志
+ *           @arg PWR_FLAG_SB: 待机标志
+ * @retval 无
+ * @example
+ *     PWR_ClearFlag(PWR_FLAG_WU);
+ *     清除唤醒标志
+ */
+void PWR_ClearFlag(uint32_t PWR_FLAG);
+```
+
+**功能说明：**
+清除指定的PWR标志位，通常在处理完相应事件后调用。
+
+## 使用示例
+
+### 基本PWR初始化示例
+
+```c
+#include "stm32f10x.h"
+
+void PWR_Init_Example(void)
+{
+    // 使能PWR时钟
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
+    
+    // 使能对备份寄存器和RTC的访问
+    PWR_BackupAccessCmd(ENABLE);
+    
+    // 配置PVD检测电平为2.5V
+    PWR_PVDLevelConfig(PWR_PVDLevel_2V5);
+    
+    // 使能PVD功能
+    PWR_PVDCmd(ENABLE);
+    
+    // 使能唤醒引脚功能
+    PWR_WakeUpPinCmd(ENABLE);
+}
+```
+
+### STOP模式示例
+
+```c
+#include "stm32f10x.h"
+
+void PWR_STOPMode_Example(void)
+{
+    // 初始化PWR（参考上面的初始化代码）
+    PWR_Init_Example();
+    
+    // 配置GPIO为唤醒引脚（PA0）
+    GPIO_InitTypeDef GPIO_InitStructure;
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+    
+    // 使能EXTI中断
+    EXTI_InitTypeDef EXTI_InitStructure;
+    EXTI_InitStructure.EXTI_Line = EXTI_Line0;
+    EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
+    EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising;
+    EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+    EXTI_Init(&EXTI_InitStructure);
+    
+    // 使能NVIC中断
+    NVIC_EnableIRQ(EXTI0_IRQn);
+    
+    // 进入STOP模式（低功耗模式）
+    PWR_EnterSTOPMode(PWR_Regulator_LowPower, PWR_STOPEntry_WFI);
+    
+    // 从STOP模式唤醒后，检查唤醒标志
+    if(PWR_GetFlagStatus(PWR_FLAG_WU) == SET)
+    {
+        // 清除唤醒标志
+        PWR_ClearFlag(PWR_FLAG_WU);
+        
+        // 重新配置系统时钟
+        SystemInit();
+    }
+}
+
+// EXTI0中断服务程序
+void EXTI0_IRQHandler(void)
+{
+    if(EXTI_GetITStatus(EXTI_Line0) == SET)
+    {
+        // 清除中断标志
+        EXTI_ClearITPendingBit(EXTI_Line0);
+        
+        // 从STOP模式唤醒
+        // 系统会自动从WFI指令处继续执行
+    }
+}
+```
+
+### STANDBY模式示例
+
+```c
+#include "stm32f10x.h"
+
+void PWR_STANDBYMode_Example(void)
+{
+    // 初始化PWR（参考上面的初始化代码）
+    PWR_Init_Example();
+    
+    // 使能RTC作为唤醒源
+    // 在实际使用中，需要先配置RTC模块
+    // 这里假设RTC已经初始化完成
+    // 设置闹钟（5秒后唤醒）
+    RTC_SetAlarm(5);
+    
+    // 使能RTC闹钟中断
+    RTC_ITConfig(RTC_IT_ALR, ENABLE);
+    
+    // 使能NVIC中断
+    NVIC_EnableIRQ(RTC_IRQn);
+    
+    // 进入STANDBY模式
+    PWR_EnterSTANDBYMode();
+    
+    // 从STANDBY模式唤醒后，检查待机标志
+    if(PWR_GetFlagStatus(PWR_FLAG_SB) == SET)
+    {
+        // 清除待机标志
+        PWR_ClearFlag(PWR_FLAG_SB);
+        
+        // 重新初始化系统
+        SystemInit();
+    }
+}
+```
+
+### PVD监控示例
+
+```c
+#include "stm32f10x.h"
+
+void PWR_PVDMonitor_Example(void)
+{
+    // 初始化PWR（参考上面的初始化代码）
+    PWR_Init_Example();
+    
+    // 使能PVD中断
+    EXTI_InitTypeDef EXTI_InitStructure;
+    EXTI_InitStructure.EXTI_Line = EXTI_Line16;
+    EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
+    EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising_Falling;
+    EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+    EXTI_Init(&EXTI_InitStructure);
+    
+    // 使能NVIC中断
+    NVIC_EnableIRQ(PVD_IRQn);
+    
+    while(1)
+    {
+        // 检查PVD状态
+        if(PWR_GetFlagStatus(PWR_FLAG_PVDO) == SET)
+        {
+            // 电源电压低于阈值，执行低功耗操作
+            // 例如：保存重要数据到备份寄存器
+            BKP_WriteBackupRegister(BKP_DR1, 0x1234);
+        }
+        else
+        {
+            // 电源电压正常
+        }
+    }
+}
+
+// PVD中断服务程序
+void PVD_IRQHandler(void)
+{
+    if(EXTI_GetITStatus(EXTI_Line16) == SET)
+    {
+        // 清除中断标志
+        EXTI_ClearITPendingBit(EXTI_Line16);
+        
+        // 处理电源电压变化事件
+        if(PWR_GetFlagStatus(PWR_FLAG_PVDO) == SET)
+        {
+            // 电源电压过低，执行紧急处理
+        }
+        else
+        {
+            // 电源电压恢复正常
+        }
+    }
+}
+```
+
+## 注意事项
+
+1. **时钟使能**：使用PWR外设前必须先使能PWR时钟
+2. **备份域访问**：使用备份域功能前必须调用`PWR_BackupAccessCmd(ENABLE)`
+3. **STOP模式**：进入STOP模式后，大部分外设停止工作，需要重新配置
+4. **STANDBY模式**：进入STANDBY模式后，SRAM和寄存器内容丢失
+5. **唤醒源**：STOP模式可以通过中断或事件唤醒，STANDBY模式只能通过特定引脚或RTC闹钟唤醒
+6. **PVD精度**：PVD检测精度约为±50mV
+7. **稳压器选择**：低功耗稳压器模式功耗更低但响应速度较慢
+8. **标志清除**：某些标志位需要手动清除
+
+## 总结
+
+STM32F10x PWR外设提供了完整的电源管理功能，支持多种低功耗模式和电源监控。通过STOP模式和STANDBY模式，可以有效降低系统功耗，延长电池寿命。PVD功能可以监控电源电压，在电压异常时及时采取措施。PWR外设广泛应用于需要低功耗设计的嵌入式系统中，如便携设备、传感器节点等。在使用时需要注意正确的初始化顺序、唤醒源配置和标志位处理，确保低功耗功能的正常使用。

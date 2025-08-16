@@ -1,0 +1,417 @@
+---
+title: stm32f10x_wwdg
+description: WWDG（Window Watchdog）外设是STM32F10x系列微控制器中的窗口看门狗模块，提供系统监控和自动复位功能。该外设具有窗口功能，只有在特定时间窗口内才能喂狗，防止过早或过晚喂狗，提高系统安全性。
+---
+
+## 数据类型定义
+
+### WWDG预分频器定义
+
+```c
+#define WWDG_Prescaler_1    ((uint32_t)0x00000000)  /* 预分频器1 */
+#define WWDG_Prescaler_2    ((uint32_t)0x00000080)  /* 预分频器2 */
+#define WWDG_Prescaler_4    ((uint32_t)0x00000100)  /* 预分频器4 */
+#define WWDG_Prescaler_8    ((uint32_t)0x00000180)  /* 预分频器8 */
+```
+
+**说明：**
+- `WWDG_Prescaler_1`：PCLK1时钟1分频，超时时间最短
+- `WWDG_Prescaler_2`：PCLK1时钟2分频
+- `WWDG_Prescaler_4`：PCLK1时钟4分频
+- `WWDG_Prescaler_8`：PCLK1时钟8分频，超时时间最长
+
+## WWDG寄存器定义
+
+STM32F10x WWDG外设包含以下主要寄存器：
+
+```c
+// WWDG控制寄存器
+#define WWDG_CR                     ((uint16_t)0x0000)  /* WWDG控制寄存器 */
+
+// WWDG配置寄存器
+#define WWDG_CFR                    ((uint16_t)0x0001)  /* WWDG配置寄存器 */
+
+// WWDG状态寄存器
+#define WWDG_SR                     ((uint16_t)0x0002)  /* WWDG状态寄存器 */
+```
+
+## 标准库函数详解
+
+### 1. WWDG_DeInit
+
+```c
+/**
+ * @brief  将WWDG外设寄存器重置为默认值
+ * @param  无
+ * @retval 无
+ * @example
+ *     WWDG_DeInit();
+ *     将WWDG外设恢复到初始状态
+ */
+void WWDG_DeInit(void);
+```
+
+**功能说明：**
+将WWDG外设的所有寄存器重置为默认值，包括预分频器、窗口值、计数器等配置。
+
+### 2. WWDG_SetPrescaler
+
+```c
+/**
+ * @brief  设置WWDG预分频器
+ * @param  WWDG_Prescaler: WWDG预分频器值
+ *         该参数可以是以下值之一：
+ *           @arg WWDG_Prescaler_1: 预分频器1
+ *           @arg WWDG_Prescaler_2: 预分频器2
+ *           @arg WWDG_Prescaler_4: 预分频器4
+ *           @arg WWDG_Prescaler_8: 预分频器8
+ * @retval 无
+ * @example
+ *     WWDG_SetPrescaler(WWDG_Prescaler_8);
+ *     设置WWDG预分频器为8
+ */
+void WWDG_SetPrescaler(uint32_t WWDG_Prescaler);
+```
+
+**功能说明：**
+设置WWDG的预分频器值，用于调整看门狗的时钟频率和超时时间。
+
+### 3. WWDG_SetWindowValue
+
+```c
+/**
+ * @brief  设置WWDG窗口值
+ * @param  WindowValue: WWDG窗口值，范围0-0x7F
+ * @retval 无
+ * @example
+ *     WWDG_SetWindowValue(0x40);
+ *     设置WWDG窗口值为0x40
+ */
+void WWDG_SetWindowValue(uint8_t WindowValue);
+```
+
+**功能说明：**
+设置WWDG的窗口值，定义允许喂狗的时间窗口。只有在窗口时间内喂狗才有效。
+
+### 4. WWDG_EnableIT
+
+```c
+/**
+ * @brief  使能WWDG中断
+ * @param  无
+ * @retval 无
+ * @example
+ *     WWDG_EnableIT();
+ *     使能WWDG中断
+ */
+void WWDG_EnableIT(void);
+```
+
+**功能说明：**
+使能WWDG中断功能，当看门狗即将超时时会产生中断。
+
+### 5. WWDG_SetCounter
+
+```c
+/**
+ * @brief  设置WWDG计数器值
+ * @param  Counter: WWDG计数器值，范围0x40-0x7F
+ * @retval 无
+ * @example
+ *     WWDG_SetCounter(0x7F);
+ *     设置WWDG计数器值为最大值
+ */
+void WWDG_SetCounter(uint8_t Counter);
+```
+
+**功能说明：**
+设置WWDG计数器的初始值，计数器值必须在0x40-0x7F范围内。
+
+### 6. WWDG_Enable
+
+```c
+/**
+ * @brief  使能WWDG
+ * @param  Counter: WWDG计数器值，范围0x40-0x7F
+ * @retval 无
+ * @example
+ *     WWDG_Enable(0x7F);
+ *     使能WWDG功能，计数器初始值为0x7F
+ */
+void WWDG_Enable(uint8_t Counter);
+```
+
+**功能说明：**
+使能WWDG功能并设置计数器初始值，一旦使能后无法禁用。
+
+### 7. WWDG_GetFlagStatus
+
+```c
+/**
+ * @brief  获取WWDG标志状态
+ * @param  无
+ * @retval 标志状态
+ *         该返回值可以是以下值之一：
+ *           @arg SET: 标志已设置
+ *           @arg RESET: 标志已清除
+ * @example
+ *     FlagStatus flag = WWDG_GetFlagStatus();
+ *     检查WWDG标志状态
+ */
+FlagStatus WWDG_GetFlagStatus(void);
+```
+
+**功能说明：**
+检查WWDG的标志状态，用于判断看门狗是否即将超时。
+
+### 8. WWDG_ClearFlag
+
+```c
+/**
+ * @brief  清除WWDG标志
+ * @param  无
+ * @retval 无
+ * @example
+ *     WWDG_ClearFlag();
+ *     清除WWDG标志
+ */
+void WWDG_ClearFlag(void);
+```
+
+**功能说明：**
+清除WWDG的标志位，通常在处理完相应事件后调用。
+
+## 使用示例
+
+### 基本WWDG初始化示例
+
+```c
+#include "stm32f10x.h"
+
+void WWDG_Init_Example(void)
+{
+    // 使能WWDG时钟
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_WWDG, ENABLE);
+    
+    // 设置WWDG预分频器为8
+    WWDG_SetPrescaler(WWDG_Prescaler_8);
+    
+    // 设置WWDG窗口值为0x40
+    WWDG_SetWindowValue(0x40);
+    
+    // 使能WWDG中断
+    WWDG_EnableIT();
+    
+    // 使能NVIC中断
+    NVIC_EnableIRQ(WWDG_IRQn);
+    
+    // 使能WWDG，计数器初始值为0x7F
+    WWDG_Enable(0x7F);
+}
+```
+
+### WWDG超时时间计算示例
+
+```c
+#include "stm32f10x.h"
+
+// PCLK1时钟频率（假设为36MHz）
+#define PCLK1_FREQ 36000000
+
+// 计算WWDG超时时间（毫秒）
+uint32_t WWDG_CalculateTimeout(uint32_t prescaler, uint8_t counter)
+{
+    uint32_t timeout_ms;
+    uint32_t wwdg_freq;
+    
+    // 计算WWDG时钟频率
+    wwdg_freq = PCLK1_FREQ / 4096 / prescaler;
+    
+    // 计算超时时间
+    timeout_ms = (counter + 1) * 1000 / wwdg_freq;
+    
+    return timeout_ms;
+}
+
+void WWDG_TimeoutExample(void)
+{
+    // 初始化WWDG
+    WWDG_Init_Example();
+    
+    // 计算超时时间
+    uint32_t timeout = WWDG_CalculateTimeout(8, 0x7F);
+    // timeout约为58.3毫秒
+    
+    while(1)
+    {
+        // 定期喂狗，防止系统复位
+        WWDG_SetCounter(0x7F);
+        
+        // 延时一段时间
+        for(volatile uint32_t i = 0; i < 100000; i++);
+    }
+}
+```
+
+### WWDG窗口功能示例
+
+```c
+#include "stm32f10x.h"
+
+volatile uint8_t wwdg_feed_flag = 0;
+
+void WWDG_WindowExample(void)
+{
+    // 初始化WWDG
+    WWDG_Init_Example();
+    
+    // 配置定时器中断，定期喂狗
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    TIM_TimeBaseStructure.TIM_Period = 49;  // 50ms中断
+    TIM_TimeBaseStructure.TIM_Prescaler = 35999;  // 36MHz / 36000 = 1kHz
+    TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
+    
+    // 使能定时器中断
+    TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);
+    
+    // 使能NVIC中断
+    NVIC_EnableIRQ(TIM2_IRQn);
+    
+    // 启动定时器
+    TIM_Cmd(TIM2, ENABLE);
+    
+    while(1)
+    {
+        // 主循环中的其他任务
+        if(wwdg_feed_flag)
+        {
+            // 在窗口时间内喂狗
+            WWDG_SetCounter(0x7F);
+            wwdg_feed_flag = 0;
+        }
+    }
+}
+
+// TIM2中断服务程序
+void TIM2_IRQHandler(void)
+{
+    if(TIM_GetITStatus(TIM2, TIM_IT_Update) == SET)
+    {
+        // 清除中断标志
+        TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+        
+        // 设置喂狗标志
+        wwdg_feed_flag = 1;
+    }
+}
+```
+
+### WWDG中断处理示例
+
+```c
+#include "stm32f10x.h"
+
+void WWDG_InterruptExample(void)
+{
+    // 初始化WWDG
+    WWDG_Init_Example();
+    
+    while(1)
+    {
+        // 主循环中的任务
+        // 定期检查WWDG标志
+        if(WWDG_GetFlagStatus() == SET)
+        {
+            // 清除标志
+            WWDG_ClearFlag();
+            
+            // 执行紧急处理
+            // 例如：保存重要数据
+        }
+    }
+}
+
+// WWDG中断服务程序
+void WWDG_IRQHandler(void)
+{
+    // 清除中断标志
+    WWDG_ClearFlag();
+    
+    // 执行紧急处理
+    // 例如：保存重要数据到备份寄存器
+    PWR_BackupAccessCmd(ENABLE);
+    BKP_WriteBackupRegister(BKP_DR1, 0x1234);
+    
+    // 喂狗
+    WWDG_SetCounter(0x7F);
+}
+```
+
+### WWDG安全喂狗示例
+
+```c
+#include "stm32f10x.h"
+
+// 安全喂狗函数
+void WWDG_SafeFeed(void)
+{
+    // 检查当前计数器值
+    uint8_t current_counter = WWDG_GetCounter();
+    
+    // 只有在窗口时间内才喂狗
+    if(current_counter <= 0x40)  // 窗口值
+    {
+        WWDG_SetCounter(0x7F);
+    }
+    else
+    {
+        // 不在窗口时间内，不喂狗
+        // 这会导致系统复位，但保证了安全性
+    }
+}
+
+void WWDG_SafeExample(void)
+{
+    // 初始化WWDG
+    WWDG_Init_Example();
+    
+    // 配置定时器中断
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    TIM_TimeBaseStructure.TIM_Period = 29;  // 30ms中断
+    TIM_TimeBaseStructure.TIM_Prescaler = 35999;
+    TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
+    
+    TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);
+    NVIC_EnableIRQ(TIM2_IRQn);
+    TIM_Cmd(TIM2, ENABLE);
+    
+    while(1)
+    {
+        // 主循环中的任务
+        // 使用安全喂狗函数
+        WWDG_SafeFeed();
+        
+        // 延时
+        for(volatile uint32_t i = 0; i < 50000; i++);
+    }
+}
+```
+
+## 注意事项
+
+1. **时钟源**：WWDG使用PCLK1时钟，依赖于系统时钟
+2. **窗口功能**：只有在窗口时间内喂狗才有效，防止过早或过晚喂狗
+3. **计数器范围**：计数器值必须在0x40-0x7F范围内
+4. **窗口值范围**：窗口值必须在0-0x7F范围内
+5. **不可禁用**：WWDG一旦使能后无法禁用，只能通过系统复位禁用
+6. **中断功能**：WWDG支持中断，可以在超时前产生中断
+7. **超时时间**：超时时间 = (计数器值 + 1) × 4096 × 预分频器 / PCLK1频率
+8. **调试影响**：在调试模式下，WWDG可能影响调试功能
+
+## 总结
+
+STM32F10x WWDG外设提供了具有窗口功能的看门狗监控，通过窗口机制确保系统在正确的时间窗口内喂狗，提高了系统的安全性。WWDG外设广泛应用于需要高安全性的嵌入式系统中，如工业控制、安全系统等领域。在使用时需要注意正确的初始化顺序、窗口时间设置和安全喂狗机制，确保看门狗功能的正常使用。WWDG的窗口功能是其区别于IWDG的重要特性，能够防止恶意或错误的喂狗操作。

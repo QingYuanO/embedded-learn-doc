@@ -13,7 +13,12 @@
     "stm32f10x_dma",
     "stm32f10x_usart",
     "stm32f10x_i2c",
-    "stm32f10x_spi"
+    "stm32f10x_spi",
+    "stm32f10x_bkp",
+    "stm32f10x_rtc",
+    "stm32f10x_pwr",
+    "stm32f10x_iwdg",
+    "stm32f10x_wwdg"
   ],
   "root": true
 }

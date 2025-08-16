@@ -1,0 +1,377 @@
+---
+title: stm32f10x_iwdg
+description: IWDG（Independent Watchdog）外设是STM32F10x系列微控制器中的独立看门狗模块，提供系统监控和自动复位功能。该外设具有独立的时钟源，不依赖于系统时钟，能够在系统出现故障时自动复位系统，提高系统可靠性。
+---
+
+## 数据类型定义
+
+### IWDG写访问定义
+
+```c
+#define IWDG_WriteAccess_Enable     ((uint16_t)0x5555)  /* 使能写访问 */
+#define IWDG_WriteAccess_Disable    ((uint16_t)0x0000)  /* 禁用写访问 */
+```
+
+**说明：**
+- `IWDG_WriteAccess_Enable`：使能对IWDG寄存器的写访问，允许配置IWDG
+- `IWDG_WriteAccess_Disable`：禁用对IWDG寄存器的写访问，保护IWDG配置
+
+### IWDG预分频器定义
+
+```c
+#define IWDG_Prescaler_4            ((uint8_t)0x00)  /* 预分频器4 */
+#define IWDG_Prescaler_8            ((uint8_t)0x01)  /* 预分频器8 */
+#define IWDG_Prescaler_16           ((uint8_t)0x02)  /* 预分频器16 */
+#define IWDG_Prescaler_32           ((uint8_t)0x03)  /* 预分频器32 */
+#define IWDG_Prescaler_64           ((uint8_t)0x04)  /* 预分频器64 */
+#define IWDG_Prescaler_128          ((uint8_t)0x05)  /* 预分频器128 */
+#define IWDG_Prescaler_256          ((uint8_t)0x06)  /* 预分频器256 */
+```
+
+**说明：**
+- `IWDG_Prescaler_4`：LSI时钟4分频，超时时间最短
+- `IWDG_Prescaler_8`：LSI时钟8分频
+- `IWDG_Prescaler_16`：LSI时钟16分频
+- `IWDG_Prescaler_32`：LSI时钟32分频
+- `IWDG_Prescaler_64`：LSI时钟64分频
+- `IWDG_Prescaler_128`：LSI时钟128分频
+- `IWDG_Prescaler_256`：LSI时钟256分频，超时时间最长
+
+### IWDG标志位定义
+
+```c
+#define IWDG_FLAG_PVU               ((uint16_t)0x0001)  /* 预分频器更新标志 */
+#define IWDG_FLAG_RVU               ((uint16_t)0x0002)  /* 重装载值更新标志 */
+```
+
+**说明：**
+- `IWDG_FLAG_PVU`：预分频器更新标志，表示预分频器正在更新
+- `IWDG_FLAG_RVU`：重装载值更新标志，表示重装载值正在更新
+
+## IWDG寄存器定义
+
+STM32F10x IWDG外设包含以下主要寄存器：
+
+```c
+// IWDG键寄存器
+#define IWDG_KR                    ((uint16_t)0x0000)  /* IWDG键寄存器 */
+
+// IWDG预分频器寄存器
+#define IWDG_PR                    ((uint16_t)0x0001)  /* IWDG预分频器寄存器 */
+
+// IWDG重装载寄存器
+#define IWDG_RLR                   ((uint16_t)0x0002)  /* IWDG重装载寄存器 */
+
+// IWDG状态寄存器
+#define IWDG_SR                    ((uint16_t)0x0003)  /* IWDG状态寄存器 */
+```
+
+## 标准库函数详解
+
+### 1. IWDG_WriteAccessCmd
+
+```c
+/**
+ * @brief  使能或禁用IWDG写访问
+ * @param  IWDG_WriteAccess: 写访问状态
+ *         该参数可以是以下值之一：
+ *           @arg IWDG_WriteAccess_Enable: 使能写访问
+ *           @arg IWDG_WriteAccess_Disable: 禁用写访问
+ * @retval 无
+ * @example
+ *     IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);
+ *     使能IWDG写访问以配置IWDG
+ */
+void IWDG_WriteAccessCmd(uint16_t IWDG_WriteAccess);
+```
+
+**功能说明：**
+控制对IWDG寄存器的写访问权限，配置IWDG前必须使能写访问。
+
+### 2. IWDG_SetPrescaler
+
+```c
+/**
+ * @brief  设置IWDG预分频器
+ * @param  IWDG_Prescaler: IWDG预分频器值
+ *         该参数可以是以下值之一：
+ *           @arg IWDG_Prescaler_4: 预分频器4
+ *           @arg IWDG_Prescaler_8: 预分频器8
+ *           @arg IWDG_Prescaler_16: 预分频器16
+ *           @arg IWDG_Prescaler_32: 预分频器32
+ *           @arg IWDG_Prescaler_64: 预分频器64
+ *           @arg IWDG_Prescaler_128: 预分频器128
+ *           @arg IWDG_Prescaler_256: 预分频器256
+ * @retval 无
+ * @example
+ *     IWDG_SetPrescaler(IWDG_Prescaler_64);
+ *     设置IWDG预分频器为64
+ */
+void IWDG_SetPrescaler(uint8_t IWDG_Prescaler);
+```
+
+**功能说明：**
+设置IWDG的预分频器值，用于调整看门狗的超时时间。
+
+### 3. IWDG_SetReload
+
+```c
+/**
+ * @brief  设置IWDG重装载值
+ * @param  Reload: IWDG重装载值，范围0-0xFFF
+ * @retval 无
+ * @example
+ *     IWDG_SetReload(0xFFF);
+ *     设置IWDG重装载值为最大值
+ */
+void IWDG_SetReload(uint16_t Reload);
+```
+
+**功能说明：**
+设置IWDG的重装载值，与预分频器一起决定看门狗的超时时间。
+
+### 4. IWDG_ReloadCounter
+
+```c
+/**
+ * @brief  重装载IWDG计数器
+ * @param  无
+ * @retval 无
+ * @example
+ *     IWDG_ReloadCounter();
+ *     重装载IWDG计数器，防止系统复位
+ */
+void IWDG_ReloadCounter(void);
+```
+
+**功能说明：**
+重装载IWDG计数器，防止看门狗超时导致系统复位。
+
+### 5. IWDG_Enable
+
+```c
+/**
+ * @brief  使能IWDG
+ * @param  无
+ * @retval 无
+ * @example
+ *     IWDG_Enable();
+ *     使能IWDG功能
+ */
+void IWDG_Enable(void);
+```
+
+**功能说明：**
+使能IWDG功能，一旦使能后无法禁用，只能通过系统复位禁用。
+
+### 6. IWDG_GetFlagStatus
+
+```c
+/**
+ * @brief  获取指定的IWDG标志状态
+ * @param  IWDG_FLAG: 要检查的IWDG标志
+ *         该参数可以是以下值之一：
+ *           @arg IWDG_FLAG_PVU: 预分频器更新标志
+ *           @arg IWDG_FLAG_RVU: 重装载值更新标志
+ * @retval 标志状态
+ *         该返回值可以是以下值之一：
+ *           @arg SET: 标志已设置
+ *           @arg RESET: 标志已清除
+ * @example
+ *     FlagStatus flag = IWDG_GetFlagStatus(IWDG_FLAG_PVU);
+ *     检查预分频器更新标志状态
+ */
+FlagStatus IWDG_GetFlagStatus(uint16_t IWDG_FLAG);
+```
+
+**功能说明：**
+检查指定的IWDG标志状态，用于判断寄存器更新状态。
+
+## 使用示例
+
+### 基本IWDG初始化示例
+
+```c
+#include "stm32f10x.h"
+
+void IWDG_Init_Example(void)
+{
+    // 使能IWDG写访问
+    IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);
+    
+    // 设置IWDG预分频器为64
+    IWDG_SetPrescaler(IWDG_Prescaler_64);
+    
+    // 设置IWDG重装载值为0xFFF（最大值）
+    IWDG_SetReload(0xFFF);
+    
+    // 使能IWDG
+    IWDG_Enable();
+    
+    // 禁用IWDG写访问
+    IWDG_WriteAccessCmd(IWDG_WriteAccess_Disable);
+}
+```
+
+### IWDG超时时间计算示例
+
+```c
+#include "stm32f10x.h"
+
+// LSI时钟频率约为40kHz
+#define LSI_FREQ 40000
+
+// 计算IWDG超时时间（毫秒）
+uint32_t IWDG_CalculateTimeout(uint8_t prescaler, uint16_t reload)
+{
+    uint32_t timeout_ms;
+    
+    switch(prescaler)
+    {
+        case IWDG_Prescaler_4:
+            timeout_ms = (reload + 1) * 4 * 1000 / LSI_FREQ;
+            break;
+        case IWDG_Prescaler_8:
+            timeout_ms = (reload + 1) * 8 * 1000 / LSI_FREQ;
+            break;
+        case IWDG_Prescaler_16:
+            timeout_ms = (reload + 1) * 16 * 1000 / LSI_FREQ;
+            break;
+        case IWDG_Prescaler_32:
+            timeout_ms = (reload + 1) * 32 * 1000 / LSI_FREQ;
+            break;
+        case IWDG_Prescaler_64:
+            timeout_ms = (reload + 1) * 64 * 1000 / LSI_FREQ;
+            break;
+        case IWDG_Prescaler_128:
+            timeout_ms = (reload + 1) * 128 * 1000 / LSI_FREQ;
+            break;
+        case IWDG_Prescaler_256:
+            timeout_ms = (reload + 1) * 256 * 1000 / LSI_FREQ;
+            break;
+        default:
+            timeout_ms = 0;
+            break;
+    }
+    
+    return timeout_ms;
+}
+
+void IWDG_TimeoutExample(void)
+{
+    // 初始化IWDG
+    IWDG_Init_Example();
+    
+    // 计算超时时间
+    uint32_t timeout = IWDG_CalculateTimeout(IWDG_Prescaler_64, 0xFFF);
+    // timeout约为26.2秒
+    
+    while(1)
+    {
+        // 定期喂狗，防止系统复位
+        IWDG_ReloadCounter();
+        
+        // 延时一段时间
+        for(volatile uint32_t i = 0; i < 1000000; i++);
+    }
+}
+```
+
+### IWDG在中断中喂狗示例
+
+```c
+#include "stm32f10x.h"
+
+volatile uint8_t watchdog_feed_flag = 0;
+
+void IWDG_InterruptFeed_Example(void)
+{
+    // 初始化IWDG
+    IWDG_Init_Example();
+    
+    // 配置定时器中断，定期喂狗
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    TIM_TimeBaseStructure.TIM_Period = 999;  // 1秒中断
+    TIM_TimeBaseStructure.TIM_Prescaler = 71999;  // 72MHz / 72000 = 1kHz
+    TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
+    
+    // 使能定时器中断
+    TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);
+    
+    // 使能NVIC中断
+    NVIC_EnableIRQ(TIM2_IRQn);
+    
+    // 启动定时器
+    TIM_Cmd(TIM2, ENABLE);
+    
+    while(1)
+    {
+        // 主循环中的其他任务
+        if(watchdog_feed_flag)
+        {
+            IWDG_ReloadCounter();
+            watchdog_feed_flag = 0;
+        }
+    }
+}
+
+// TIM2中断服务程序
+void TIM2_IRQHandler(void)
+{
+    if(TIM_GetITStatus(TIM2, TIM_IT_Update) == SET)
+    {
+        // 清除中断标志
+        TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+        
+        // 设置喂狗标志
+        watchdog_feed_flag = 1;
+    }
+}
+```
+
+### IWDG配置检查示例
+
+```c
+#include "stm32f10x.h"
+
+void IWDG_ConfigCheck_Example(void)
+{
+    // 使能IWDG写访问
+    IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);
+    
+    // 设置IWDG预分频器
+    IWDG_SetPrescaler(IWDG_Prescaler_64);
+    
+    // 等待预分频器更新完成
+    while(IWDG_GetFlagStatus(IWDG_FLAG_PVU) == SET);
+    
+    // 设置IWDG重装载值
+    IWDG_SetReload(0xFFF);
+    
+    // 等待重装载值更新完成
+    while(IWDG_GetFlagStatus(IWDG_FLAG_RVU) == SET);
+    
+    // 使能IWDG
+    IWDG_Enable();
+    
+    // 禁用IWDG写访问
+    IWDG_WriteAccessCmd(IWDG_WriteAccess_Disable);
+}
+```
+
+## 注意事项
+
+1. **独立时钟源**：IWDG使用LSI时钟，不依赖于系统时钟
+2. **写访问控制**：配置IWDG前必须使能写访问
+3. **不可禁用**：IWDG一旦使能后无法禁用，只能通过系统复位禁用
+4. **超时时间**：超时时间 = (重装载值 + 1) × 预分频器 / LSI频率
+5. **定期喂狗**：必须在超时时间到达前调用`IWDG_ReloadCounter()`
+6. **寄存器更新**：修改预分频器或重装载值后需要等待更新完成
+7. **LSI精度**：LSI时钟精度较低，超时时间可能有偏差
+8. **调试影响**：在调试模式下，IWDG可能影响调试功能
+
+## 总结
+
+STM32F10x IWDG外设提供了可靠的系统监控功能，通过独立的时钟源确保在系统出现故障时能够自动复位。IWDG外设广泛应用于需要高可靠性的嵌入式系统中，如工业控制、汽车电子、医疗设备等领域。在使用时需要注意正确的初始化顺序、超时时间计算和定期喂狗，确保看门狗功能的正常使用。IWDG一旦使能后无法禁用，这确保了系统监控的可靠性，但也要求开发者必须正确实现喂狗机制。
