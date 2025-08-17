@@ -18,7 +18,8 @@
     "stm32f10x_rtc",
     "stm32f10x_pwr",
     "stm32f10x_iwdg",
-    "stm32f10x_wwdg"
+    "stm32f10x_wwdg",
+    "stm32f10x_flash"
   ],
   "root": true
 }

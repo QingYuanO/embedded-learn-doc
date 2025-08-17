@@ -2,6 +2,7 @@
   "title": "江协科技-STM32入门教程",
   "icon": "School",
   "pages": [
+    "chip-introduction",
     "std-start",
     "gpio",
     "exti",
@@ -14,6 +15,7 @@
     "rtc",
     "pwr",
     "wdg",
+    "flash",
     "sh1106"
   ],
   "defaultOpen": true,

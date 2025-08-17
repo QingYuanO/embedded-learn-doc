@@ -1,0 +1,452 @@
+---
+title: stm32f10x_flash
+description: STM32F10x FLASH 外设标准库函数参考文档
+---
+
+# STM32F10x FLASH 标准库函数参考
+
+## 数据类型定义
+
+### FLASH_Status - FLASH操作状态枚举
+
+```c
+typedef enum
+{ 
+  FLASH_BUSY = 1,        /* FLASH忙状态 */
+  FLASH_ERROR_PG,        /* 编程错误 */
+  FLASH_ERROR_WRP,       /* 写保护错误 */
+  FLASH_COMPLETE,        /* 操作完成 */
+  FLASH_TIMEOUT          /* 操作超时 */
+}FLASH_Status;
+```
+
+**说明：**
+- `FLASH_BUSY`：FLASH控制器正在执行操作
+- `FLASH_ERROR_PG`：编程过程中发生错误
+- `FLASH_ERROR_WRP`：尝试写入写保护区域
+- `FLASH_COMPLETE`：操作成功完成
+- `FLASH_TIMEOUT`：操作超时
+
+## FLASH寄存器定义
+
+STM32F10x FLASH外设包含以下寄存器：
+
+```c
+#define FLASH_Latency_0                ((uint32_t)0x00000000)  /* FLASH零延迟周期 */
+#define FLASH_Latency_1                ((uint32_t)0x00000001)  /* FLASH一个延迟周期 */
+#define FLASH_Latency_2                ((uint32_t)0x00000002)  /* FLASH两个延迟周期 */
+
+#define FLASH_HalfCycleAccess_Enable   ((uint32_t)0x00000008)  /* FLASH半周期访问使能 */
+#define FLASH_HalfCycleAccess_Disable  ((uint32_t)0x00000000)  /* FLASH半周期访问禁用 */
+
+#define FLASH_PrefetchBuffer_Enable    ((uint32_t)0x00000010)  /* FLASH预取缓冲区使能 */
+#define FLASH_PrefetchBuffer_Disable   ((uint32_t)0x00000000)  /* FLASH预取缓冲区禁用 */
+```
+
+## FLASH中断标志定义
+
+### 基本中断类型
+
+```c
+#define FLASH_IT_ERROR                 ((uint32_t)0x00000400)  /* FPEC错误中断源 */
+#define FLASH_IT_EOP                   ((uint32_t)0x00001000)  /* FLASH操作结束中断源 */
+```
+
+### 具体中断标志
+
+```c
+#define FLASH_FLAG_BSY                 ((uint32_t)0x00000001)  /* FLASH忙标志 */
+#define FLASH_FLAG_EOP                 ((uint32_t)0x00000020)  /* FLASH操作结束标志 */
+#define FLASH_FLAG_PGERR               ((uint32_t)0x00000004)  /* FLASH编程错误标志 */
+#define FLASH_FLAG_WRPRTERR            ((uint32_t)0x00000010)  /* FLASH写保护错误标志 */
+#define FLASH_FLAG_OPTERR              ((uint32_t)0x00000001)  /* FLASH选项字节错误标志 */
+```
+
+## 标准库函数详解
+
+### 1. FLASH_SetLatency
+
+```c
+/**
+ * @brief  设置FLASH延迟周期
+ * @param  FLASH_Latency: FLASH延迟周期
+ *         该参数可以是以下值之一：
+ *           @arg FLASH_Latency_0: 零延迟周期
+ *           @arg FLASH_Latency_1: 一个延迟周期  
+ *           @arg FLASH_Latency_2: 两个延迟周期
+ * @retval 无
+ * @example
+ *     FLASH_SetLatency(FLASH_Latency_2);
+ */
+void FLASH_SetLatency(uint32_t FLASH_Latency);
+```
+
+**功能说明：**
+设置FLASH访问延迟周期，用于匹配系统时钟频率。当系统时钟频率较高时，需要增加延迟周期以确保FLASH访问的可靠性。
+
+### 2. FLASH_HalfCycleAccessCmd
+
+```c
+/**
+ * @brief  使能或禁用FLASH半周期访问
+ * @param  FLASH_HalfCycleAccess: FLASH半周期访问状态
+ *         该参数可以是以下值之一：
+ *           @arg FLASH_HalfCycleAccess_Enable: 使能半周期访问
+ *           @arg FLASH_HalfCycleAccess_Disable: 禁用半周期访问
+ * @retval 无
+ * @example
+ *     FLASH_HalfCycleAccessCmd(FLASH_HalfCycleAccess_Enable);
+ */
+void FLASH_HalfCycleAccessCmd(uint32_t FLASH_HalfCycleAccess);
+```
+
+**功能说明：**
+控制FLASH半周期访问功能，可以优化FLASH访问性能。
+
+### 3. FLASH_PrefetchBufferCmd
+
+```c
+/**
+ * @brief  使能或禁用FLASH预取缓冲区
+ * @param  FLASH_PrefetchBuffer: FLASH预取缓冲区状态
+ *         该参数可以是以下值之一：
+ *           @arg FLASH_PrefetchBuffer_Enable: 使能预取缓冲区
+ *           @arg FLASH_PrefetchBuffer_Disable: 禁用预取缓冲区
+ * @retval 无
+ * @example
+ *     FLASH_PrefetchBufferCmd(FLASH_PrefetchBuffer_Enable);
+ */
+void FLASH_PrefetchBufferCmd(uint32_t FLASH_PrefetchBuffer);
+```
+
+**功能说明：**
+控制FLASH预取缓冲区功能，可以提高代码执行效率。
+
+### 4. FLASH_Unlock
+
+```c
+/**
+ * @brief  解锁FLASH编程擦除控制器
+ * @param  无
+ * @retval 无
+ * @example
+ *     FLASH_Unlock();
+ */
+void FLASH_Unlock(void);
+```
+
+**功能说明：**
+解锁FLASH编程擦除控制器，允许进行FLASH编程和擦除操作。在执行任何FLASH写操作前必须调用此函数。
+
+### 5. FLASH_Lock
+
+```c
+/**
+ * @brief  锁定FLASH编程擦除控制器
+ * @param  无
+ * @retval 无
+ * @example
+ *     FLASH_Lock();
+ */
+void FLASH_Lock(void);
+```
+
+**功能说明：**
+锁定FLASH编程擦除控制器，防止意外的FLASH写操作。
+
+### 6. FLASH_ErasePage
+
+```c
+/**
+ * @brief  擦除指定FLASH页
+ * @param  Page_Address: 要擦除的页地址
+ * @retval FLASH_Status: FLASH操作状态
+ * @example
+ *     FLASH_Status status = FLASH_ErasePage(0x08000000);
+ *     if(status == FLASH_COMPLETE)
+ *     {
+ *         // 擦除成功
+ *     }
+ */
+FLASH_Status FLASH_ErasePage(uint32_t Page_Address);
+```
+
+**功能说明：**
+擦除指定地址所在的FLASH页。页地址必须是页对齐的地址。
+
+### 7. FLASH_EraseAllPages
+
+```c
+/**
+ * @brief  擦除所有FLASH页
+ * @param  无
+ * @retval FLASH_Status: FLASH操作状态
+ * @example
+ *     FLASH_Status status = FLASH_EraseAllPages();
+ */
+FLASH_Status FLASH_EraseAllPages(void);
+```
+
+**功能说明：**
+擦除所有用户FLASH页，此操作会清除所有用户程序和数据。
+
+### 8. FLASH_ProgramWord
+
+```c
+/**
+ * @brief  在指定地址编程32位数据
+ * @param  Address: 编程地址
+ * @param  Data: 要编程的32位数据
+ * @retval FLASH_Status: FLASH操作状态
+ * @example
+ *     FLASH_Status status = FLASH_ProgramWord(0x08000000, 0x12345678);
+ */
+FLASH_Status FLASH_ProgramWord(uint32_t Address, uint32_t Data);
+```
+
+**功能说明：**
+在指定地址编程32位数据。地址必须是4字节对齐的。
+
+### 9. FLASH_ProgramHalfWord
+
+```c
+/**
+ * @brief  在指定地址编程16位数据
+ * @param  Address: 编程地址
+ * @param  Data: 要编程的16位数据
+ * @retval FLASH_Status: FLASH操作状态
+ * @example
+ *     FLASH_Status status = FLASH_ProgramHalfWord(0x08000000, 0x1234);
+ */
+FLASH_Status FLASH_ProgramHalfWord(uint32_t Address, uint16_t Data);
+```
+
+**功能说明：**
+在指定地址编程16位数据。地址必须是2字节对齐的。
+
+### 10. FLASH_GetStatus
+
+```c
+/**
+ * @brief  获取FLASH状态
+ * @param  无
+ * @retval FLASH_Status: FLASH当前状态
+ * @example
+ *     FLASH_Status status = FLASH_GetStatus();
+ *     while(status == FLASH_BUSY)
+ *     {
+ *         status = FLASH_GetStatus();
+ *     }
+ */
+FLASH_Status FLASH_GetStatus(void);
+```
+
+**功能说明：**
+获取FLASH控制器的当前状态，用于检查操作是否完成。
+
+### 11. FLASH_WaitForLastOperation
+
+```c
+/**
+ * @brief  等待最后一次FLASH操作完成
+ * @param  Timeout: 超时时间
+ * @retval FLASH_Status: FLASH操作状态
+ * @example
+ *     FLASH_Status status = FLASH_WaitForLastOperation(5000);
+ */
+FLASH_Status FLASH_WaitForLastOperation(uint32_t Timeout);
+```
+
+**功能说明：**
+等待最后一次FLASH操作完成，如果超时则返回FLASH_TIMEOUT。
+
+### 12. FLASH_GetFlagStatus
+
+```c
+/**
+ * @brief  获取指定FLASH标志状态
+ * @param  FLASH_FLAG: 要检查的FLASH标志
+ *         该参数可以是以下值之一：
+ *           @arg FLASH_FLAG_BSY: FLASH忙标志
+ *           @arg FLASH_FLAG_EOP: FLASH操作结束标志
+ *           @arg FLASH_FLAG_PGERR: FLASH编程错误标志
+ *           @arg FLASH_FLAG_WRPRTERR: FLASH写保护错误标志
+ *           @arg FLASH_FLAG_OPTERR: FLASH选项字节错误标志
+ * @retval FlagStatus: 标志状态（SET或RESET）
+ * @example
+ *     FlagStatus flag = FLASH_GetFlagStatus(FLASH_FLAG_BSY);
+ *     if(flag == SET)
+ *     {
+ *         // FLASH忙
+ *     }
+ */
+FlagStatus FLASH_GetFlagStatus(uint32_t FLASH_FLAG);
+```
+
+**功能说明：**
+获取指定FLASH标志的状态，用于检查FLASH操作状态。
+
+### 13. FLASH_ClearFlag
+
+```c
+/**
+ * @brief  清除指定FLASH标志
+ * @param  FLASH_FLAG: 要清除的FLASH标志
+ *         该参数可以是以下值之一：
+ *           @arg FLASH_FLAG_EOP: FLASH操作结束标志
+ *           @arg FLASH_FLAG_PGERR: FLASH编程错误标志
+ *           @arg FLASH_FLAG_WRPRTERR: FLASH写保护错误标志
+ *           @arg FLASH_FLAG_OPTERR: FLASH选项字节错误标志
+ * @retval 无
+ * @example
+ *     FLASH_ClearFlag(FLASH_FLAG_EOP);
+ */
+void FLASH_ClearFlag(uint32_t FLASH_FLAG);
+```
+
+**功能说明：**
+清除指定的FLASH标志位。
+
+### 14. FLASH_ITConfig
+
+```c
+/**
+ * @brief  使能或禁用指定FLASH中断
+ * @param  FLASH_IT: 要配置的FLASH中断
+ *         该参数可以是以下值之一：
+ *           @arg FLASH_IT_ERROR: FLASH错误中断
+ *           @arg FLASH_IT_EOP: FLASH操作结束中断
+ * @param  NewState: 中断新状态
+ *         该参数可以是以下值之一：
+ *           @arg ENABLE: 使能中断
+ *           @arg DISABLE: 禁用中断
+ * @retval 无
+ * @example
+ *     FLASH_ITConfig(FLASH_IT_EOP, ENABLE);
+ */
+void FLASH_ITConfig(uint32_t FLASH_IT, FunctionalState NewState);
+```
+
+**功能说明：**
+配置FLASH中断的使能状态。
+
+## 使用示例
+
+### 基本FLASH编程示例
+
+```c
+#include "stm32f10x.h"
+
+void FLASH_WriteExample(void)
+{
+    uint32_t writeAddr = 0x08010000;  // 选择要写入的地址
+    uint32_t writeData = 0x12345678;  // 要写入的数据
+    
+    // 解锁FLASH
+    FLASH_Unlock();
+    
+    // 擦除页
+    FLASH_Status status = FLASH_ErasePage(writeAddr);
+    if(status == FLASH_COMPLETE)
+    {
+        // 编程数据
+        status = FLASH_ProgramWord(writeAddr, writeData);
+        if(status == FLASH_COMPLETE)
+        {
+            // 编程成功
+        }
+    }
+    
+    // 锁定FLASH
+    FLASH_Lock();
+}
+```
+
+### FLASH状态检查示例
+
+```c
+#include "stm32f10x.h"
+
+void FLASH_StatusCheckExample(void)
+{
+    // 等待FLASH操作完成
+    FLASH_Status status = FLASH_WaitForLastOperation(5000);
+    
+    if(status == FLASH_COMPLETE)
+    {
+        // 操作成功完成
+    }
+    else if(status == FLASH_TIMEOUT)
+    {
+        // 操作超时
+    }
+    else if(status == FLASH_ERROR_PG)
+    {
+        // 编程错误
+        FLASH_ClearFlag(FLASH_FLAG_PGERR);
+    }
+    else if(status == FLASH_ERROR_WRP)
+    {
+        // 写保护错误
+        FLASH_ClearFlag(FLASH_FLAG_WRPRTERR);
+    }
+}
+```
+
+### FLASH中断使用示例
+
+```c
+#include "stm32f10x.h"
+
+void FLASH_InterruptExample(void)
+{
+    // 使能FLASH操作结束中断
+    FLASH_ITConfig(FLASH_IT_EOP, ENABLE);
+    
+    // 使能NVIC中断
+    NVIC_EnableIRQ(FLASH_IRQn);
+    
+    // 执行FLASH操作
+    FLASH_Unlock();
+    FLASH_ProgramWord(0x08010000, 0x12345678);
+    FLASH_Lock();
+}
+
+// FLASH中断服务函数
+void FLASH_IRQHandler(void)
+{
+    if(FLASH_GetITStatus(FLASH_IT_EOP) != RESET)
+    {
+        // FLASH操作完成
+        FLASH_ClearITPendingBit(FLASH_IT_EOP);
+    }
+    
+    if(FLASH_GetITStatus(FLASH_IT_ERROR) != RESET)
+    {
+        // FLASH操作错误
+        FLASH_ClearITPendingBit(FLASH_IT_ERROR);
+    }
+}
+```
+
+## 注意事项
+
+1. **解锁顺序**：在执行任何FLASH写操作前，必须先调用`FLASH_Unlock()`函数解锁FLASH控制器。
+
+2. **地址对齐**：编程地址必须按照数据类型对齐（16位数据2字节对齐，32位数据4字节对齐）。
+
+3. **页擦除**：在编程前必须先擦除目标页，擦除操作以页为单位进行。
+
+4. **状态检查**：每次FLASH操作后都应该检查操作状态，确保操作成功完成。
+
+5. **超时处理**：长时间等待FLASH操作完成时，应该设置合理的超时时间。
+
+6. **中断使用**：使用FLASH中断时，需要在中断服务函数中清除相应的中断标志。
+
+7. **写保护**：注意某些FLASH区域可能被写保护，尝试写入这些区域会导致错误。
+
+8. **时钟配置**：FLASH延迟周期需要根据系统时钟频率正确配置。
+
+## 总结
+
+STM32F10x FLASH标准库提供了完整的FLASH操作接口，包括页擦除、数据编程、状态检查等功能。使用这些函数可以安全地进行FLASH读写操作，实现程序更新、参数存储等功能。在使用过程中需要注意正确的操作顺序、地址对齐要求和状态检查，确保FLASH操作的可靠性。
