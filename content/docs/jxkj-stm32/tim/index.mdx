@@ -13,6 +13,19 @@ description: ""
 - 不仅具备基本的定时中断功能，而且还包含内外时钟源选择、输入捕获、输出比较、编码器接口、主从触发模式等多种功能
 - 根据复杂度和应用场景分为了高级定时器、通用定时器、基本定时器三种类型
 
+## 定时器的组成
+
+1. 计数器（Counter）：定时器的核心部分，用于计数。计数器可以是向上计数、向下计数或双向计数。
+2. 预分频器（Prescaler）：用于将输入时钟频率分频，从而调整计数器的计数速度。
+3. 自动重装载寄存器（Auto-reload Register）：用于设置计数器的最大值。当计数器达到该值时，会触发溢出事件，并重新开始计数。
+4. 捕获/比较寄存器（Capture/Compare Register）：用于捕获外部事件的时间或生成PWM信号
+
+## 定时器的工作模式
+- 定时器模式：用于生成精确的时间延迟。
+- 输入捕获模式：用于测量外部信号的脉冲宽度或频率。
+- 输出比较模式：用于生成PWM信号或触发其他事件。
+- PWM模式：用于生成脉宽调制信号，常用于控制电机或LED亮度
+
 ## 定时器类型
 
 | 类型 | 编号 | 总线 | 功能 |
@@ -21,328 +34,156 @@ description: ""
 | 通用定时器 | TIM2、TIM3、TIM4、TIM5 | APB1 | 拥有基本定时器全部功能，并额外具有内外时钟源选择、输入捕获、输出比较、编码器接口、主从触发模式等功能 |
 | 基本定时器 | TIM6、TIM7 | APB1 | 拥有定时中断、主模式触发DAC的功能 |
 
-## 高级定时器
+### 高级定时器
+
+- 支持多种计数模式（向上、向下、中央对齐）。
+- 支持多通道PWM输出。
+- 支持死区时间插入，适用于电机控制。
+- 支持编码器接口。
+- 支持事件触发和中断
 
 <Image src="/tim/tim1.png" alt="高级定时器框图" />
 
-#### 上半部分详解
 
-上半部分主要展示了定时器的**时钟、触发、同步与控制逻辑**，包括外部/内部时钟输入、触发信号的选择与处理、主从同步机制等：
+### 通用定时器
 
-1. **时钟与触发输入**
-   - 左上角的 `TIMx_ETR` 是外部触发输入端口，可用于外部时钟或事件输入。
-   - `ITR1~ITR3` 是内部触发信号，来自其他定时器。
-   - 这些信号经过滤波、边沿检测、选择器（如 ETRP、ETRF、TRC）后，决定定时器的启动、复位、同步等行为。
-   - `TIFP_ED`、`TRGI`、`TRGO` 等信号用于定时器间的主从同步和触发。
+通用定时器是STM32中功能最为丰富的定时器类型，它在基本定时器功能的基础上，增加了多种高级功能，适用于各种复杂的应用场景。
 
-2. **触发控制与主模式选择**
-   - 右上角的“触发控制器”和“主模式选择器”模块，支持将定时器的某些事件（如计数溢出、比较匹配等）输出为触发信号，驱动其他定时器或外设（如 DAC/ADC）。
-   - 这些机制实现了多定时器协同、复杂波形生成等高级功能。
+#### 功能特性
 
-3. **门控与复位**
-   - 图中间的门控逻辑、复位控制等模块，决定计数器的启动、停止、复位等操作。
-   - 通过外部/内部触发信号，可以灵活控制定时器的工作状态。
+1. **基本定时功能**
+   - 16位向上、向下、向上/向下自动装载计数器
+   - 16位可编程预分频器，可以实时修改，分频系数为1-65536之间的任意数值
+   - 支持定时中断功能
 
----
+2. **输入捕获功能**
+   - 4个独立的通道可以用来：输入捕获、输出比较、产生PWM或单脉冲模式输出
+   - 可测量脉冲长度和频率
+   - 支持编码器和霍尔传感器电路直接接口
 
-#### 下半部分详解
+3. **输出比较/PWM功能**
+   - 可产生多达4路的PWM输出
+   - 支持单脉冲模式输出
+   - 输出比较功能可用于精确的时间控制
 
-下半部分主要展示了**输入捕获、输出比较、PWM生成、死区控制、刹车保护等功能**，以及各通道信号的流向：
+4. **时钟源选择**
+   - 内部时钟源（CK_INT）
+   - 外部时钟模式1：外部输入引脚（TIx）
+   - 外部时钟模式2：外部触发输入（ETR）
+   - 内部触发输入（ITRx）
 
-1. **输入捕获与边沿检测**
-   - 左侧的 `TIMx_CH1~CH4` 是定时器的四个主通道输入/输出端口。
-   - 每个通道都连接到输入选择器和边沿检测器，可选择不同的输入源，并检测上升/下降沿。
-   - `XOR` 逻辑用于编码器接口等特殊功能。
+5. **主从同步功能**
+   - 可作为主定时器控制其他从定时器
+   - 可作为从定时器接受其他主定时器控制
+   - 支持定时器链式连接
 
-2. **预分频与滤波**
-   - 每个输入通道配有预分频器和滤波器（如 TI1FP1、IC1PS 等），可对输入信号进行分频和滤波，适应不同频率和抗干扰需求。
-
-3. **捕获/比较单元**
-   - 每个通道有独立的捕获/比较寄存器（如 CC1、CC2、CC3、CC4），用于存储捕获的计数值或比较的参考值。
-   - 支持输入捕获（测量外部信号周期、脉宽）和输出比较（产生PWM、定时脉冲等）。
-
-4. **输出控制与死区生成**
-   - 右侧的 DTG（死区发生器）为互补输出（如 CH1/CH1N）插入死区时间，防止上下桥臂同时导通。
-   - 输出控制模块支持主输出和互补输出，适合驱动半桥、全桥等电路。
-
-5. **刹车输入与保护**
-   - 下方的 TIMx_BKIN（刹车输入）和相关逻辑可在检测到异常时，强制关闭输出，保护外部电路安全。
-
-6. **中断与DMA**
-   - 下部的 UI（更新中断）、DMA请求等信号，支持定时器事件的中断处理和数据自动搬运。
-
----
-
-#### 名词与缩写详细解释
-
-| 名称/缩写      | 全称/中文含义                                   | 说明                                                         |
-|----------------|------------------------------------------------|--------------------------------------------------------------|
-| **TIMx**       | Timer x                                         | 定时器编号（如 TIM1、TIM2 等）                               |
-| **ETR**        | External Trigger                                | 外部触发输入端口                                             |
-| **ITR1~ITR3**  | Internal Trigger 1~3                            | 内部触发信号，来自其他定时器                                 |
-| **CK_INT**     | Internal Clock                                  | 内部时钟                                                     |
-| **CK_PSC**     | Clock after Prescaler                           | 预分频器输出时钟                                             |
-| **PSC**        | Prescaler                                       | 预分频器，对时钟进行分频                                     |
-| **CNT**        | Counter                                         | 计数器，记录当前计数值                                       |
-| **ARR**        | Auto-Reload Register                            | 自动重装载寄存器，设定计数器溢出值                           |
-| **REP**        | Repetition Counter                              | 重复计数器，高级定时器特有                                   |
-| **TRC**        | Trigger Controller                              | 触发控制器                                                   |
-| **TRGI**       | Trigger Input                                   | 触发输入，定时器间同步/外设联动                              |
-| **TRGO**       | Trigger Output                                  | 触发输出，定时器事件输出给其他定时器/外设                    |
-| **ETRP**       | ETR Pre-Filter                                  | ETR输入预滤波器                                              |
-| **ETRF**       | ETR Filter                                      | ETR输入滤波器                                                |
-| **TIFP_ED**    | TI Filtered Pulse Edge Detector                 | 输入滤波脉冲边沿检测                                         |
-| **TIx**        | Timer Input x                                   | 定时器通道输入（如 TI1、TI2）                                |
-| **TIxFPx**     | Timer Input x Filtered Pulse x                  | 通道x输入滤波脉冲                                            |
-| **ICx**        | Input Capture x                                 | 输入捕获通道x                                                |
-| **ICxPS**      | Input Capture x Prescaler                       | 输入捕获x预分频器                                            |
-| **CCx**        | Capture/Compare x                               | 捕获/比较通道x                                               |
-| **OCxREF**     | Output Compare x Reference                      | 输出比较x参考信号                                            |
-| **OCxRE**      | Output Compare x Reference Enable               | 输出比较x参考使能                                            |
-| **CHx**        | Channel x                                       | 通道x                                                        |
-| **CHxN**       | Channel x Complementary                         | 通道x互补输出                                                |
-| **DTG**        | Dead Time Generator                             | 死区发生器                                                   |
-| **BRK**        | Break Input                                     | 刹车输入                                                     |
-| **BI**         | Break Input (after logic)                       | 刹车输入（经过逻辑处理）                                     |
-| **UI**         | Update Interrupt                                | 更新中断                                                     |
-| **DMA**        | Direct Memory Access                            | 直接存储器访问                                               |
-| **XOR**        | Exclusive OR                                    | 异或逻辑，用于编码器接口                                     |
-| **CSS**        | Clock Security System                           | 时钟安全系统，检测时钟异常                                   |
-| **NVIC**       | Nested Vectored Interrupt Controller            | 嵌套向量中断控制器（中断管理）                               |
-| **TIM_IT_Update** | Timer Interrupt Update                       | 定时器更新中断                                               |
-| **TIM_CKD_DIVx** | Timer Clock Division x                        | 定时器时钟分频系数                                           |
-| **TIM_CounterMode_Up/Down** | Timer Counter Mode Up/Down         | 定时器计数模式：向上/向下                                    |
-| **TIM_TimeBaseInitStructure** | Timer Time Base Init Structure    | 定时器时基单元初始化结构体                                   |
-| **TIMx_BKIN**  | Timer x Break Input                             | 定时器x刹车输入端口                                          |
-
----
-
-#### 作用与典型应用举例
-- **TIx / TIxFPx（定时器输入/滤波脉冲）**
-  - 作用：TIx 是定时器的输入通道（如 TI1、TI2），TIxFPx 是经过滤波后的输入脉冲，常用于消除毛刺。
-  - 典型应用：外部信号捕获、抗干扰测量。
-  - 硬件连接：信号线连接到定时器输入引脚（如 PA8/TI1）。
-  - 代码示例：
-    ```c
-    TIM_ICInitTypeDef TIM_ICInitStructure;
-    TIM_ICInitStructure.TIM_Channel = TIM_Channel_1;
-    TIM_ICInitStructure.TIM_ICFilter = 0x0F; // 最大滤波
-    TIM_ICInit(TIM1, &TIM_ICInitStructure);
-    ```
-
-- **ARR（自动重装载寄存器）**
-  - 作用：设定计数器溢出周期，实现定时器周期性溢出。
-  - 典型应用：定时中断、PWM周期设定。
-  - 代码示例：
-    ```c
-    TIM1->ARR = 9999; // 设定自动重装载值
-    ```
-
-- **PSC（预分频器）**
-  - 作用：对输入时钟进行分频，延长定时周期。
-  - 典型应用：需要较长定时时间的场合。
-  - 代码示例：
-    ```c
-    TIM1->PSC = 7199; // 预分频7200
-    ```
-
-- **REP（重复计数器）**
-  - 作用：高级定时器特有，控制PWM等事件的重复次数。
-  - 典型应用：复杂波形输出、周期性事件。
-  - 代码示例：
-    ```c
-    TIM1->RCR = 3; // 重复计数4次
-    ```
-
-- **NVIC（嵌套向量中断控制器）**
-  - 作用：管理和响应定时器等外设的中断请求。
-  - 典型应用：定时中断、捕获中断等。
-  - 代码示例：
-    ```c
-    NVIC_InitTypeDef NVIC_InitStructure;
-    NVIC_InitStructure.NVIC_IRQChannel = TIM1_UP_IRQn;
-    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
-    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
-    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-    NVIC_Init(&NVIC_InitStructure);
-    ```
-
-- **TIM_IT_Update（定时器更新中断）**
-  - 作用：计数器溢出或自动重装载时产生的中断。
-  - 典型应用：定时任务、周期性操作。
-  - 代码示例：
-    ```c
-    TIM_ITConfig(TIM1, TIM_IT_Update, ENABLE);
-    ```
-
-- **TIM_CKD_DIVx（定时器时钟分频）**
-  - 作用：配置定时器时钟的分频系数。
-  - 典型应用：滤波器时钟调整。
-  - 代码示例：
-    ```c
-    TIM_TimeBaseInitStructure.TIM_ClockDivision = TIM_CKD_DIV4;
-    ```
-
-- **TIM_CounterMode_Up/Down（计数模式）**
-  - 作用：设置定时器计数方向（向上、向下、中心对齐）。
-  - 典型应用：PWM对称波形、特殊计数需求。
-  - 代码示例：
-    ```c
-    TIM_TimeBaseInitStructure.TIM_CounterMode = TIM_CounterMode_Up;
-    ```
-
-- **TIM_TimeBaseInitStructure（时基单元初始化结构体）**
-  - 作用：配置定时器的基本参数（分频、周期、计数模式等）。
-  - 典型应用：所有定时器初始化。
-  - 代码示例：
-    ```c
-    TIM_TimeBaseInitTypeDef TIM_TimeBaseInitStructure;
-    TIM_TimeBaseInitStructure.TIM_Period = 9999;
-    TIM_TimeBaseInitStructure.TIM_Prescaler = 7199;
-    TIM_TimeBaseInitStructure.TIM_ClockDivision = TIM_CKD_DIV1;
-    TIM_TimeBaseInitStructure.TIM_CounterMode = TIM_CounterMode_Up;
-    TIM_TimeBaseInit(TIM1, &TIM_TimeBaseInitStructure);
-    ```
-
-- **BRK（刹车输入）**
-  - 代码示例：
-    ```c
-    // 配置刹车输入
-    TIM_BDTRInitTypeDef TIM_BDTRInitStructure;
-    TIM_BDTRInitStructure.TIM_Break = TIM_Break_Enable;
-    TIM_BDTRInitStructure.TIM_BreakPolarity = TIM_BreakPolarity_Low;
-    TIM_BDTRConfig(TIM1, &TIM_BDTRInitStructure);
-    ```
-
-- **TIFP_ED（输入滤波脉冲边沿检测）**
-  - 作用：检测输入信号的上升/下降沿，常用于捕获外部脉冲的时刻。
-  - 典型应用：测量脉冲宽度、周期。
-  - **代码示例**：
-    ```c
-    TIM_ICInitStructure.TIM_ICPolarity = TIM_ICPolarity_Rising; // 捕获上升沿
-    TIM_ICInit(TIM1, &TIM_ICInitStructure);
-    ```
-
-- **ETRP/ETRF（ETR预滤波/滤波器）**
-  - 作用：对ETR输入信号进行滤波，抑制毛刺和干扰。
-  - 典型应用：外部脉冲信号抗干扰。
-  - **代码示例**：
-    ```c
-    TIM_ETRClockMode2Config(TIM1, TIM_ExtTRGPSC_OFF, TIM_ExtTRGPolarity_NonInverted, 0x0F); // 0x0F为最大滤波
-    ```
-
-- **TRGI/TRGO（触发输入/输出）**
-  - 作用：实现定时器间同步或与外设（如ADC、DAC）联动。
-  - 典型应用：多定时器同步启动、定时器触发ADC采样。
-  - **代码示例**：
-    ```c
-    TIM_SelectInputTrigger(TIM2, TIM_TS_ITR0); // 选择TRGI为ITR0
-    TIM_SelectOutputTrigger(TIM1, TIM_TRGOSource_Update); // TRGO为更新事件
-    ```
-
-- **OCxRE（输出比较参考使能）**
-  - 作用：使能输出比较参考信号，决定PWM等输出的有效性。
-  - 典型应用：PWM输出使能。
-  - **代码示例**：
-    ```c
-    TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable); // 使能OC1参考
-    ```
-
-- **BI（Break Input after logic）**
-  - 作用：经过逻辑处理后的刹车输入，决定是否关闭输出。
-  - 典型应用：电机保护、紧急停机。
-  - **硬件连接**：保护电路输出连接到BKIN引脚。
-
-- **CSS（Clock Security System）**
-  - 作用：检测主时钟异常，自动切换备用时钟或发出警告。
-  - 典型应用：高可靠性系统时钟保护。
-  - **代码示例**：
-    ```c
-    RCC_ClockSecuritySystemCmd(ENABLE); // 使能时钟安全系统
-    ```
-
-- **ICxPS（输入捕获预分频器）**
-  - 作用：对输入捕获信号进行分频，降低高频输入对捕获单元的压力。
-  - 典型应用：高频脉冲信号测量。
-  - **代码示例**：
-    ```c
-    TIM_ICInitStructure.TIM_ICPrescaler = TIM_ICPSC_DIV4; // 输入信号4分频
-    TIM_ICInit(TIM1, &TIM_ICInitStructure);
-    ```
-
-- **CCx（捕获/比较通道）**
-  - 作用：既可作为输入捕获通道，也可作为输出比较通道。
-  - 典型应用：测量信号、输出PWM等。
-  - **代码示例**：
-    ```c
-    // CC1作为输入捕获
-    TIM_ICInitStructure.TIM_Channel = TIM_Channel_1;
-    TIM_ICInit(TIM1, &TIM_ICInitStructure);
-    // CC2作为输出比较
-    TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
-    TIM_OC2Init(TIM1, &TIM_OCInitStructure);
-    ```
-
-- **OCxREF（输出比较参考信号）**
-  - 作用：决定输出比较的参考电平，影响PWM波形的高低电平切换。
-  - 典型应用：PWM输出、单脉冲输出。
-  - **代码示例**：
-    ```c
-    TIM_SetCompare1(TIM1, 3000); // OC1REF=3000
-    ```
-
-- **CHxN（互补输出）**
-  - 作用：输出与主通道相反的PWM信号，常用于半桥/全桥驱动。
-  - 典型应用：三相电机驱动、逆变器。
-  - **硬件连接**：如 TIM1_CH1N（PA7）连接到下桥臂，TIM1_CH1（PA8）连接到上桥臂。
-  - **代码示例**：
-    ```c
-    TIM_OCInitStructure.TIM_OutputNState = TIM_OutputNState_Enable;
-    TIM_OC1Init(TIM1, &TIM_OCInitStructure);
-    ```
-
-- **UI（更新中断）**
-  - 作用：计数器溢出或自动重装载时产生中断，常用于定时任务。
-  - 典型应用：定时采样、定时刷新。
-  - **代码示例**：
-    ```c
-    TIM_ITConfig(TIM1, TIM_IT_Update, ENABLE); // 使能更新中断
-    void TIM1_UP_IRQHandler(void) {
-      if (TIM_GetITStatus(TIM1, TIM_IT_Update) == SET) {
-        // 处理中断
-        TIM_ClearITPendingBit(TIM1, TIM_IT_Update);
-      }
-    }
-    ```
-
-- **DMA（直接存储器访问）**
-  - 作用：定时器事件触发DMA自动搬运数据，无需CPU干预。
-  - 典型应用：高速PWM波形自动更新、ADC采样结果自动存储。
-  - **代码示例**：
-    ```c
-    TIM_DMACmd(TIM1, TIM_DMA_Update, ENABLE);
-    ```
-
-- **XOR（异或逻辑）**
-  - 作用：对多个输入信号进行异或处理，常用于编码器接口，实现正交解码。
-  - 典型应用：旋转编码器测速、测角度。
-  - **代码示例**：
-    ```c
-    TIM_EncoderInterfaceConfig(TIM1, TIM_EncoderMode_TI12, TIM_ICPolarity_Rising, TIM_ICPolarity_Rising);
-    ```
-
----
-
-**总结**：  
-高级定时器不仅具备基本定时、计数、输入捕获、输出比较等功能，还支持死区控制、互补输出、刹车输入、主从同步等高级特性，广泛应用于电机控制、PWM 波形生成、精确定时等复杂场景。
-
-## 通用定时器
+#### 框图解析
 
 <Image src="/tim/tim2.png" alt="通用定时器框图" />
 
-## 基本定时器
+通用定时器的框图展示了其复杂而完整的内部结构：
+
+**1. 时钟源部分（左上角）**
+- **内部时钟（CK_INT）**：来自APB1时钟，是最常用的时钟源
+- **外部时钟模式1（TIMx_CH1/CH2）**：通过定时器的输入通道接收外部时钟
+- **外部时钟模式2（TIMx_ETR）**：通过专用的外部触发引脚接收时钟
+- **内部触发（ITR0-ITR3）**：来自其他定时器的触发信号
+- **时钟源选择器**：可以选择上述任意一种时钟源
+
+**2. 时基单元（中心部分）**
+- **预分频器（PSC）**：16位预分频器，实际分频系数为PSC+1
+- **计数器（CNT）**：16位计数器，支持向上、向下、中心对齐计数模式
+- **自动重装载寄存器（ARR）**：设定计数器的最大值
+- **重复计数器（RCR）**：仅高级定时器具有，用于控制更新事件的产生频率
+
+**3. 输入捕获部分（右侧）**
+- **输入通道（TIMx_CH1-CH4）**：4个独立的输入通道
+- **输入滤波器**：对输入信号进行滤波，去除噪声
+- **边沿检测器**：检测信号的上升沿、下降沿或双边沿
+- **预分频器**：可对捕获事件进行分频
+- **捕获寄存器（CCR1-CCR4）**：存储捕获到的计数器值
+
+**4. 输出比较部分（右侧）**
+- **比较器**：将计数器值与比较寄存器值进行比较
+- **输出控制逻辑**：根据比较结果产生输出信号
+- **输出通道（TIMx_CH1-CH4）**：4路独立输出
+- **PWM模式**：可产生脉宽调制信号
+
+**5. 中断和DMA（底部）**
+- **更新中断**：计数器溢出时产生
+- **捕获/比较中断**：输入捕获或输出比较匹配时产生
+- **触发中断**：外部触发事件产生
+- **DMA请求**：可以触发DMA传输，实现高效的数据处理
+
+**6. 主从控制器（中下部）**
+- **触发选择器**：选择触发源
+- **从模式控制器**：处理从模式操作（重置、门控、触发等）
+- **主模式控制器**：生成触发输出信号（TRGO）供其他定时器使用
+
+#### 工作模式
+
+**1. 定时器模式**：最基本的功能，用于产生精确的时间间隔
+
+**2. 输入捕获模式**：测量输入信号的脉宽、频率等参数
+- 可以测量PWM信号的占空比
+- 可以测量外部事件的时间间隔
+
+**3. 输出比较模式**：在特定时间产生输出事件
+- 可以产生精确的延时
+- 可以控制外部设备的时序
+
+**4. PWM模式**：产生脉宽调制信号
+- PWM模式1：CNT < CCR时输出有效电平
+- PWM模式2：CNT < CCR时输出无效电平
+
+**5. 单脉冲模式**：产生单个脉冲输出
+
+**6. 编码器模式**：直接连接正交编码器，用于电机位置检测
+
+
+
+### 基本定时器
+基本定时器是STM32中最简单的定时器类型，主要用于提供基本的定时功能。它包含以下核心功能：
+
+1. **定时中断**：可以产生周期性的定时中断，用于实现精确的时间控制
+2. **主模式触发DAC**：可以作为主模式定时器，为DAC模块提供触发信号
+3. **向上计数**：只支持向上计数模式，计数器从0开始递增到自动重装载值
+
+#### 框图解析
 
 <Image src="/tim/tim3.png" alt="基本定时器框图" />
+
+基本定时器的结构相对简单，主要包含以下几个部分：
+
+1. **时钟源（CK_INT）**：内部时钟信号，通常来自APB1时钟
+2. **预分频器（PSC）**：16位预分频器，用于对输入时钟进行分频
+   - 实际分频系数 = PSC + 1
+   - 输出时钟频率 = 输入时钟频率 / (PSC + 1)
+3. **计数器（CNT）**：16位向上计数器，从0开始计数
+4. **自动重装载寄存器（ARR）**：设置计数器的最大值
+   - 当CNT达到ARR值时，产生更新事件并重新开始计数
+5. **更新事件生成**：当计数器溢出时产生更新事件
+6. **中断/DMA**：可以产生中断信号或DMA请求
+7. **主模式触发输出（TRGO）**：可以为其他外设（如DAC）提供触发信号
+
+#### 工作原理
+
+基本定时器的工作流程如下：
+1. 内部时钟信号经过预分频器分频后，驱动计数器递增
+2. 计数器从0开始向上计数，每个时钟周期递增1
+3. 当计数器值达到自动重装载寄存器（ARR）的值时，产生更新事件
+4. 更新事件可以触发中断、DMA请求或为DAC提供触发信号
+5. 计数器自动重新装载，重新从0开始计数，实现周期性定时
+
+#### 计算公式
+
+定时器溢出频率：`f = CK_PSC / ((PSC + 1) × (ARR + 1))`
+定时周期：`T = (PSC + 1) × (ARR + 1) / CK_PSC`
+
+其中：
+- CK_PSC：预分频器输入时钟频率
+- PSC：预分频器寄存器值
+- ARR：自动重装载寄存器值
 
 ## 定时中断基本结构
 
@@ -359,8 +200,53 @@ Prescaler(PSC -16 bits value):预分频器
 
 这意味着计数器每计数10次，就会过去1毫秒。如果需要更长的计时范围，可以将PSC设置为更大的值。
 
-<Image src="/tim/tim5.png" alt="预分频器时序" />
 计数器计数频率：`CK_CNT = CK_PSC / (PSC + 1)`
+
+<Image src="/tim/tim5.png" alt="预分频器时序" />
+
+预分频器从1变为2的时序分析
+
+### 时序图信号解析
+
+1. **CK_PSC（预分频器输入时钟）**
+   - 这是输入到预分频器的原始时钟信号
+   - 在STM32F103中，通常来自72MHz的系统时钟（经过APB预分频后）
+   - 保持恒定的高频率脉冲
+
+2. **CNT_EN（计数器使能信号）**
+   - 控制计数器是否开始计数的使能信号
+   - 高电平时计数器工作，低电平时计数器停止
+
+3. **计数器写入操作**
+   - 显示了在运行过程中写入新的预分频器值的时刻
+   - 图中显示从PSC=1写入PSC=2的时刻
+
+4. **更新事件(UEV)**
+   - Update Event，更新事件信号
+   - 当计数器溢出或手动触发更新时产生
+   - 新的预分频器值在更新事件时才真正生效
+
+5. **预分频器控制存器**
+   - 存储当前生效的预分频器值
+   - 在更新事件发生前保持原值（1），更新事件后变为新值（2）
+
+6. **CK_CNT（计数器时钟）**
+   - 经过预分频器处理后的计数器时钟信号
+   - PSC=1时：CK_CNT频率 = CK_PSC/(1+1) = CK_PSC/2
+   - PSC=2时：CK_CNT频率 = CK_PSC/(2+1) = CK_PSC/3
+
+7. **预分频器计数器**
+   - 内部预分频计数器的值
+   - PSC=1时计数范围0-1，PSC=2时计数范围0-2
+
+### 关键观察点
+
+从时序图可以看出：
+- **预装载特性**：新写入的PSC值（2）不会立即生效，而是等待下一个更新事件
+- **平滑过渡**：这种设计避免了计数器时钟突然改变导致的时序问题
+- **同步更新**：所有相关寄存器在同一个更新事件时刻同时更新
+
+### STM32标准库代码示例
 
 
 
