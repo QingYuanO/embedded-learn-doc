@@ -1,4 +1,5 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
+
 import Image from 'next/image';
 
 /**
@@ -23,5 +24,16 @@ export const baseOptions: BaseLayoutProps = {
     transparentMode: 'top',
   },
   // see https://fumadocs.dev/docs/ui/navigation/links
-  links: [],
+  links: [
+    {
+      text: '江协科技教程',
+      url: '/docs/jxkj-stm32/std-start',
+      secondary: false,
+    },
+    {
+      text: '标准库文档',
+      url: '/docs/std/introduction',
+      secondary: false,
+    },
+  ],
 };
