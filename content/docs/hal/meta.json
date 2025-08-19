@@ -1,6 +1,6 @@
 {
   "title": "STM32F1 HAL",
-  "icon": "BookCheck",
+  "icon": "BookPlus",
   "pages": [
   
     "stm32f1xx_hal_gpio"
