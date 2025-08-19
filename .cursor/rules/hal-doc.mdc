@@ -1,3 +1,7 @@
+---
+globs: content/docs/hal/**/*.mdx
+alwaysApply: false
+---
 # STM32 HAL库函数文档
 
 ## 文档结构规范

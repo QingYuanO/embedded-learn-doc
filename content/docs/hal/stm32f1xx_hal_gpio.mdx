@@ -1,254 +1,581 @@
-# STM32F1xx HAL GPIO 驱动
+---
+title: stm32f1xx_hal_gpio
+description: STM32F1xx GPIO 外设 HAL 库函数参考文档
+---
 
-## 概述
+## 外设概述
 
-STM32F1xx HAL GPIO驱动提供了对STM32F1系列微控制器通用输入输出(GPIO)端口的完整控制功能。该驱动支持GPIO的初始化、配置、读写操作以及外部中断处理。
+### 简介
+GPIO（General Purpose Input/Output，通用输入输出）是STM32微控制器最基本的外设之一，用于控制数字信号的输入和输出。每个GPIO引脚都可以独立配置为输入或输出模式，支持多种工作模式和配置选项。
 
-## 主要特性
+### 主要特性
+- **多端口支持**：支持GPIOA、GPIOB、GPIOC等多个GPIO端口
+- **灵活配置**：每个引脚可独立配置为输入、输出、复用功能或模拟模式
+- **中断支持**：支持外部中断和事件触发，可配置上升沿、下降沿或双边沿触发
+- **上拉下拉**：支持内部上拉电阻、下拉电阻或无上拉下拉配置
+- **输出模式**：支持推挽输出和开漏输出两种模式
+- **速度配置**：支持低、中、高三种输出速度配置
+- **引脚锁定**：支持引脚配置锁定功能，防止意外修改
 
-- **多模式支持**: 输入、输出、复用功能、模拟模式
-- **中断处理**: 支持上升沿、下降沿、双边沿触发的外部中断
-- **事件处理**: 支持外部事件模式
-- **上拉/下拉配置**: 可配置内部上拉或下拉电阻
-- **输出类型**: 推挽输出和开漏输出
-- **速度控制**: 低、中、高速配置
+## 数据类型定义
 
-## 数据结构
+### 枚举类型
 
-### GPIO_InitTypeDef
-
-GPIO初始化结构体，用于配置GPIO引脚参数：
-
-```c
-typedef struct
-{
-  uint32_t Pin;       /*!< 指定要配置的GPIO引脚 */
-  uint32_t Mode;      /*!< 指定选中引脚的工作模式 */
-  uint32_t Pull;      /*!< 指定选中引脚的上拉或下拉激活 */
-  uint32_t Speed;     /*!< 指定选中引脚的速度 */
-} GPIO_InitTypeDef;
-```
-
-### GPIO_PinState
-
-GPIO引脚状态枚举：
+#### GPIO_PinState - GPIO引脚状态枚举
 
 ```c
 typedef enum
 {
-  GPIO_PIN_RESET = 0u,  /*!< 引脚低电平 */
-  GPIO_PIN_SET          /*!< 引脚高电平 */
+  GPIO_PIN_RESET = 0u,    /* 引脚低电平 */
+  GPIO_PIN_SET            /* 引脚高电平 */
 } GPIO_PinState;
 ```
 
-## 引脚定义
+**说明：**
+- `GPIO_PIN_RESET`：引脚输出低电平或读取到低电平
+- `GPIO_PIN_SET`：引脚输出高电平或读取到高电平
 
-### GPIO引脚选择
+### 结构体类型
+
+#### GPIO_InitTypeDef - GPIO初始化结构体
 
 ```c
-#define GPIO_PIN_0                 ((uint16_t)0x0001)  /* 引脚0 */
-#define GPIO_PIN_1                 ((uint16_t)0x0002)  /* 引脚1 */
-#define GPIO_PIN_2                 ((uint16_t)0x0004)  /* 引脚2 */
-// ... 其他引脚
-#define GPIO_PIN_15                ((uint16_t)0x8000)  /* 引脚15 */
-#define GPIO_PIN_All               ((uint16_t)0xFFFF)  /* 所有引脚 */
+typedef struct
+{
+  uint32_t Pin;       /* 指定要配置的GPIO引脚 */
+  uint32_t Mode;      /* 指定选中引脚的工作模式 */
+  uint32_t Pull;      /* 指定选中引脚的上拉或下拉激活 */
+  uint32_t Speed;     /* 指定选中引脚的速度 */
+} GPIO_InitTypeDef;
 ```
 
-## 工作模式
+**成员说明：**
+- `Pin`：指定要配置的GPIO引脚，可以是GPIO_PIN_x的组合
+- `Mode`：指定引脚的工作模式，如输入、输出、复用功能等
+- `Pull`：指定引脚的上拉或下拉配置
+- `Speed`：指定引脚的输出速度配置
 
-### GPIO模式定义
+### 宏定义
 
-| 模式 | 值 | 描述 |
-|------|----|----|
-| `GPIO_MODE_INPUT` | 0x00000000 | 浮空输入模式 |
-| `GPIO_MODE_OUTPUT_PP` | 0x00000001 | 推挽输出模式 |
-| `GPIO_MODE_OUTPUT_OD` | 0x00000011 | 开漏输出模式 |
-| `GPIO_MODE_AF_PP` | 0x00000002 | 复用功能推挽模式 |
-| `GPIO_MODE_AF_OD` | 0x00000012 | 复用功能开漏模式 |
-| `GPIO_MODE_ANALOG` | 0x00000003 | 模拟模式 |
-
-### 中断模式
-
-| 模式 | 值 | 描述 |
-|------|----|----|
-| `GPIO_MODE_IT_RISING` | 0x10110000 | 上升沿外部中断 |
-| `GPIO_MODE_IT_FALLING` | 0x10210000 | 下降沿外部中断 |
-| `GPIO_MODE_IT_RISING_FALLING` | 0x10310000 | 双边沿外部中断 |
-
-### 事件模式
-
-| 模式 | 值 | 描述 |
-|------|----|----|
-| `GPIO_MODE_EVT_RISING` | 0x10120000 | 上升沿外部事件 |
-| `GPIO_MODE_EVT_FALLING` | 0x10220000 | 下降沿外部事件 |
-| `GPIO_MODE_EVT_RISING_FALLING` | 0x10320000 | 双边沿外部事件 |
-
-## 速度配置
+#### GPIO引脚定义宏
 
 ```c
-#define GPIO_SPEED_FREQ_LOW        (GPIO_CRL_MODE0_1) /* 低速 */
-#define GPIO_SPEED_FREQ_MEDIUM     (GPIO_CRL_MODE0_0) /* 中速 */
-#define GPIO_SPEED_FREQ_HIGH       (GPIO_CRL_MODE0)   /* 高速 */
+#define GPIO_PIN_0                 ((uint16_t)0x0001)  /* 选择引脚0 */
+#define GPIO_PIN_1                 ((uint16_t)0x0002)  /* 选择引脚1 */
+#define GPIO_PIN_2                 ((uint16_t)0x0004)  /* 选择引脚2 */
+#define GPIO_PIN_3                 ((uint16_t)0x0008)  /* 选择引脚3 */
+#define GPIO_PIN_4                 ((uint16_t)0x0010)  /* 选择引脚4 */
+#define GPIO_PIN_5                 ((uint16_t)0x0020)  /* 选择引脚5 */
+#define GPIO_PIN_6                 ((uint16_t)0x0040)  /* 选择引脚6 */
+#define GPIO_PIN_7                 ((uint16_t)0x0080)  /* 选择引脚7 */
+#define GPIO_PIN_8                 ((uint16_t)0x0100)  /* 选择引脚8 */
+#define GPIO_PIN_9                 ((uint16_t)0x0200)  /* 选择引脚9 */
+#define GPIO_PIN_10                ((uint16_t)0x0400)  /* 选择引脚10 */
+#define GPIO_PIN_11                ((uint16_t)0x0800)  /* 选择引脚11 */
+#define GPIO_PIN_12                ((uint16_t)0x1000)  /* 选择引脚12 */
+#define GPIO_PIN_13                ((uint16_t)0x2000)  /* 选择引脚13 */
+#define GPIO_PIN_14                ((uint16_t)0x4000)  /* 选择引脚14 */
+#define GPIO_PIN_15                ((uint16_t)0x8000)  /* 选择引脚15 */
+#define GPIO_PIN_All               ((uint16_t)0xFFFF)  /* 选择所有引脚 */
 ```
 
-## 上拉/下拉配置
+**说明：**
+这些宏定义用于指定要操作的GPIO引脚，可以单独使用或组合使用。
+
+#### GPIO模式定义宏
 
 ```c
-#define GPIO_NOPULL        0x00000000u   /* 无上拉或下拉 */
-#define GPIO_PULLUP        0x00000001u   /* 上拉激活 */
-#define GPIO_PULLDOWN      0x00000002u   /* 下拉激活 */
+#define  GPIO_MODE_INPUT                        0x00000000u   /* 浮空输入模式 */
+#define  GPIO_MODE_OUTPUT_PP                    0x00000001u   /* 推挽输出模式 */
+#define  GPIO_MODE_OUTPUT_OD                    0x00000011u   /* 开漏输出模式 */
+#define  GPIO_MODE_AF_PP                        0x00000002u   /* 复用功能推挽模式 */
+#define  GPIO_MODE_AF_OD                        0x00000012u   /* 复用功能开漏模式 */
+#define  GPIO_MODE_AF_INPUT                     GPIO_MODE_INPUT          /* 复用功能输入模式 */
+#define  GPIO_MODE_ANALOG                       0x00000003u   /* 模拟模式 */
+#define  GPIO_MODE_IT_RISING                    0x10110000u   /* 外部中断模式，上升沿触发 */
+#define  GPIO_MODE_IT_FALLING                   0x10210000u   /* 外部中断模式，下降沿触发 */
+#define  GPIO_MODE_IT_RISING_FALLING            0x10310000u   /* 外部中断模式，双边沿触发 */
+#define  GPIO_MODE_EVT_RISING                   0x10120000u   /* 外部事件模式，上升沿触发 */
+#define  GPIO_MODE_EVT_FALLING                  0x10220000u   /* 外部事件模式，下降沿触发 */
+#define  GPIO_MODE_EVT_RISING_FALLING           0x10320000u   /* 外部事件模式，双边沿触发 */
 ```
 
-## 核心函数
+**说明：**
+这些宏定义用于配置GPIO引脚的工作模式，包括输入、输出、复用功能、模拟和中断模式。
 
-### 初始化和反初始化
+#### GPIO速度定义宏
 
-#### HAL_GPIO_Init
 ```c
+#define  GPIO_SPEED_FREQ_LOW              (GPIO_CRL_MODE0_1) /* 低速 */
+#define  GPIO_SPEED_FREQ_MEDIUM           (GPIO_CRL_MODE0_0) /* 中速 */
+#define  GPIO_SPEED_FREQ_HIGH             (GPIO_CRL_MODE0)   /* 高速 */
+```
+
+**说明：**
+这些宏定义用于配置GPIO引脚的输出速度，影响引脚的驱动能力和功耗。
+
+#### GPIO上拉下拉定义宏
+
+```c
+#define  GPIO_NOPULL        0x00000000u   /* 无上拉或下拉激活 */
+#define  GPIO_PULLUP        0x00000001u   /* 上拉激活 */
+#define  GPIO_PULLDOWN      0x00000002u   /* 下拉激活 */
+```
+
+**说明：**
+这些宏定义用于配置GPIO引脚的上拉或下拉电阻。
+
+## HAL 库函数详解
+
+### 初始化函数
+
+#### 1. HAL_GPIO_Init
+
+```c
+/**
+ * @brief  根据GPIO_InitStruct中指定的参数初始化GPIOx外设
+ * @param  GPIOx: 其中x可以是(A, B, C, D, E, F, G)来选择GPIO外设
+ * @param  GPIO_InitStruct: 指向GPIO_InitTypeDef结构的指针，该结构包含指定GPIO外设的配置信息
+ * @retval 无
+ * @note   当GPIO_Pin设置为GPIO_PIN_All时，将配置所有可用的GPIO引脚
+ * @example
+ *     GPIO_InitTypeDef GPIO_InitStruct = {0};
+ *     GPIO_InitStruct.Pin = GPIO_PIN_13;
+ *     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+ *     GPIO_InitStruct.Pull = GPIO_NOPULL;
+ *     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+ *     HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+ */
 void HAL_GPIO_Init(GPIO_TypeDef *GPIOx, GPIO_InitTypeDef *GPIO_Init);
 ```
-**功能**: 根据GPIO_InitStruct中的指定参数初始化GPIOx外设
-**参数**:
-- `GPIOx`: GPIO端口，其中x可以是(A..G)
-- `GPIO_Init`: 指向GPIO_InitTypeDef结构的指针
 
-#### HAL_GPIO_DeInit
+**功能说明：**
+该函数用于初始化指定的GPIO端口和引脚。根据GPIO_InitStruct结构体中的配置参数，设置引脚的工作模式、上拉下拉配置、输出速度等。
+
+**参数说明：**
+- `GPIOx`：指定要初始化的GPIO端口，如GPIOA、GPIOB、GPIOC等
+- `GPIO_InitStruct`：指向GPIO_InitTypeDef结构体的指针，包含引脚配置信息
+
+**返回值说明：**
+- 无返回值
+
+**使用示例：**
 ```c
-void HAL_GPIO_DeInit(GPIO_TypeDef *GPIOx, uint32_t GPIO_Pin);
-```
-**功能**: 反初始化GPIOx外设寄存器到其默认复位值
-**参数**:
-- `GPIOx`: GPIO端口，其中x可以是(A..G)
-- `GPIO_Pin`: 要反初始化的GPIO引脚
-
-### IO操作函数
-
-#### HAL_GPIO_ReadPin
-```c
-GPIO_PinState HAL_GPIO_ReadPin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
-```
-**功能**: 读取指定的输入端口引脚
-**返回值**: 输入端口引脚值(GPIO_PIN_RESET或GPIO_PIN_SET)
-
-#### HAL_GPIO_WritePin
-```c
-void HAL_GPIO_WritePin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin, GPIO_PinState PinState);
-```
-**功能**: 设置或清除选定的数据端口位
-**参数**:
-- `PinState`: 指定要写入选中引脚的值
-
-#### HAL_GPIO_TogglePin
-```c
-void HAL_GPIO_TogglePin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
-```
-**功能**: 切换指定的GPIO引脚
-
-#### HAL_GPIO_LockPin
-```c
-HAL_StatusTypeDef HAL_GPIO_LockPin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
-```
-**功能**: 锁定GPIO引脚配置寄存器
-**返回值**: HAL状态
-
-### 外部中断处理
-
-#### HAL_GPIO_EXTI_IRQHandler
-```c
-void HAL_GPIO_EXTI_IRQHandler(uint16_t GPIO_Pin);
-```
-**功能**: 处理GPIO外部中断请求
-
-#### HAL_GPIO_EXTI_Callback
-```c
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
-```
-**功能**: 外部中断回调函数，用户需要重写此函数
-
-## 宏定义
-
-### EXTI标志位操作
-
-```c
-// 检查指定的EXTI线标志是否设置
-#define __HAL_GPIO_EXTI_GET_FLAG(__EXTI_LINE__) (EXTI->PR & (__EXTI_LINE__))
-
-// 清除EXTI线的待处理标志
-#define __HAL_GPIO_EXTI_CLEAR_FLAG(__EXTI_LINE__) (EXTI->PR = (__EXTI_LINE__))
-
-// 检查指定的EXTI线是否断言
-#define __HAL_GPIO_EXTI_GET_IT(__EXTI_LINE__) (EXTI->PR & (__EXTI_LINE__))
-
-// 清除EXTI线的待处理位
-#define __HAL_GPIO_EXTI_CLEAR_IT(__EXTI_LINE__) (EXTI->PR = (__EXTI_LINE__))
-
-// 在选定的EXTI线上生成软件中断
-#define __HAL_GPIO_EXTI_GENERATE_SWIT(__EXTI_LINE__) (EXTI->SWIER |= (__EXTI_LINE__))
-```
-
-## 使用示例
-
-### 基本GPIO配置
-
-```c
-// 配置GPIO引脚为输出模式
 GPIO_InitTypeDef GPIO_InitStruct = {0};
 
+// 配置PC13为推挽输出
 GPIO_InitStruct.Pin = GPIO_PIN_13;
 GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
 GPIO_InitStruct.Pull = GPIO_NOPULL;
 GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-
 HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 ```
 
-### 外部中断配置
+#### 2. HAL_GPIO_DeInit
 
 ```c
-// 配置GPIO引脚为外部中断模式
-GPIO_InitTypeDef GPIO_InitStruct = {0};
-
-GPIO_InitStruct.Pin = GPIO_PIN_0;
-GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-GPIO_InitStruct.Pull = GPIO_NOPULL;
-
-HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-// 使能外部中断
-HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
-HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+/**
+ * @brief  反初始化GPIOx外设寄存器到其默认复位值
+ * @param  GPIOx: 其中x可以是(A, B, C, D, E, F, G)来选择GPIO外设
+ * @param  GPIO_Pin: 指定要反初始化的GPIO引脚
+ * @retval 无
+ * @note   当GPIO_Pin设置为GPIO_PIN_All时，将反初始化所有可用的GPIO引脚
+ * @example
+ *     HAL_GPIO_DeInit(GPIOC, GPIO_PIN_13);
+ */
+void HAL_GPIO_DeInit(GPIO_TypeDef *GPIOx, uint32_t GPIO_Pin);
 ```
 
-### 外部中断处理
+**功能说明：**
+该函数用于反初始化指定的GPIO引脚，将其配置恢复到默认状态。通常用于释放GPIO资源或重新配置引脚。
+
+**参数说明：**
+- `GPIOx`：指定要反初始化的GPIO端口
+- `GPIO_Pin`：指定要反初始化的GPIO引脚，可以是单个引脚或GPIO_PIN_All
+
+**返回值说明：**
+- 无返回值
+
+**使用示例：**
+```c
+// 反初始化PC13引脚
+HAL_GPIO_DeInit(GPIOC, GPIO_PIN_13);
+```
+
+### 控制函数
+
+#### 3. HAL_GPIO_ReadPin
 
 ```c
-// 外部中断处理函数
-void EXTI0_IRQHandler(void)
-{
-  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
-}
+/**
+ * @brief  读取指定的输入端口引脚
+ * @param  GPIOx: 其中x可以是(A, B, C, D, E, F, G)来选择GPIO外设
+ * @param  GPIO_Pin: 指定要读取的端口位
+ * @retval 输入端口引脚值
+ * @note   该函数读取指定引脚的电平状态
+ * @example
+ *     GPIO_PinState pinState = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
+ *     if(pinState == GPIO_PIN_SET) {
+ *         // 引脚为高电平
+ *     }
+ */
+GPIO_PinState HAL_GPIO_ReadPin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
+```
 
-// 外部中断回调函数
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-  if(GPIO_Pin == GPIO_PIN_0)
-  {
-    // 处理PA0引脚的中断
-    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-  }
+**功能说明：**
+该函数用于读取指定GPIO引脚的电平状态，返回GPIO_PIN_SET（高电平）或GPIO_PIN_RESET（低电平）。
+
+**参数说明：**
+- `GPIOx`：指定要读取的GPIO端口
+- `GPIO_Pin`：指定要读取的GPIO引脚
+
+**返回值说明：**
+- `GPIO_PIN_SET`：引脚为高电平
+- `GPIO_PIN_RESET`：引脚为低电平
+
+**使用示例：**
+```c
+// 读取PA0引脚状态
+GPIO_PinState buttonState = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
+if(buttonState == GPIO_PIN_SET) {
+    // 按钮按下（假设上拉配置）
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
 }
 ```
+
+#### 4. HAL_GPIO_WritePin
+
+```c
+/**
+ * @brief  设置或清除选定的数据端口位
+ * @param  GPIOx: 其中x可以是(A, B, C, D, E, F, G)来选择GPIO外设
+ * @param  GPIO_Pin: 指定要写入的端口位
+ * @param  PinState: 指定要写入选中端口位的值
+ * @retval 无
+ * @note   该函数设置指定引脚的输出电平
+ * @example
+ *     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
+ *     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+ */
+void HAL_GPIO_WritePin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin, GPIO_PinState PinState);
+```
+
+**功能说明：**
+该函数用于设置指定GPIO引脚的输出电平，可以输出高电平或低电平。
+
+**参数说明：**
+- `GPIOx`：指定要写入的GPIO端口
+- `GPIO_Pin`：指定要写入的GPIO引脚
+- `PinState`：指定要输出的电平状态（GPIO_PIN_SET或GPIO_PIN_RESET）
+
+**返回值说明：**
+- 无返回值
+
+**使用示例：**
+```c
+// 设置PC13为高电平
+HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
+
+// 设置PC13为低电平
+HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+```
+
+#### 5. HAL_GPIO_TogglePin
+
+```c
+/**
+ * @brief  切换指定的GPIO引脚
+ * @param  GPIOx: 其中x可以是(A, B, C, D, E, F, G)来选择GPIO外设
+ * @param  GPIO_Pin: 指定要切换的端口位
+ * @retval 无
+ * @note   该函数将指定引脚的电平状态取反
+ * @example
+ *     HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+ */
+void HAL_GPIO_TogglePin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
+```
+
+**功能说明：**
+该函数用于切换指定GPIO引脚的电平状态，如果当前是高电平则变为低电平，如果当前是低电平则变为高电平。
+
+**参数说明：**
+- `GPIOx`：指定要切换的GPIO端口
+- `GPIO_Pin`：指定要切换的GPIO引脚
+
+**返回值说明：**
+- 无返回值
+
+**使用示例：**
+```c
+// 切换PC13引脚状态（常用于LED闪烁）
+HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+```
+
+#### 6. HAL_GPIO_LockPin
+
+```c
+/**
+ * @brief  锁定GPIO引脚配置
+ * @param  GPIOx: 其中x可以是(A, B, C, D, E, F, G)来选择GPIO外设
+ * @param  GPIO_Pin: 指定要锁定的端口位
+ * @retval HAL状态
+ * @note   锁定后，引脚配置不能被修改，直到下次复位
+ * @example
+ *     HAL_StatusTypeDef status = HAL_GPIO_LockPin(GPIOC, GPIO_PIN_13);
+ *     if(status == HAL_OK) {
+ *         // 锁定成功
+ *     }
+ */
+HAL_StatusTypeDef HAL_GPIO_LockPin(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
+```
+
+**功能说明：**
+该函数用于锁定指定GPIO引脚的配置，防止意外修改。锁定后，引脚配置将保持不变，直到下次系统复位。
+
+**参数说明：**
+- `GPIOx`：指定要锁定的GPIO端口
+- `GPIO_Pin`：指定要锁定的GPIO引脚
+
+**返回值说明：**
+- `HAL_OK`：锁定成功
+- `HAL_ERROR`：锁定失败
+
+**使用示例：**
+```c
+// 锁定PC13引脚配置
+HAL_StatusTypeDef status = HAL_GPIO_LockPin(GPIOC, GPIO_PIN_13);
+if(status == HAL_OK) {
+    // 锁定成功，引脚配置现在被保护
+}
+```
+
+### 中断处理函数
+
+#### 7. HAL_GPIO_EXTI_IRQHandler
+
+```c
+/**
+ * @brief  处理GPIO外部中断请求
+ * @param  GPIO_Pin: 指定触发中断的GPIO引脚
+ * @retval 无
+ * @note   该函数在GPIO外部中断服务程序中调用
+ * @example
+ *     void EXTI15_10_IRQHandler(void) {
+ *         HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13);
+ *     }
+ */
+void HAL_GPIO_EXTI_IRQHandler(uint16_t GPIO_Pin);
+```
+
+**功能说明：**
+该函数用于处理GPIO外部中断请求，通常在中断服务程序（ISR）中调用。它会清除中断标志并调用相应的回调函数。
+
+**参数说明：**
+- `GPIO_Pin`：指定触发中断的GPIO引脚
+
+**返回值说明：**
+- 无返回值
+
+**使用示例：**
+```c
+// 在中断服务程序中调用
+void EXTI15_10_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_13);
+}
+```
+
+#### 8. HAL_GPIO_EXTI_Callback
+
+```c
+/**
+ * @brief  GPIO外部中断回调函数
+ * @param  GPIO_Pin: 指定触发中断的GPIO引脚
+ * @retval 无
+ * @note   用户需要重写此函数来实现具体的中断处理逻辑
+ * @example
+ *     void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+ *         if(GPIO_Pin == GPIO_PIN_13) {
+ *             // 处理PC13引脚中断
+ *             HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+ *         }
+ *     }
+ */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
+```
+
+**功能说明：**
+该函数是GPIO外部中断的回调函数，当GPIO外部中断发生时会被自动调用。用户需要重写此函数来实现具体的中断处理逻辑。
+
+**参数说明：**
+- `GPIO_Pin`：指定触发中断的GPIO引脚
+
+**返回值说明：**
+- 无返回值
+
+**使用示例：**
+```c
+// 重写中断回调函数
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+    if(GPIO_Pin == GPIO_PIN_13) {
+        // PC13引脚中断处理
+        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+    }
+}
+```
+
+## 使用示例
+
+### LED控制示例
+
+**功能描述：**
+使用GPIO控制LED的开关和闪烁
+
+**硬件连接：**
+- LED正极连接到PC13引脚
+- LED负极通过限流电阻接地
+
+**代码实现：**
+```c
+#include "stm32f1xx_hal.h"
+
+void GPIO_LED_Init(void) {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    
+    // 使能GPIOC时钟
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    
+    // 配置PC13为推挽输出
+    GPIO_InitStruct.Pin = GPIO_PIN_13;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+}
+
+void LED_Control(void) {
+    // 点亮LED
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+    HAL_Delay(1000);
+    
+    // 熄灭LED
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
+    HAL_Delay(1000);
+    
+    // LED闪烁
+    for(int i = 0; i < 5; i++) {
+        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+        HAL_Delay(200);
+    }
+}
+```
+
+**运行结果：**
+LED将按照设定的时序进行开关和闪烁操作。
+
+### 按键输入示例
+
+**功能描述：**
+使用GPIO读取按键输入状态
+
+**硬件连接：**
+- 按键一端连接到PA0引脚
+- 按键另一端接地
+- PA0引脚配置内部上拉电阻
+
+**代码实现：**
+```c
+#include "stm32f1xx_hal.h"
+
+void GPIO_Button_Init(void) {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    
+    // 使能GPIOA时钟
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    
+    // 配置PA0为输入模式，内部上拉
+    GPIO_InitStruct.Pin = GPIO_PIN_0;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+}
+
+void Button_Read(void) {
+    GPIO_PinState buttonState = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
+    
+    if(buttonState == GPIO_PIN_RESET) {
+        // 按键按下
+        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+    } else {
+        // 按键释放
+        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
+    }
+}
+```
+
+**运行结果：**
+当按键按下时LED点亮，按键释放时LED熄灭。
+
+### 外部中断示例
+
+**功能描述：**
+使用GPIO外部中断检测按键按下
+
+**硬件连接：**
+- 按键一端连接到PA0引脚
+- 按键另一端接地
+- PA0引脚配置为外部中断模式
+
+**代码实现：**
+```c
+#include "stm32f1xx_hal.h"
+
+void GPIO_EXTI_Init(void) {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    
+    // 使能GPIOA时钟
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    
+    // 配置PA0为外部中断，下降沿触发
+    GPIO_InitStruct.Pin = GPIO_PIN_0;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    
+    // 使能EXTI中断
+    HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+}
+
+// 中断服务程序
+void EXTI0_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
+}
+
+// 中断回调函数
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+    if(GPIO_Pin == GPIO_PIN_0) {
+        // 按键按下，切换LED状态
+        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+    }
+}
+```
+
+**运行结果：**
+每次按键按下时，LED状态都会切换一次。
 
 ## 注意事项
 
-1. **引脚编号**: GPIO引脚编号从0到15，每个引脚都有对应的宏定义
-2. **模式配置**: 确保选择正确的GPIO模式，特别是复用功能模式
-3. **中断优先级**: 使用外部中断时，需要正确配置NVIC中断优先级
-4. **时钟使能**: 使用GPIO端口前需要使能对应的GPIO时钟
-5. **引脚锁定**: 使用HAL_GPIO_LockPin可以锁定引脚配置，防止意外修改
+1. **时钟使能**：在使用GPIO之前，必须先使能对应GPIO端口的时钟
+2. **引脚复用**：某些引脚可能被其他外设占用，使用时需要注意引脚复用配置
+3. **中断优先级**：使用外部中断时，需要正确配置中断优先级
+4. **上拉下拉**：根据硬件连接方式选择合适的内部上拉或下拉配置
+5. **输出模式**：推挽输出适合驱动LED等负载，开漏输出适合I2C等通信接口
+6. **速度配置**：高速配置会增加功耗，应根据实际需求选择合适的速度
+7. **引脚锁定**：锁定后的引脚配置在复位前无法修改，请谨慎使用
+8. **中断处理**：中断回调函数中应避免执行耗时操作，保持中断处理简洁
 
-## 相关文件
+## 总结
 
-- `stm32f1xx_hal_gpio_ex.h`: GPIO扩展功能
-- `stm32f1xx_hal_def.h`: HAL通用定义
-- `stm32f1xx_hal.h`: HAL主头文件
+STM32F1xx GPIO HAL库提供了完整的GPIO控制功能，包括引脚初始化、读写操作、中断处理等。通过合理配置GPIO的工作模式、上拉下拉、输出速度等参数，可以实现各种数字信号的控制和检测功能。
+
+GPIO是嵌入式系统中最基础也是最重要的外设之一，掌握GPIO的使用对于STM32开发至关重要。HAL库的GPIO函数设计简洁易用，配合详细的中文文档和示例代码，能够帮助开发者快速上手STM32 GPIO的应用开发。
