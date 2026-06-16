@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import { baseOptions } from '@/app/layout.config';
 import { source } from '@/lib/source';
 import { Provider } from '../provider';
-import Script from 'next/script';
 export default function Layout({ children }: { children: ReactNode }) {
   return (
     <Provider>
@@ -69,24 +68,6 @@ export default function Layout({ children }: { children: ReactNode }) {
           }
         >
           {children}
-          {/* <Script
-            id='giscus'
-            src='https://giscus.app/client.js'
-            data-repo='QingYuanO/embedded-learn-doc'
-            data-repo-id='R_kgDOO6T_Iw'
-            data-category='Announcements'
-            data-category-id='DIC_kwDOO6T_I84C5DxG'
-            data-mapping='url'
-            data-strict='0'
-            data-reactions-enabled='1'
-            data-emit-metadata='0'
-            data-input-position='bottom'
-            data-theme='preferred_color_scheme'
-            data-lang='zh-CN'
-            crossOrigin='anonymous'
-            async
-          ></Script> */}
-         
         </DocsLayout>
       </div>
     </Provider>
