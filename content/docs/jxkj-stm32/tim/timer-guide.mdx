@@ -379,15 +379,79 @@ CNT:       0  5  10  15  20 ...
 
 ### 5.2 触发源（TRGI）可选来源
 
+**触发源回答的是：「我根据什么信号来决定下一步动作？」**
+
+通过 `TIM_SelectInputTrigger(TIMx, TIM_TS_xxx)` 选择，写入 SMCR 寄存器的 TS 位。
+
+#### 硬件信号来源
+
 | 触发源 | 说明 |
 |--------|------|
 | **ITR0 ~ ITR3** | 来自 **其他定时器** 的 TRGO（内部联动） |
-| **TI1F / TI2F** | 来自本定时器 **CH1/CH2 引脚** 的边沿（经滤波） |
-| **TI1F_ED** | CH1 双边沿 |
-| **ETRF** | 外部触发引脚 ETR |
+| **TI1FP1 / TI2FP2** | 来自本定时器 **CH1 / CH2 引脚** 的边沿，**经输入滤波器** 后 |
+| **TI1F_ED** | CH1 **双边沿** 检测（不经过滤波器路径 FP1） |
+| **ETRF** | 外部触发引脚 **ETR**，经滤波后 |
 | **内部事件** | 比较事件、更新事件等（视芯片而定） |
 
-**触发源回答的是：「我根据什么信号来决定下一步动作？」**
+#### 标准库枚举对照
+
+| 常量 | 硬件信号 | 含义 |
+|------|----------|------|
+| `TIM_TS_ITR0` ~ `TIM_TS_ITR3` | ITR0 ~ ITR3 | 其他定时器 TRGO |
+| `TIM_TS_TI1F_ED` | TI1F_ED | CH1 双边沿 |
+| `TIM_TS_TI1FP1` | TI1 → 滤波 → FP1 | **CH1 引脚滤波后信号** |
+| `TIM_TS_TI2FP2` | TI2 → 滤波 → FP2 | **CH2 引脚滤波后信号** |
+| `TIM_TS_ETRF` | ETR → 滤波 | ETR 引脚滤波后信号 |
+
+> 文档和参考手册里常写 **TI1F**，标准库枚举写 **TI1FP1**——多出的 **FP** 表示 *Filtered Path*（滤波后路径），含义相同。
+
+#### `TIM_TS_TI1FP1` 名字拆解
+
+| 部分 | 含义 |
+|------|------|
+| **TIM_TS** | Timer Trigger Source，触发源 |
+| **TI1** | Timer Input 1，通道 1 输入（对应 **CH1 引脚**） |
+| **FP1** | Filtered Path 1，经 **输入捕获滤波器** 处理后的信号 |
+
+#### 信号路径（以 CH1 为例）
+
+```
+外部引脚 (TIMx_CH1，如 PA6 = TIM3_CH1)
+    ↓
+  TI1（原始输入）
+    ↓
+  输入滤波器（TIM_ICInit 里的 TIM_ICFilter）
+    ↓
+  TI1FP1  ← TIM_SelectInputTrigger(TIMx, TIM_TS_TI1FP1)
+    ↓
+  TRGI → 从模式控制器（Reset / Gated / External Clock …）
+```
+
+使用 `TIM_TS_TI1FP1` 时，通常需先对 CH1 做输入捕获初始化（配置极性与滤波），否则滤波器未生效：
+
+```c
+/* 先配 CH1 输入 + 滤波 */
+TIM_ICInitStructure.TIM_Channel     = TIM_Channel_1;
+TIM_ICInitStructure.TIM_ICPolarity  = TIM_ICPolarity_Rising;
+TIM_ICInitStructure.TIM_ICSelection = TIM_ICSelection_DirectTI;
+TIM_ICInitStructure.TIM_ICFilter    = 0x3;   /* 滤波强度 */
+TIM_ICInit(TIM3, &TIM_ICInitStructure);
+
+/* 再选触发源 + 从模式 */
+TIM_SelectInputTrigger(TIM3, TIM_TS_TI1FP1);
+TIM_SelectSlaveMode(TIM3, TIM_SlaveMode_External1);  /* 每脉冲 CNT+1 */
+```
+
+#### 与输入捕获的区别
+
+| | 触发源 TRGI | 输入捕获 IC |
+|---|------------|-------------|
+| **作用** | 决定 CNT **怎么数**（复位 / 门控 / 外部时钟） | 边沿到来时把 **CNT 锁存到 CCR** |
+| **配置 API** | `TIM_SelectInputTrigger` + `TIM_SelectSlaveMode` | `TIM_ICInit` + 捕获中断 |
+| **典型用途** | 编码器脉冲计数、外部同步清零 | 测脉宽、测频率 |
+| **类比** | 遥控器：归零 / 暂停 / 步进 | 秒表：按下时记下当前时间 |
+
+两者可共用同一 CH1 引脚和滤波配置，但功能独立——前者管「怎么计数」，后者管「记录时刻」。
 
 ### 5.3 从模式（Slave Mode）
 
