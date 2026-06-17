@@ -1,0 +1,782 @@
+---
+title: STM32 定时器详解
+description: 定时中断、输出比较、输入捕获、触发源与从模式
+---
+
+> 面向嵌入式入门，以 **STM32F10x 标准外设库（StdPeriph Library）** 为例。  
+> 不绑定具体工程，可直接作为学习笔记或实验参考。
+
+---
+
+## 目录
+
+1. [定时器是什么](#一定时器是什么)
+2. [四种常见用法](#二四种常见用法)
+3. [输出比较（Output Compare）](#三输出比较output-compare)
+4. [输入捕获（Input Capture）](#四输入捕获input-capture)
+5. [触发源与从模式](#五触发源与从模式)
+6. [主模式与从模式联动](#六主模式与从模式联动)
+7. [标准库代码示例](#七标准库代码示例)
+8. [常用 API 对照表](#八常用-api-对照表)
+9. [配置思路 checklist](#九配置思路-checklist)
+
+---
+
+## 一、定时器是什么
+
+### 1.1 本质
+
+定时器（Timer，STM32 中常写作 TIM）是一个 **硬件计数器**：
+
+```
+时钟脉冲 → [计数器 CNT] → 计满/匹配 → 产生中断或改变引脚
+```
+
+- 每来一个时钟 tick，`CNT` 加 1（或减 1）
+- 可以设置 **预分频（PSC）** 和 **自动重装载（ARR / Period）**，控制计数速度
+- 计到设定值时，可以：
+  - 触发 **中断**
+  - 改变 **GPIO 电平**（PWM）
+  - 记录 **外部事件时间**（输入捕获）
+
+### 1.2 两个核心参数
+
+| 参数 | 寄存器 | 含义 |
+|------|--------|------|
+| **预分频 PSC** | TIM_PSC | 把定时器时钟降频 |
+| **周期 ARR** | TIM_Period | 计数器最大值，计满后溢出 |
+
+**计数频率公式**（STM32 常见）：
+
+```
+定时器计数频率 = TIM_CLK / (PSC + 1)
+溢出周期     = (ARR + 1) / 定时器计数频率
+```
+
+### 1.3 计算示例
+
+假设 TIM 时钟为 **72MHz**：
+
+| PSC | ARR | 计数频率 | 溢出周期 |
+|-----|-----|----------|----------|
+| 72-1 | 1000-1 | 1MHz (1μs/tick) | 1ms |
+| 72-1 | 10000-1 | 1MHz | 10ms |
+| 720-1 | 1000-1 | 100kHz | 10ms |
+
+---
+
+## 二、四种常见用法
+
+```
+定时器 TIM
+├── 1. 定时中断（Time Base）     ← OS tick、周期任务、超时
+├── 2. PWM 输出（输出比较 OC）   ← 电机调速、LED 亮度、舵机
+├── 3. 输入捕获 IC             ← 测脉宽、测频率、测周期
+└── 4. 编码器 / 外部时钟模式    ← 脉冲计数、测转速（进阶）
+```
+
+### 三者对比
+
+| | 定时中断 | 输出比较 OC | 输入捕获 IC |
+|---|---------|------------|------------|
+| **方向** | 内部计时 | MCU → 外部引脚 | 外部引脚 → MCU |
+| **触发** | CNT 计到 ARR | CNT == CCR | 外部边沿到来 |
+| **主要用途** | 系统 tick、周期任务 | PWM、方波、脉冲 | 测脉宽、频率、周期 |
+| **CPU 占用** | 中断里需处理 | 硬件自动，几乎不占 | 硬件锁存，中断可选 |
+| **典型 API** | `TIM_IT_Update` | `TIM_OCxInit` PWM | `TIM_ICInit` |
+
+---
+
+## 三、输出比较（Output Compare）
+
+### 3.1 是什么
+
+**输出比较** = 当计数器 `CNT` 和某个 **比较寄存器 CCR** 相等时，硬件自动对 **引脚** 做预定动作。
+
+```
+CNT:  0 ──1──2──...── CCR ──...── ARR ──0──1──...
+                        ↑
+                   到达 CCR 时触发动作
+```
+
+**动作可以是**：
+
+- 置高 / 置低 / 翻转引脚
+- 产生中断（不直接改引脚）
+
+### 3.2 与 PWM 的关系
+
+**PWM 就是输出比较最典型的应用。**
+
+设 `ARR = 999`，`CCR = 300`：
+
+```
+CNT  0 ───────── 300 ───────── 999 ──0──
+引脚 ████████░░░░░░░░░░░░░░░░░░░░░░░░
+     |← 30% 高 →|←── 70% 低 ──→|
+```
+
+- **CCR 越大** → 高电平时间越长 → 占空比越大
+- **ARR 决定 PWM 频率**：
+
+```
+f_PWM = TIM_CLK / ((PSC + 1) × (ARR + 1))
+```
+
+### 3.3 输出比较模式（STM32）
+
+| 模式 | 行为 |
+|------|------|
+| Frozen | 比较匹配时不改变引脚（只中断） |
+| Active on match | 匹配时置高 |
+| Inactive on match | 匹配时置低 |
+| Toggle | 匹配时翻转 → 可生成方波 |
+| PWM Mode 1/2 | 标准 PWM |
+
+### 3.4 典型应用
+
+| 场景 | 说明 |
+|------|------|
+| LED 调光 | 占空比控制亮度 |
+| 舵机 | 固定 50Hz，脉宽 1~2ms 控制角度 |
+| 直流电机调速 | 占空比 ≈ 平均电压 |
+| 步进 STEP 脉冲 | 定时翻转或单脉冲输出 |
+
+---
+
+## 四、输入捕获（Input Capture）
+
+### 4.1 是什么
+
+**输入捕获** = 当 **外部引脚** 出现指定边沿（上升/下降）时，硬件 **立刻把当前 CNT 值锁存到 CCR**，并可触发中断。
+
+```
+外部信号:  ___/‾‾‾‾\___
+CNT:       0  5  10  15  20 ...
+                 ↑上升沿时，CCR = 10（锁存）
+```
+
+**核心**：用硬件记录「事件发生时的精确时刻」，不需要 CPU 轮询。
+
+### 4.2 能测什么
+
+#### （1）测脉宽
+
+```
+上升沿捕获 → CCR1 = t1
+下降沿捕获 → CCR2 = t2
+脉宽 = CCR2 - CCR1
+```
+
+应用：超声波测距、红外遥控解码。
+
+#### （2）测频率 / 周期
+
+连续两次 **上升沿** 捕获：
+
+```
+周期 T = CCR2 - CCR1
+频率 f = 1 / T
+```
+
+应用：转速测量、信号频率检测。
+
+#### （3）测占空比
+
+一个通道捕上升沿，另一个捕下降沿，或同一通道交替切换边沿。
+
+### 4.3 为什么不用轮询
+
+| 方式 | 问题 |
+|------|------|
+| `while(GPIO)` 轮询 | CPU 占用高，边沿可能漏掉 |
+| 外部中断 + 读 tick | 可行，但有中断响应抖动 |
+| **输入捕获** | 硬件在边沿瞬间锁存 CNT，**精度最高** |
+
+### 4.4 与触发源的区别
+
+| | 输入捕获 IC | 触发源 TRGI |
+|---|------------|------------|
+| **目的** | 记录边沿时的 **CNT 值** | 控制 CNT **怎么数 / 何时数** |
+| **结果** | 读到 CCR，用于测时间 | 复位 / 门控 / 启动计数 |
+| **类比** | 拍照记下时刻 | 遥控器控制播放 / 暂停 / 归零 |
+
+---
+
+## 五、触发源与从模式
+
+### 5.1 整体模型
+
+一个定时器 TIM 有两套角色：
+
+```
+┌─────────────────────────────────────┐
+│              TIMx                   │
+│                                     │
+│  主模式 Master  ──TRGO──→  输出触发  │  「我触发别人」
+│                                     │
+│  从模式 Slave   ←──TRGI──  输入触发  │  「别人触发我」
+│                                     │
+│  [PSC] [CNT] [ARR] [CCR]            │
+└─────────────────────────────────────┘
+```
+
+| 术语 | 英文 | 含义 |
+|------|------|------|
+| **触发源** | Trigger Source (TRGI) | 用哪个信号作为「触发输入」 |
+| **从模式** | Slave Mode | 收到触发后，定时器 **做什么动作** |
+| **主模式** | Master Mode (TRGO) | 本定时器向外 **发什么触发信号** |
+
+### 5.2 触发源（TRGI）可选来源
+
+| 触发源 | 说明 |
+|--------|------|
+| **ITR0 ~ ITR3** | 来自 **其他定时器** 的 TRGO（内部联动） |
+| **TI1F / TI2F** | 来自本定时器 **CH1/CH2 引脚** 的边沿（经滤波） |
+| **TI1F_ED** | CH1 双边沿 |
+| **ETRF** | 外部触发引脚 ETR |
+| **内部事件** | 比较事件、更新事件等（视芯片而定） |
+
+**触发源回答的是：「我根据什么信号来决定下一步动作？」**
+
+### 5.3 从模式（Slave Mode）
+
+**从模式** = 当 **TRGI 触发源** 来了之后，定时器 **CNT 要执行什么动作**。
+
+| 从模式 | 行为 | 直观理解 |
+|--------|------|----------|
+| **Reset（复位）** | 触发边沿来时，CNT 清零 | 每到同步点就「对齐」 |
+| **Gated（门控）** | 触发为高时 CNT 才计数，为低时停 | 闸门打开才流水 |
+| **Trigger（触发）** | 触发边沿来时，CNT 开始计数 | 按一下才开始跑 |
+| **External Clock Mode 1** | 触发边沿每来一次，CNT +1 | 外部脉冲当时钟 |
+| **Disabled** | 不听触发，自己正常跑 | 普通定时器 |
+
+#### 时序示意
+
+**Reset 模式**：
+
+```
+TRGI:  ↑     ↑     ↑     ↑
+CNT:   0─1─2─0─1─2─3─0─1─2─...
+           ↑复位   ↑复位
+```
+
+**Gated 模式**：
+
+```
+TRGI:  ___/‾‾‾‾‾\_____/‾‾‾\___
+CNT:      0 1 2 3       0 1 2
+          |← 只有高电平期间计数 →|
+```
+
+**External Clock Mode 1**：
+
+```
+外部脉冲:  ↑   ↑   ↑   ↑   ↑
+CNT:       0   1   2   3   4
+```
+
+### 5.4 记忆口诀
+
+- **触发源** = 输入是什么
+- **从模式** = 输入来了做什么
+- **主模式** = 我自己何时输出触发给别人
+
+---
+
+## 六、主模式与从模式联动
+
+### 6.1 主模式（Master / TRGO）
+
+主模式决定：**本定时器溢出 / 比较时，向外发什么 TRGO 信号**。
+
+| 主模式 TRGO 源 | 含义 |
+|----------------|------|
+| Reset | 发复位信号（少用） |
+| Enable | 计数器使能信号 |
+| **Update** | **更新事件（溢出时）** ← 最常用 |
+| Compare Pulse | 比较匹配脉冲 |
+| OCxREF | 某个通道比较输出 |
+
+### 6.2 经典组合：定时器级联
+
+**需求**：实现 1 秒定时，但单次 16 位 CNT 装不下 1 秒。
+
+```
+TIM2（主）                    TIM3（从）
+ARR=999, 1ms 溢出一次   →    触发源 = ITRx
+                              从模式 = External Clock
+                              每收到 1 次 TRGI，CNT+1
+                              CNT 到 999 → 1 秒中断
+```
+
+### 6.3 PWM 同步 + ADC 采样
+
+```
+TIM1 输出 PWM
+主模式 TRGO = 在 PWM 特定时刻
+    ↓
+触发 ADC 采样电流
+```
+
+电流采样点与 PWM 周期 **严格对齐**，测量更准确。
+
+### 6.4 典型工程场景
+
+| 场景 | 主 / 从用法 |
+|------|-------------|
+| 步进脉冲计数 | 从模式 External Clock，每个 STEP 边沿 CNT+1 |
+| 编码器测速 | 编码器 A 相当外部时钟 |
+| 多路 PWM 同相位 | 多个 TIM 从模式 Reset，共用同一 TRGI |
+| 超声波测距 | 输出比较发触发，输入捕获测回波时间 |
+| ADC + PWM 同步 | 主模式 TRGO 触发 ADC |
+
+---
+
+## 七、标准库代码示例
+
+以下示例基于 **STM32F10x StdPeriph Library**，系统时钟假设 **72MHz**。
+
+### 7.1 定时中断 — 10ms 周期
+
+```c
+#include "stm32f10x.h"
+
+void TIM2_TimeBase_Init(void)
+{
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    NVIC_InitTypeDef NVIC_InitStructure;
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+
+    /* 72MHz / 72 = 1MHz，每个 tick = 1us */
+    TIM_TimeBaseStructure.TIM_Period        = 10000 - 1;   /* 10000us = 10ms */
+    TIM_TimeBaseStructure.TIM_Prescaler     = 72 - 1;
+    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseStructure.TIM_CounterMode   = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
+
+    TIM_ClearFlag(TIM2, TIM_FLAG_Update);
+    TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);
+    TIM_Cmd(TIM2, ENABLE);
+
+    NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+}
+
+void TIM2_IRQHandler(void)
+{
+    if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET)
+    {
+        TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+        /* 每 10ms 执行一次 */
+    }
+}
+```
+
+---
+
+### 7.2 输出比较 / PWM — PA0 呼吸灯（TIM2 CH1）
+
+```c
+#include "stm32f10x.h"
+
+void TIM2_PWM_Init(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    TIM_OCInitTypeDef TIM_OCInitStructure;
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+
+    /* PA0 = TIM2_CH1 */
+    GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_0;
+    GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    /* 72MHz / 72 / 1000 = 1kHz PWM */
+    TIM_TimeBaseStructure.TIM_Period        = 1000 - 1;
+    TIM_TimeBaseStructure.TIM_Prescaler     = 72 - 1;
+    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseStructure.TIM_CounterMode   = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
+
+    TIM_OCInitStructure.TIM_OCMode      = TIM_OCMode_PWM1;
+    TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+    TIM_OCInitStructure.TIM_Pulse       = 0;
+    TIM_OCInitStructure.TIM_OCPolarity  = TIM_OCPolarity_High;
+    TIM_OC1Init(TIM2, &TIM_OCInitStructure);
+
+    TIM_OC1PreloadConfig(TIM2, TIM_OCPreload_Enable);
+    TIM_ARRPreloadConfig(TIM2, ENABLE);
+    TIM_Cmd(TIM2, ENABLE);
+}
+
+void TIM2_PWM_SetDuty(uint16_t duty)   /* duty: 0 ~ 999 */
+{
+    TIM_SetCompare1(TIM2, duty);
+}
+```
+
+---
+
+### 7.3 输入捕获 — 测方波周期（TIM3 CH1 / PA6）
+
+```c
+#include "stm32f10x.h"
+
+volatile uint32_t g_capture1 = 0;
+volatile uint32_t g_capture2 = 0;
+volatile uint32_t g_period_ticks = 0;
+
+void TIM3_IC_Init(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    TIM_ICInitTypeDef TIM_ICInitStructure;
+    NVIC_InitTypeDef NVIC_InitStructure;
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+
+    /* PA6 = TIM3_CH1 */
+    GPIO_InitStructure.GPIO_Pin  = GPIO_Pin_6;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    /* 1MHz 计数，1 tick = 1us */
+    TIM_TimeBaseStructure.TIM_Period        = 0xFFFF;
+    TIM_TimeBaseStructure.TIM_Prescaler     = 72 - 1;
+    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseStructure.TIM_CounterMode   = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);
+
+    TIM_ICInitStructure.TIM_Channel     = TIM_Channel_1;
+    TIM_ICInitStructure.TIM_ICPolarity  = TIM_ICPolarity_Rising;
+    TIM_ICInitStructure.TIM_ICSelection = TIM_ICSelection_DirectTI;
+    TIM_ICInitStructure.TIM_ICPrescaler = TIM_ICPSC_DIV1;
+    TIM_ICInitStructure.TIM_ICFilter    = 0x0;
+    TIM_ICInit(TIM3, &TIM_ICInitStructure);
+
+    TIM_ITConfig(TIM3, TIM_IT_CC1, ENABLE);
+    TIM_Cmd(TIM3, ENABLE);
+
+    NVIC_InitStructure.NVIC_IRQChannel = TIM3_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+}
+
+void TIM3_IRQHandler(void)
+{
+    if (TIM_GetITStatus(TIM3, TIM_IT_CC1) != RESET)
+    {
+        static uint8_t edge_count = 0;
+
+        if (edge_count == 0)
+        {
+            g_capture1 = TIM_GetCapture1(TIM3);
+            edge_count = 1;
+            TIM_ICInitTypeDef ic = {
+                TIM_Channel_1, TIM_ICPolarity_Falling, TIM_ICSelection_DirectTI,
+                TIM_ICPSC_DIV1, 0x0
+            };
+            TIM_ICInit(TIM3, &ic);
+        }
+        else
+        {
+            g_capture2 = TIM_GetCapture1(TIM3);
+            g_period_ticks = g_capture2 - g_capture1;
+            edge_count = 0;
+            TIM_ICInitTypeDef ic = {
+                TIM_Channel_1, TIM_ICPolarity_Rising, TIM_ICSelection_DirectTI,
+                TIM_ICPSC_DIV1, 0x0
+            };
+            TIM_ICInit(TIM3, &ic);
+        }
+
+        TIM_ClearITPendingBit(TIM3, TIM_IT_CC1);
+    }
+}
+
+/* 频率计算（1 tick = 1us 时） */
+float TIM3_GetFrequency(void)
+{
+    if (g_period_ticks == 0) return 0.0f;
+    return 1000000.0f / g_period_ticks;
+}
+```
+
+---
+
+### 7.4 从模式：外部时钟 — 每个脉冲 CNT+1
+
+适合 **编码器脉冲计数** 或 **统计 STEP 脉冲个数**：
+
+```c
+#include "stm32f10x.h"
+
+void TIM3_ExternalClock_Init(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    TIM_ICInitTypeDef TIM_ICInitStructure;
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+
+    GPIO_InitStructure.GPIO_Pin  = GPIO_Pin_6;   /* TIM3_CH1 */
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    TIM_TimeBaseStructure.TIM_Period        = 0xFFFF;
+    TIM_TimeBaseStructure.TIM_Prescaler     = 0;
+    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseStructure.TIM_CounterMode   = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);
+
+    TIM_ICInitStructure.TIM_Channel     = TIM_Channel_1;
+    TIM_ICInitStructure.TIM_ICPolarity  = TIM_ICPolarity_Rising;
+    TIM_ICInitStructure.TIM_ICSelection = TIM_ICSelection_DirectTI;
+    TIM_ICInitStructure.TIM_ICPrescaler = TIM_ICPSC_DIV1;
+    TIM_ICInitStructure.TIM_ICFilter    = 0x3;
+    TIM_ICInit(TIM3, &TIM_ICInitStructure);
+
+    /* 触发源 = TI1，从模式 = 外部时钟模式1 */
+    TIM_SelectInputTrigger(TIM3, TIM_TS_TI1FP1);
+    TIM_SelectSlaveMode(TIM3, TIM_SlaveMode_External1);
+    TIM_SelectMasterSlaveMode(TIM3, TIM_MasterSlaveMode_Enable);
+
+    TIM_SetCounter(TIM3, 0);
+    TIM_Cmd(TIM3, ENABLE);
+}
+
+uint16_t TIM3_GetPulseCount(void)
+{
+    return TIM_GetCounter(TIM3);
+}
+```
+
+---
+
+### 7.5 从模式：Reset — 外部信号同步清零
+
+```c
+void TIM2_SlaveReset_Init(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+    TIM_ICInitTypeDef TIM_ICInitStructure;
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+
+    GPIO_InitStructure.GPIO_Pin  = GPIO_Pin_0;   /* TIM2_CH1 作为触发输入 */
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    TIM_TimeBaseStructure.TIM_Period        = 1000 - 1;
+    TIM_TimeBaseStructure.TIM_Prescaler     = 72 - 1;
+    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseStructure.TIM_CounterMode   = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
+
+    TIM_ICInitStructure.TIM_Channel     = TIM_Channel_1;
+    TIM_ICInitStructure.TIM_ICPolarity  = TIM_ICPolarity_Rising;
+    TIM_ICInitStructure.TIM_ICSelection = TIM_ICSelection_DirectTI;
+    TIM_ICInitStructure.TIM_ICPrescaler = TIM_ICPSC_DIV1;
+    TIM_ICInitStructure.TIM_ICFilter    = 0x0;
+    TIM_ICInit(TIM2, &TIM_ICInitStructure);
+
+    TIM_SelectInputTrigger(TIM2, TIM_TS_TI1FP1);
+    TIM_SelectSlaveMode(TIM2, TIM_SlaveMode_Reset);
+    TIM_SelectMasterSlaveMode(TIM2, TIM_MasterSlaveMode_Enable);
+
+    TIM_Cmd(TIM2, ENABLE);
+}
+```
+
+**效果**：CH1 每来一个上升沿，TIM2 的 CNT 归零重新计数。
+
+---
+
+### 7.6 主从联动 — TIM3 计数 TIM2 的溢出次数
+
+**需求**：TIM2 每 1ms 溢出，TIM3 计 1000 次 → 1 秒事件。
+
+```c
+void TIM2_Master_1ms_Init(void)
+{
+    TIM_TimeBaseInitTypeDef tb;
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+
+    tb.TIM_Period        = 1000 - 1;
+    tb.TIM_Prescaler     = 72 - 1;
+    tb.TIM_ClockDivision = TIM_CKD_DIV1;
+    tb.TIM_CounterMode   = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM2, &tb);
+
+    TIM_SelectOutputTrigger(TIM2, TIM_TRGOSource_Update);
+    TIM_SelectMasterSlaveMode(TIM2, TIM_MasterSlaveMode_Enable);
+
+    TIM_Cmd(TIM2, ENABLE);
+}
+
+void TIM3_Slave_CountMaster_Init(void)
+{
+    TIM_TimeBaseInitTypeDef tb;
+    NVIC_InitTypeDef nvic;
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
+
+    tb.TIM_Period        = 1000 - 1;
+    tb.TIM_Prescaler     = 0;
+    tb.TIM_ClockDivision = TIM_CKD_DIV1;
+    tb.TIM_CounterMode   = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM3, &tb);
+
+    /* ITR 编号查参考手册 Timer linking 表 */
+    TIM_SelectInputTrigger(TIM3, TIM_TS_ITR2);
+    TIM_SelectSlaveMode(TIM3, TIM_SlaveMode_External1);
+    TIM_SelectMasterSlaveMode(TIM3, TIM_MasterSlaveMode_Enable);
+
+    TIM_ITConfig(TIM3, TIM_IT_Update, ENABLE);
+    TIM_Cmd(TIM3, ENABLE);
+
+    nvic.NVIC_IRQChannel = TIM3_IRQn;
+    nvic.NVIC_IRQChannelPreemptionPriority = 1;
+    nvic.NVIC_IRQChannelSubPriority = 0;
+    nvic.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&nvic);
+}
+```
+
+> **注意**：`TIM_TS_ITR2` 仅为示意，TIM 之间 ITR 映射关系请查阅 **STM32F10x 参考手册** 中的 Timer linking 表。
+
+---
+
+### 7.7 单脉冲输出 — 硬件发一个 STEP 脉冲
+
+```c
+void TIM4_OnePulse_Init(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure;
+    TIM_TimeBaseInitTypeDef tb;
+    TIM_OCInitTypeDef oc;
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+
+    GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_6;   /* TIM4_CH1 */
+    GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+    tb.TIM_Period        = 100 - 1;
+    tb.TIM_Prescaler     = 72 - 1;
+    tb.TIM_ClockDivision = TIM_CKD_DIV1;
+    tb.TIM_CounterMode   = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM4, &tb);
+
+    oc.TIM_OCMode      = TIM_OCMode_PWM1;
+    oc.TIM_OutputState = TIM_OutputState_Enable;
+    oc.TIM_Pulse       = 50;
+    oc.TIM_OCPolarity  = TIM_OCPolarity_High;
+    TIM_OC1Init(TIM4, &oc);
+
+    TIM_SelectOnePulseMode(TIM4, TIM_OPMode_Single);
+    TIM_Cmd(TIM4, ENABLE);
+}
+
+void TIM4_TriggerOnePulse(void)
+{
+    TIM_SetCounter(TIM4, 0);
+    TIM_Cmd(TIM4, ENABLE);
+}
+```
+
+---
+
+## 八、常用 API 对照表
+
+| 功能 | 关键 API |
+|------|----------|
+| 定时基 | `TIM_TimeBaseInit` |
+| PWM / 输出比较 | `TIM_OC1Init`, `TIM_SetCompare1` |
+| 输入捕获 | `TIM_ICInit`, `TIM_GetCapture1` |
+| 选触发源 | `TIM_SelectInputTrigger` |
+| 选从模式 | `TIM_SelectSlaveMode` |
+| 主模式输出 | `TIM_SelectOutputTrigger` |
+| 使能主从 | `TIM_SelectMasterSlaveMode` |
+| 读计数值 | `TIM_GetCounter`, `TIM_SetCounter` |
+| 开中断 | `TIM_ITConfig` |
+| 清中断 | `TIM_ClearITPendingBit` |
+| 单脉冲 | `TIM_SelectOnePulseMode` |
+
+### 关键寄存器概念
+
+```
+TIMx_PSC    预分频
+TIMx_ARR    自动重装载（周期）
+TIMx_CNT    当前计数值
+TIMx_CCR1   比较/捕获寄存器 1
+TIMx_CCER   通道使能、极性
+TIMx_CCMR   模式：输出比较 or 输入捕获
+TIMx_SMCR   从模式控制（SMS、TS）
+TIMx_CR2    主模式控制（MMS = TRGO 源）
+```
+
+---
+
+## 九、配置思路 checklist
+
+配定时器功能前，按顺序回答这 4 个问题：
+
+1. **定时器用来干什么？**  
+   → 定时中断 / PWM / 测时间 / 计脉冲
+
+2. **PSC 和 ARR 怎么设？**  
+   → 算出 tick 分辨率和溢出周期
+
+3. **要不要和外部信号联动？**  
+   → 要：配触发源 + 从模式；不要：普通 Time Base
+
+4. **要不要触发别的外设？**  
+   → 要：配主模式 TRGO（如触发 ADC）
+
+### 学习实验建议
+
+| 阶段 | 实验 |
+|------|------|
+| 入门 | TIM 1ms/10ms 中断 + 串口打印 |
+| 进阶 | TIM PWM 驱动 LED 呼吸灯 |
+| 进阶 | TIM 输入捕获测外部方波频率 |
+| 高级 | 主从级联实现 1 秒长定时 |
+| 高级 | 外部时钟模式统计脉冲数 |
+
+---
+
+## 附录：概念速记
+
+| 概念 | 一句话 |
+|------|--------|
+| **定时器** | 硬件计数器，按时钟 tick 计数 |
+| **输出比较** | CNT 数到 CCR 时 **主动改变引脚** → PWM、脉冲 |
+| **输入捕获** | 外部边沿来时 **记下 CNT** → 测脉宽、频率 |
+| **触发源** | 定时器「听谁的信号」 |
+| **从模式** | 听到信号后「怎么数」 |
+| **主模式** | 自己「通知谁」 |
+
+**方向记忆**：
+
+- **输出比较** = MCU 告诉世界「到点了」（主动输出）
+- **输入捕获** = 世界告诉 MCU「刚才那一刻是几点」（被动记录）
+
+---

@@ -5,7 +5,8 @@
     "index",
     "oc",
     "ic",
-    "encoder"
+    "encoder",
+    "timer-guide"
 
   ],
   "defaultOpen": true
