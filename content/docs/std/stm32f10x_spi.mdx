@@ -248,7 +248,7 @@ typedef struct
 
 ```c
 /**
- * @brief  将SPIx外设寄存器复位为默认值
+ * @brief  将 SPI/I2S 所有寄存器恢复为复位默认值，用于重新配置前清空旧状态
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @retval 无
  * @example
@@ -258,13 +258,15 @@ void SPI_I2S_DeInit(SPI_TypeDef* SPIx);
 ```
 
 **功能说明：**
-将指定的SPI/I2S外设的所有寄存器复位为默认值，通常在重新配置外设前调用。
+- 调用后外设回到上电默认，SPI 与 I2S 模式均被清除
+- 切换工作模式（如 SPI 改 I2S）或更换引脚复用前先 DeInit
+- 异常通信后可配合重新 Init 恢复
 
 ### 2. SPI_Init
 
 ```c
 /**
- * @brief  根据SPI_InitStruct中的参数初始化SPIx外设
+ * @brief  初始化 SPI 工作参数（主从、时钟、数据位宽等），是 Flash/屏/传感器通信的基础
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @param  SPI_InitStruct: 指向SPI_InitTypeDef结构体的指针，包含SPI的配置信息
  * @retval 无
@@ -278,13 +280,15 @@ void SPI_Init(SPI_TypeDef* SPIx, SPI_InitTypeDef* SPI_InitStruct);
 ```
 
 **功能说明：**
-根据SPI_InitStruct结构体中指定的参数初始化SPI外设，配置工作模式、数据大小、时钟参数等。
+- 配置全双工/半双工、CPOL/CPHA、波特率分频、8/16 位帧
+- 主机模式需匹配从设备时钟极性与相位
+- 需在 GPIO 与时钟使能后、SPI_Cmd 前调用
 
 ### 3. I2S_Init
 
 ```c
 /**
- * @brief  根据I2S_InitStruct中的参数初始化SPIx外设的I2S功能
+ * @brief  初始化 I2S 音频参数（标准、采样率、数据格式），将 SPI 外设切换为 I2S 音频传输
  * @param  SPIx: 选择SPI外设，可以是SPI2或SPI3
  * @param  I2S_InitStruct: 指向I2S_InitTypeDef结构体的指针，包含I2S的配置信息
  * @retval 无
@@ -298,13 +302,15 @@ void I2S_Init(SPI_TypeDef* SPIx, I2S_InitTypeDef* I2S_InitStruct);
 ```
 
 **功能说明：**
-根据I2S_InitStruct结构体中指定的参数初始化SPI外设的I2S功能，配置音频标准、数据格式、频率等。
+- 选择 Philips/MSB/LSB 标准及 16/24/32 位音频格式
+- 主机 TX 向 DAC/功放送数，主机 RX 从 ADC/麦克风采集
+- 与 SPI_Init 互斥，同一外设只能处于 SPI 或 I2S 模式
 
 ### 4. SPI_StructInit
 
 ```c
 /**
- * @brief  将SPI_InitStruct结构体各成员设置为默认值
+ * @brief  将 SPI_InitTypeDef 成员填为安全默认值，避免未赋值字段导致随机配置
  * @param  SPI_InitStruct: 指向SPI_InitTypeDef结构体的指针
  * @retval 无
  * @example
@@ -315,13 +321,15 @@ void SPI_StructInit(SPI_InitTypeDef* SPI_InitStruct);
 ```
 
 **功能说明：**
-将SPI初始化结构体的各个成员设置为默认值，可在自定义配置前调用。
+- 默认 8 位、主机、全双工、软件 NSS 等常用设置
+- 先 StructInit 再按需修改，减少遗漏
+- 适合快速搭建可工作的 SPI 初始模板
 
 ### 5. I2S_StructInit
 
 ```c
 /**
- * @brief  将I2S_InitStruct结构体各成员设置为默认值
+ * @brief  将 I2S_InitTypeDef 成员填为安全默认值，避免未赋值字段导致随机配置
  * @param  I2S_InitStruct: 指向I2S_InitTypeDef结构体的指针
  * @retval 无
  * @example
@@ -332,13 +340,15 @@ void I2S_StructInit(I2S_InitTypeDef* I2S_InitStruct);
 ```
 
 **功能说明：**
-将I2S初始化结构体的各个成员设置为默认值，可在自定义配置前调用。
+- 默认 Philips 标准、16 位扩展、48kHz 等常见音频参数
+- 先 StructInit 再修改 Mode/Standard/Frequency
+- 降低 I2S 多字段配置的出错概率
 
 ### 6. SPI_Cmd
 
 ```c
 /**
- * @brief  使能或禁用指定的SPI外设
+ * @brief  启动或停止 SPI 外设；ENABLE 后开始移位收发，DISABLE 后停止
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @param  NewState: SPI外设的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -350,13 +360,15 @@ void SPI_Cmd(SPI_TypeDef* SPIx, FunctionalState NewState);
 ```
 
 **功能说明：**
-使能或禁用指定的SPI外设，在配置完成后需要调用此函数使能外设。
+- SPI_Init 完成后必须 ENABLE 才能 SendData/ReceiveData
+- DISABLE 可用于低功耗或切换 NSS 片选前暂停时钟
+- 全双工下每发送一字节同时接收一字节
 
 ### 7. I2S_Cmd
 
 ```c
 /**
- * @brief  使能或禁用指定的I2S外设
+ * @brief  启动或停止 I2S 功能；ENABLE 后开始音频流传输，DISABLE 后静音停止
  * @param  SPIx: 选择SPI外设，可以是SPI2或SPI3
  * @param  NewState: I2S外设的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -368,13 +380,15 @@ void I2S_Cmd(SPI_TypeDef* SPIx, FunctionalState NewState);
 ```
 
 **功能说明：**
-使能或禁用指定SPI外设的I2S功能，在I2S配置完成后需要调用此函数。
+- I2S_Init 后调用以开始向编解码器送/收采样数据
+- 配合 DMA 可实现连续音频流而不占 CPU
+- DISABLE 常用于停止播放或切换采样率前
 
 ### 8. SPI_I2S_ITConfig
 
 ```c
 /**
- * @brief  使能或禁用指定的SPI/I2S中断
+ * @brief  打开/关闭 SPI/I2S 中断（TXE/RXNE 等），配合 NVIC 实现异步收发
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @param  SPI_I2S_IT: 指定要配置的SPI/I2S中断类型
  * @param  NewState: 中断的新状态，可以是ENABLE或DISABLE
@@ -387,13 +401,15 @@ void SPI_I2S_ITConfig(SPI_TypeDef* SPIx, uint8_t SPI_I2S_IT, FunctionalState New
 ```
 
 **功能说明：**
-使能或禁用指定的SPI/I2S中断，可配置发送缓冲区空中断、接收缓冲区非空中断等。
+- TXE：发送缓冲空，可写入下一字节
+- RXNE：接收缓冲非空，应读取 DR
+- 中断驱动适合不定长或高吞吐 SPI 通信
 
 ### 9. SPI_I2S_DMACmd
 
 ```c
 /**
- * @brief  使能或禁用指定SPI/I2S的DMA传输请求
+ * @brief  打开/关闭 SPI/I2S 的 DMA 请求，实现大批量数据无 CPU 参与的连续搬运
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @param  SPI_I2S_DMAReq: 指定要配置的DMA传输请求
  * @param  NewState: DMA请求的新状态，可以是ENABLE或DISABLE
@@ -406,13 +422,15 @@ void SPI_I2S_DMACmd(SPI_TypeDef* SPIx, uint16_t SPI_I2S_DMAReq, FunctionalState 
 ```
 
 **功能说明：**
-使能或禁用指定SPI/I2S的DMA传输请求，可配置DMA发送和接收请求。
+- 适合 LCD 刷屏、Flash 读写、I2S 音频缓冲等大块传输
+- 需先配置 DMA 通道指向 SPI DR 寄存器
+- Tx/Rx 可独立使能，全双工需双通道配合
 
 ### 10. SPI_I2S_SendData
 
 ```c
 /**
- * @brief  通过SPIx外设发送一个数据
+ * @brief  向 DR 写入待发数据，硬件在 SCK 驱动下逐位串行发出
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @param  Data: 要发送的数据
  * @retval 无
@@ -423,13 +441,15 @@ void SPI_I2S_SendData(SPI_TypeDef* SPIx, uint16_t Data);
 ```
 
 **功能说明：**
-通过指定的SPI/I2S外设发送一个数据，数据会被写入发送缓冲区。
+- 写入前确认 TXE 置位，避免覆盖未发送数据
+- 全双工模式下写 DR 同时触发时钟接收对端数据
+- 8 位模式下仅低 8 位有效
 
 ### 11. SPI_I2S_ReceiveData
 
 ```c
 /**
- * @brief  返回SPIx外设最近接收到的数据
+ * @brief  从 DR 读取最近接收到的数据，全双工或只读模式下使用
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @retval 接收到的数据
  * @example
@@ -439,13 +459,15 @@ uint16_t SPI_I2S_ReceiveData(SPI_TypeDef* SPIx);
 ```
 
 **功能说明：**
-返回指定SPI/I2S外设最近接收到的数据，从接收缓冲区读取数据。
+- 读取前确认 RXNE 置位
+- 全双工发送时每次 SendData 后通常需 Read 丢弃/获取回读
+- 读 DR 自动清除 RXNE
 
 ### 12. SPI_NSSInternalSoftwareConfig
 
 ```c
 /**
- * @brief  设置SPIx的内部NSS信号状态
+ * @brief  在软件 NSS 模式下手动置位/复位内部片选，选中或释放 SPI 从设备
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @param  SPI_NSSInternalSoft: 指定内部NSS信号状态
  * @retval 无
@@ -456,13 +478,15 @@ void SPI_NSSInternalSoftwareConfig(SPI_TypeDef* SPIx, uint16_t SPI_NSSInternalSo
 ```
 
 **功能说明：**
-在软件NSS管理模式下，设置内部NSS信号的状态，用于主机模式的片选控制。
+- Set 通常表示片选有效（低有效硬件需配合 GPIO）
+- 多从机时软件控制 NSS 切换目标芯片
+- 需在 SPI_NSS_Soft 模式下使用
 
 ### 13. SPI_SSOutputCmd
 
 ```c
 /**
- * @brief  使能或禁用指定SPI的SS输出
+ * @brief  控制 NSS 引脚作为 SS 输出驱动从机片选，多从机硬件片选场景使用
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @param  NewState: SS输出的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -473,13 +497,15 @@ void SPI_SSOutputCmd(SPI_TypeDef* SPIx, FunctionalState NewState);
 ```
 
 **功能说明：**
-使能或禁用指定SPI的SS输出功能，用于主机模式下的多从机管理。
+- 主机模式下使 NSS 引脚输出片选信号
+- 与硬件 NSS 管理配合，自动拉低选中从机
+- 单从机且用 GPIO 片选时通常不需要此功能
 
 ### 14. SPI_DataSizeConfig
 
 ```c
 /**
- * @brief  配置指定SPI的数据大小
+ * @brief  运行时切换 SPI 帧长（8/16 位），适配不同外设的数据宽度要求
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @param  SPI_DataSize: 指定SPI数据大小
  * @retval 无
@@ -491,13 +517,15 @@ void SPI_DataSizeConfig(SPI_TypeDef* SPIx, uint16_t SPI_DataSize);
 ```
 
 **功能说明：**
-动态配置指定SPI的数据大小，可在运行时切换8位和16位数据模式。
+- 8 位常用于 Flash、传感器；16 位用于部分 ADC/屏
+- 切换前建议 DISABLE SPI，避免帧边界错乱
+- 与 Init 中 DataSize 作用相同，但可动态修改
 
 ### 15. SPI_TransmitCRC
 
 ```c
 /**
- * @brief  发送SPIx的CRC值
+ * @brief  触发发送 CRC 寄存器中的校验值，用于帧尾完整性验证
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @retval 无
  * @example
@@ -507,13 +535,15 @@ void SPI_TransmitCRC(SPI_TypeDef* SPIx);
 ```
 
 **功能说明：**
-发送当前计算的CRC值，通常在数据传输完成后调用进行校验。
+- 数据发送完毕后调用，发出硬件计算的 CRC
+- 对端可用相同多项式验证传输正确性
+- 需先使能 CalculateCRC 并完成数据阶段
 
 ### 16. SPI_CalculateCRC
 
 ```c
 /**
- * @brief  使能或禁用指定SPI的CRC计算
+ * @brief  打开/关闭硬件 CRC 累加，对后续发送/接收数据自动计算校验值
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @param  NewState: CRC计算的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -525,13 +555,15 @@ void SPI_CalculateCRC(SPI_TypeDef* SPIx, FunctionalState NewState);
 ```
 
 **功能说明：**
-使能或禁用指定SPI的CRC计算功能，用于数据传输的完整性检查。
+- 使能后对每帧数据硬件更新 CRC 寄存器
+- 适合工业 SPI 协议要求数据完整性校验
+- 多项式由 CRCPR 配置，默认常用 0x0007
 
 ### 17. SPI_GetCRC
 
 ```c
 /**
- * @brief  返回指定SPI的发送或接收CRC寄存器值
+ * @brief  读取 Tx/Rx CRC 寄存器值，用于发送前取出或接收后比对校验
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @param  SPI_CRC: 指定要读取的CRC寄存器
  * @retval CRC寄存器值
@@ -543,13 +575,15 @@ uint16_t SPI_GetCRC(SPI_TypeDef* SPIx, uint8_t SPI_CRC);
 ```
 
 **功能说明：**
-返回指定SPI的发送或接收CRC寄存器值，用于读取计算出的CRC校验码。
+- SPI_CRC_Tx：取发送侧累加结果供 TransmitCRC 发出
+- SPI_CRC_Rx：取接收侧结果与对端 CRC 比较
+- 需在 CalculateCRC 使能且传输完成后读取
 
 ### 18. SPI_GetCRCPolynomial
 
 ```c
 /**
- * @brief  返回指定SPI的CRC多项式寄存器值
+ * @brief  读取当前 CRC 多项式配置，确认与对端校验算法一致
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @retval CRC多项式寄存器值
  * @example
@@ -559,13 +593,15 @@ uint16_t SPI_GetCRCPolynomial(SPI_TypeDef* SPIx);
 ```
 
 **功能说明：**
-返回指定SPI的CRC多项式寄存器值，获取当前使用的CRC计算多项式。
+- 返回 CRCPR 寄存器中的多项式值
+- 调试 CRC 不匹配时可核对双方多项式
+- 写入 CRCPR 需在 CRC 计算关闭时进行
 
 ### 19. SPI_BiDirectionalLineConfig
 
 ```c
 /**
- * @brief  选择指定SPI单向模式的数据传输方向
+ * @brief  在单线双向模式下选择当前引脚方向为发送或接收
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @param  SPI_Direction: 指定数据传输方向
  * @retval 无
@@ -577,13 +613,15 @@ void SPI_BiDirectionalLineConfig(SPI_TypeDef* SPIx, uint16_t SPI_Direction);
 ```
 
 **功能说明：**
-在单线双向模式下，选择数据传输方向（发送或接收）。
+- 半双工单线模式：一根数据线分时收发
+- 发送前切 Tx，接收前切 Rx
+- 节省引脚，常见于单线 Flash 或传感器
 
 ### 20. SPI_I2S_GetFlagStatus
 
 ```c
 /**
- * @brief  检查指定的SPI/I2S标志位状态
+ * @brief  查询 SPI/I2S 标志位（TXE/RXNE/BSY 等），判断收发就绪或忙状态
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @param  SPI_I2S_FLAG: 指定要检查的标志位
  * @retval 标志位状态（SET或RESET）
@@ -597,13 +635,15 @@ FlagStatus SPI_I2S_GetFlagStatus(SPI_TypeDef* SPIx, uint16_t SPI_I2S_FLAG);
 ```
 
 **功能说明：**
-检查指定SPI/I2S标志位的状态，用于查询外设当前状态。
+- TXE：可写 DR；RXNE：应读 DR
+- BSY：移位器忙，连续传输间需等 BSY 清零
+- 轮询收发与错误检测的基础 API
 
 ### 21. SPI_I2S_ClearFlag
 
 ```c
 /**
- * @brief  清除指定SPI/I2S的标志位
+ * @brief  清除 SPI/I2S 可清标志（如 CRCERR），避免错误状态持续
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @param  SPI_I2S_FLAG: 指定要清除的标志位
  * @retval 无
@@ -614,13 +654,15 @@ void SPI_I2S_ClearFlag(SPI_TypeDef* SPIx, uint16_t SPI_I2S_FLAG);
 ```
 
 **功能说明：**
-清除指定SPI/I2S的标志位，通常用于清除错误标志。
+- 主要用于清除 CRCERR、MODF 等错误标志
+- TXE/RXNE 等由读写 DR 自动清除
+- 错误恢复后继续通信前必须清除
 
 ### 22. SPI_I2S_GetITStatus
 
 ```c
 /**
- * @brief  检查指定的SPI/I2S中断状态
+ * @brief  在中断服务程序中判断具体 SPI/I2S 中断源是否挂起
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @param  SPI_I2S_IT: 指定要检查的中断类型
  * @retval 中断状态（SET或RESET）
@@ -634,13 +676,15 @@ ITStatus SPI_I2S_GetITStatus(SPI_TypeDef* SPIx, uint8_t SPI_I2S_IT);
 ```
 
 **功能说明：**
-检查指定SPI/I2S中断的状态，在中断服务函数中使用以确定中断源。
+- 同时检查中断使能与挂起位
+- ISR 中区分 TXE/RXNE/ERR 分支处理
+- 比 GetFlagStatus 更适合中断上下文
 
 ### 23. SPI_I2S_ClearITPendingBit
 
 ```c
 /**
- * @brief  清除指定SPI/I2S的中断挂起位
+ * @brief  清除 SPI/I2S 中断挂起位，ISR 处理完毕后调用以免重复进中断
  * @param  SPIx: 选择SPI外设，可以是SPI1、SPI2或SPI3
  * @param  SPI_I2S_IT: 指定要清除的中断类型
  * @retval 无
@@ -651,7 +695,9 @@ void SPI_I2S_ClearITPendingBit(SPI_TypeDef* SPIx, uint8_t SPI_I2S_IT);
 ```
 
 **功能说明：**
-清除指定SPI/I2S的中断挂起位，在中断服务函数中调用以清除中断标志。
+- 处理完 CRCERR、MODF 等错误中断后清除
+- TXE/RXNE 通常读/写 DR 即清除，部分需显式调用
+- 未清除会导致中断反复触发
 
 ## 使用示例
 

@@ -69,7 +69,7 @@ typedef enum
 
 ```c
 /**
- * @brief  将GPIO外设寄存器重设为默认值
+ * @brief  将指定 GPIO 端口寄存器恢复为复位默认值，用于切换引脚用途或重新配置前清空旧模式
  * @param  GPIOx: 选择要重置的GPIO外设
  * @retval 无
  * @example
@@ -78,11 +78,16 @@ typedef enum
 void GPIO_DeInit(GPIO_TypeDef* GPIOx);
 ```
 
+**功能说明：**
+- 整端口回到浮空输入等默认状态，不会自动关闭 RCC 时钟
+- 从输出改为复用/模拟输入等场景，可先 DeInit 再 GPIO_Init
+- 仅影响 GPIOx 对应端口，AFIO 重映射需单独处理
+
 ### 2.GPIO_AFIODeInit
 
 ```c
 /**
- * @brief  将AFIO外设寄存器重设为默认值
+ * @brief  将 AFIO 寄存器恢复为默认值，清除引脚重映射与 EXTI 端口选择等复用配置
  * @param  无
  * @retval 无
  * @example
@@ -91,11 +96,16 @@ void GPIO_DeInit(GPIO_TypeDef* GPIOx);
 void GPIO_AFIODeInit(void);
 ```
 
+**功能说明：**
+- 清除所有重映射与 EXTI 线到端口的映射关系
+- 系统级复位或调试时恢复引脚默认功能
+- 调用前需使能 AFIO 时钟（`RCC_APB2Periph_AFIO`）
+
 ### 3.GPIO_Init
 
 ```c
 /**
- * @brief  根据GPIO_InitStruct中指定的参数初始化GPIOx外设
+ * @brief  按结构体一次性配置引脚模式、速度与方向，是 LED、按键、外设复用等应用的基础步骤
  * @param  GPIOx: 选择要初始化的GPIO外设
  * @param  GPIO_InitStruct: 指向GPIO_InitTypeDef结构的指针，包含指定GPIO外设的配置信息
  * @retval 无
@@ -109,11 +119,16 @@ void GPIO_AFIODeInit(void);
 void GPIO_Init(GPIO_TypeDef* GPIOx, GPIO_InitTypeDef* GPIO_InitStruct);
 ```
 
+**功能说明：**
+- `GPIO_Pin` 可位或组合，一次配置多引脚
+- 输出模式需根据负载与边沿速率选 `GPIO_Speed`
+- 使用前必须先 `RCC_APB2PeriphClockCmd` 使能对应 GPIO 时钟
+
 ### 4.GPIO_StructInit
 
 ```c
 /**
- * @brief  将GPIO_InitStruct中的每个参数设为默认值
+ * @brief  将 GPIO_InitTypeDef 填为库默认安全值，避免未初始化字段导致随机引脚配置
  * @param  GPIO_InitStruct: 指向GPIO_InitTypeDef结构的指针，将被初始化
  * @retval 无
  * @example
@@ -123,11 +138,16 @@ void GPIO_Init(GPIO_TypeDef* GPIOx, GPIO_InitTypeDef* GPIO_InitStruct);
 void GPIO_StructInit(GPIO_InitTypeDef* GPIO_InitStruct);
 ```
 
+**功能说明：**
+- 默认浮空输入、2MHz，适合作为模板再改个别字段
+- 推荐在 `GPIO_Init` 前调用，减少遗漏成员的风险
+- 不会修改硬件，仅填充结构体
+
 ### 5.GPIO_ReadInputDataBit
 
 ```c
 /**
- * @brief  读取指定GPIO端口的输入数据位
+ * @brief  读取单路输入引脚电平，用于按键检测、传感器数字量采样等场景
  * @param  GPIOx: 选择GPIO外设
  * @param  GPIO_Pin: 选择要读取的GPIO引脚
  * @retval 输入端口位值（Bit_SET或Bit_RESET）
@@ -137,11 +157,16 @@ void GPIO_StructInit(GPIO_InitTypeDef* GPIO_InitStruct);
 uint8_t GPIO_ReadInputDataBit(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
 ```
 
+**功能说明：**
+- 读 IDR 寄存器对应位，引脚须先配置为输入模式
+- 返回 `Bit_SET`/`Bit_RESET`，便于与逻辑电平比较
+- 比读整端口再掩码更直观，适合单键轮询
+
 ### 6.GPIO_ReadInputData
 
 ```c
 /**
- * @brief  读取指定GPIO端口的输入数据
+ * @brief  一次性读取整端口 16 路输入状态，适合矩阵键盘或并行总线批量采样
  * @param  GPIOx: 选择GPIO外设
  * @retval GPIO输入数据端口值
  * @example
@@ -150,11 +175,16 @@ uint8_t GPIO_ReadInputDataBit(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
 uint16_t GPIO_ReadInputData(GPIO_TypeDef* GPIOx);
 ```
 
+**功能说明：**
+- 返回 16 位 IDR 值，每位对应一个引脚
+- 多引脚同时扫描时比逐位读取更高效
+- 读后自行用位掩码解析各引脚
+
 ### 7.GPIO_ReadOutputDataBit
 
 ```c
 /**
- * @brief  读取指定GPIO端口的输出数据位
+ * @brief  回读输出锁存器中单引脚状态，用于确认写操作是否生效或做读-改-写前检查
  * @param  GPIOx: 选择GPIO外设
  * @param  GPIO_Pin: 选择要读取的GPIO引脚
  * @retval 输出端口位值（Bit_SET或Bit_RESET）
@@ -164,11 +194,16 @@ uint16_t GPIO_ReadInputData(GPIO_TypeDef* GPIOx);
 uint8_t GPIO_ReadOutputDataBit(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
 ```
 
+**功能说明：**
+- 读 ODR 而非引脚实际电平（开漏外接上拉时可能不同）
+- 翻转单 bit 前可先读再写，避免影响同端口其他引脚
+- 输出模式下常用
+
 ### 8.GPIO_ReadOutputData
 
 ```c
 /**
- * @brief  读取指定GPIO端口的输出数据
+ * @brief  读取整端口输出锁存值，便于批量保存或恢复 IO 状态
  * @param  GPIOx: 选择GPIO外设
  * @retval GPIO输出数据端口值
  * @example
@@ -177,11 +212,16 @@ uint8_t GPIO_ReadOutputDataBit(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
 uint16_t GPIO_ReadOutputData(GPIO_TypeDef* GPIOx);
 ```
 
+**功能说明：**
+- 返回 ODR 完整 16 位，反映上次写入的输出值
+- 配合 `GPIO_Write` 可实现端口级快照与恢复
+- 调试时核对软件期望输出与实际锁存
+
 ### 9.GPIO_SetBits
 
 ```c
 /**
- * @brief  设置指定GPIO端口的指定引脚为高电平
+ * @brief  将指定引脚驱动为高电平，常用于点亮 LED、置位控制线或片选有效
  * @param  GPIOx: 选择GPIO外设
  * @param  GPIO_Pin: 选择要设置的GPIO引脚
  * @retval 无
@@ -191,11 +231,16 @@ uint16_t GPIO_ReadOutputData(GPIO_TypeDef* GPIOx);
 void GPIO_SetBits(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
 ```
 
+**功能说明：**
+- 通过 BSRR 置位，不影响同端口其他引脚
+- 引脚须已配置为推挽/开漏输出或复用输出
+- 可多引脚位或，一次置高多路
+
 ### 10.GPIO_ResetBits
 
 ```c
 /**
- * @brief  清除指定GPIO端口的指定引脚为低电平
+ * @brief  将指定引脚驱动为低电平，常用于熄灭 LED、释放片选或拉低使能脚
  * @param  GPIOx: 选择GPIO外设
  * @param  GPIO_Pin: 选择要清除的GPIO引脚
  * @retval 无
@@ -205,11 +250,16 @@ void GPIO_SetBits(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
 void GPIO_ResetBits(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
 ```
 
+**功能说明：**
+- 通过 BSRR 复位对应位，原子操作不读-改-写
+- 与 `GPIO_SetBits` 配对实现闪烁、脉冲
+- 开漏输出时低电平为有效驱动
+
 ### 11.GPIO_WriteBit
 
 ```c
 /**
- * @brief  设置或清除指定的数据端口位
+ * @brief  按 Bit_SET/Bit_RESET 写入单引脚，适合根据布尔变量统一控制高低电平
  * @param  GPIOx: 选择GPIO外设
  * @param  GPIO_Pin: 选择要写入的GPIO引脚
  * @param  BitVal: 选择要写入的值（Bit_SET或Bit_RESET）
@@ -220,11 +270,16 @@ void GPIO_ResetBits(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
 void GPIO_WriteBit(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin, BitAction BitVal);
 ```
 
+**功能说明：**
+- 等价于条件调用 Set/Reset，接口更统一
+- `BitVal` 仅接受 `Bit_SET` 或 `Bit_RESET`
+- 封装驱动层时常用此函数传递开关状态
+
 ### 12.GPIO_Write
 
 ```c
 /**
- * @brief  向指定的GPIO数据端口写入数据
+ * @brief  向 ODR 整字写入，一次更新端口多路输出，适合并行数据或位图式控制
  * @param  GPIOx: 选择GPIO外设
  * @param  PortVal: 要写入端口输出数据寄存器的值
  * @retval 无
@@ -234,11 +289,16 @@ void GPIO_WriteBit(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin, BitAction BitVal);
 void GPIO_Write(GPIO_TypeDef* GPIOx, uint16_t PortVal);
 ```
 
+**功能说明：**
+- 直接覆盖 ODR 低 16 位，未置位引脚会被清零
+- 七段数码管、并行 DAC 等需要整端口图案时常用
+- 若只需改部分位，优先用 Set/Reset 避免误改其他引脚
+
 ### 13.GPIO_PinLockConfig
 
 ```c
 /**
- * @brief  锁定GPIO引脚配置寄存器
+ * @brief  锁定指定引脚的配置寄存器，防止运行中被误写导致引脚功能漂移
  * @param  GPIOx: 选择GPIO外设
  * @param  GPIO_Pin: 选择要锁定的GPIO引脚
  * @retval 无
@@ -248,11 +308,16 @@ void GPIO_Write(GPIO_TypeDef* GPIOx, uint16_t PortVal);
 void GPIO_PinLockConfig(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
 ```
 
+**功能说明：**
+- 锁定后 MODE/CFG 等配置不可再改，直至复位
+- 安全关键或防篡改场景（如 JTAG 引脚）可考虑使用
+- 锁定前须完成最终 `GPIO_Init` 配置
+
 ### 14.GPIO_EventOutputConfig
 
 ```c
 /**
- * @brief  选择GPIO引脚用作事件输出
+ * @brief  选择 EVENTOUT 信号从哪一路 GPIO 输出，用于将内部事件路由到外部观测或触发
  * @param  GPIO_PortSource: 选择用作事件输出的GPIO端口源
  * @param  GPIO_PinSource: 选择用作事件输出的GPIO引脚源
  * @retval 无
@@ -262,11 +327,16 @@ void GPIO_PinLockConfig(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin);
 void GPIO_EventOutputConfig(uint8_t GPIO_PortSource, uint8_t GPIO_PinSource);
 ```
 
+**功能说明：**
+- 需配合 `GPIO_EventOutputCmd` 才真正输出事件
+- 事件源由其他外设（如 RTC、USB 等）选择，本函数只定引脚
+- 调试时钟或内部事件时可用于示波器抓取
+
 ### 15.GPIO_EventOutputCmd
 
 ```c
 /**
- * @brief  使能或失能事件输出
+ * @brief  打开或关闭 EVENTOUT 输出，使能后选定引脚对外送出内部事件脉冲
  * @param  NewState: 事件输出新状态（ENABLE或DISABLE）
  * @retval 无
  * @example
@@ -275,11 +345,16 @@ void GPIO_EventOutputConfig(uint8_t GPIO_PortSource, uint8_t GPIO_PinSource);
 void GPIO_EventOutputCmd(FunctionalState NewState);
 ```
 
+**功能说明：**
+- 须先 `GPIO_EventOutputConfig` 指定引脚
+- 失能后引脚恢复普通 GPIO 控制
+- 低功耗或量产时可 DISABLE 避免多余翻转
+
 ### 16.GPIO_PinRemapConfig
 
 ```c
 /**
- * @brief  改变指定引脚的映射
+ * @brief  将 USART/SPI/TIM 等外设映射到备用引脚，解决默认引脚被占用或与 PCB 不符的问题
  * @param  GPIO_Remap: 选择要配置的重映射
  * @param  NewState: 重映射新状态（ENABLE或DISABLE）
  * @retval 无
@@ -289,11 +364,16 @@ void GPIO_EventOutputCmd(FunctionalState NewState);
 void GPIO_PinRemapConfig(uint32_t GPIO_Remap, FunctionalState NewState);
 ```
 
+**功能说明：**
+- 部分重映射互斥，需查数据手册 Remap 表
+- 使能 AFIO 时钟后调用，并重新 `GPIO_Init` 复用模式
+- DISABLE 可恢复默认引脚映射
+
 ### 17.GPIO_EXTILineConfig
 
 ```c
 /**
- * @brief  选择GPIO引脚用作外部中断线
+ * @brief  将 EXTI 线连接到指定端口引脚，是外部中断/事件与 GPIO 之间的桥梁
  * @param  GPIO_PortSource: 选择用作外部中断线的GPIO端口源
  * @param  GPIO_PinSource: 选择用作外部中断线的GPIO引脚源
  * @retval 无
@@ -303,11 +383,16 @@ void GPIO_PinRemapConfig(uint32_t GPIO_Remap, FunctionalState NewState);
 void GPIO_EXTILineConfig(uint8_t GPIO_PortSource, uint8_t GPIO_PinSource);
 ```
 
+**功能说明：**
+- 每条 EXTI 线同一时刻只能连一个端口（如 PA0 与 PB0 二选一）
+- 须配合 `EXTI_Init` 与 NVIC 完成中断配置
+- 使能 AFIO 时钟；引脚建议配置上/下拉或浮空输入
+
 ### 18.GPIO_ETH_MediaInterfaceConfig
 
 ```c
 /**
- * @brief  配置以太网媒体接口
+ * @brief  选择以太网 MAC 使用 MII 还是 RMII 与 PHY 通信，决定所需 GPIO 数量与连线方式
  * @param  GPIO_ETH_MediaInterface: 选择以太网媒体接口
  * @retval 无
  * @example
@@ -315,6 +400,11 @@ void GPIO_EXTILineConfig(uint8_t GPIO_PortSource, uint8_t GPIO_PinSource);
  */
 void GPIO_ETH_MediaInterfaceConfig(uint32_t GPIO_ETH_MediaInterface);
 ```
+
+**功能说明：**
+- RMII 引脚更少，多数开发板默认 RMII
+- 须在 ETH 与外设 GPIO 初始化前配置
+- 仅 connectivity 系列（如 STM32F107）具备 ETH 外设
 
 ## 常用宏定义
 

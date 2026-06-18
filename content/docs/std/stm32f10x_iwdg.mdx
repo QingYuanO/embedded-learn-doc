@@ -72,7 +72,7 @@ STM32F10x IWDG外设包含以下主要寄存器：
 
 ```c
 /**
- * @brief  使能或禁用IWDG写访问
+ * @brief  解锁/锁定 IWDG 寄存器写保护，配置前须先使能写访问
  * @param  IWDG_WriteAccess: 写访问状态
  *         该参数可以是以下值之一：
  *           @arg IWDG_WriteAccess_Enable: 使能写访问
@@ -80,19 +80,20 @@ STM32F10x IWDG外设包含以下主要寄存器：
  * @retval 无
  * @example
  *     IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);
- *     使能IWDG写访问以配置IWDG
  */
 void IWDG_WriteAccessCmd(uint16_t IWDG_WriteAccess);
 ```
 
 **功能说明：**
-控制对IWDG寄存器的写访问权限，配置IWDG前必须使能写访问。
+- 向键寄存器写入 0x5555 解锁，写入 0x0000 重新锁定
+- 修改预分频器或重装载值前必须先 Enable
+- 配置完成并 IWDG_Enable 后可 Disable 防止误写
 
 ### 2. IWDG_SetPrescaler
 
 ```c
 /**
- * @brief  设置IWDG预分频器
+ * @brief  设置 IWDG 预分频系数（4~256），与重装载值共同决定超时时间
  * @param  IWDG_Prescaler: IWDG预分频器值
  *         该参数可以是以下值之一：
  *           @arg IWDG_Prescaler_4: 预分频器4
@@ -105,70 +106,74 @@ void IWDG_WriteAccessCmd(uint16_t IWDG_WriteAccess);
  * @retval 无
  * @example
  *     IWDG_SetPrescaler(IWDG_Prescaler_64);
- *     设置IWDG预分频器为64
  */
 void IWDG_SetPrescaler(uint8_t IWDG_Prescaler);
 ```
 
 **功能说明：**
-设置IWDG的预分频器值，用于调整看门狗的超时时间。
+- 须在写访问使能后、IWDG_Enable 之前调用
+- 超时时间 = (Reload+1) × Prescaler / LSI_FREQ（LSI 约 40 kHz）
+- 写入后应等待 IWDG_FLAG_PVU 清零确认更新完成
 
 ### 3. IWDG_SetReload
 
 ```c
 /**
- * @brief  设置IWDG重装载值
+ * @brief  设置 IWDG 重装载值（0~0xFFF），决定计数器递减到 0 前的计数值
  * @param  Reload: IWDG重装载值，范围0-0xFFF
  * @retval 无
  * @example
  *     IWDG_SetReload(0xFFF);
- *     设置IWDG重装载值为最大值
  */
 void IWDG_SetReload(uint16_t Reload);
 ```
 
 **功能说明：**
-设置IWDG的重装载值，与预分频器一起决定看门狗的超时时间。
+- 与预分频器配合计算超时：值越大超时越长，最大约 26 s（Prescaler=256, Reload=0xFFF）
+- 须在写访问使能后调用，写入后等待 IWDG_FLAG_RVU 清零
+- IWDG_ReloadCounter 喂狗时计数器重新加载为此值
 
 ### 4. IWDG_ReloadCounter
 
 ```c
 /**
- * @brief  重装载IWDG计数器
+ * @brief  喂狗：向键寄存器写入 0xAAAA，重装载计数器防止超时复位
  * @param  无
  * @retval 无
  * @example
  *     IWDG_ReloadCounter();
- *     重装载IWDG计数器，防止系统复位
  */
 void IWDG_ReloadCounter(void);
 ```
 
 **功能说明：**
-重装载IWDG计数器，防止看门狗超时导致系统复位。
+- 必须在超时到达前周期性调用，否则系统将硬件复位
+- 可在主循环、定时器中断或 RTOS 任务中调用
+- 写入键值 0xAAAA 即可，无需解锁写访问
 
 ### 5. IWDG_Enable
 
 ```c
 /**
- * @brief  使能IWDG
+ * @brief  启动独立看门狗，向键寄存器写入 0xCCCC 开始倒计时
  * @param  无
  * @retval 无
  * @example
  *     IWDG_Enable();
- *     使能IWDG功能
  */
 void IWDG_Enable(void);
 ```
 
 **功能说明：**
-使能IWDG功能，一旦使能后无法禁用，只能通过系统复位禁用。
+- 一旦启动无法软件关闭，仅硬件复位可停止
+- 应在预分频器和重装载值配置完毕后再调用
+- 使用 LSI 独立时钟，主时钟故障时仍能复位系统
 
 ### 6. IWDG_GetFlagStatus
 
 ```c
 /**
- * @brief  获取指定的IWDG标志状态
+ * @brief  查询 IWDG 寄存器更新状态（预分频器/重装载值是否写入完成）
  * @param  IWDG_FLAG: 要检查的IWDG标志
  *         该参数可以是以下值之一：
  *           @arg IWDG_FLAG_PVU: 预分频器更新标志
@@ -179,13 +184,14 @@ void IWDG_Enable(void);
  *           @arg RESET: 标志已清除
  * @example
  *     FlagStatus flag = IWDG_GetFlagStatus(IWDG_FLAG_PVU);
- *     检查预分频器更新标志状态
  */
 FlagStatus IWDG_GetFlagStatus(uint16_t IWDG_FLAG);
 ```
 
 **功能说明：**
-检查指定的IWDG标志状态，用于判断寄存器更新状态。
+- SET 表示寄存器正在更新，应等待变为 RESET 后再继续配置
+- 典型用法：while(IWDG_GetFlagStatus(IWDG_FLAG_PVU) == SET);
+- 确保预分频器和重装载值已生效后再 IWDG_Enable
 
 ## 使用示例
 

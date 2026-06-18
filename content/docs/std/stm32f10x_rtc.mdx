@@ -66,7 +66,7 @@ STM32F10x RTC外设包含以下主要寄存器：
 
 ```c
 /**
- * @brief  使能或禁用指定的RTC中断
+ * @brief  使能/屏蔽 RTC 中断源（秒、闹钟、溢出），配合 NVIC 实现定时唤醒或事件响应
  * @param  RTC_IT: 要配置的RTC中断
  *         该参数可以是以下值之一：
  *           @arg RTC_IT_OW: 溢出中断
@@ -79,173 +79,183 @@ STM32F10x RTC外设包含以下主要寄存器：
  * @retval 无
  * @example
  *     RTC_ITConfig(RTC_IT_SEC, ENABLE);
- *     使能RTC秒中断
  */
 void RTC_ITConfig(uint16_t RTC_IT, FunctionalState NewState);
 ```
 
 **功能说明：**
-配置RTC中断的使能状态，可以选择使能秒中断、闹钟中断或溢出中断。
+- 可单独打开秒中断（每秒节拍）、闹钟中断（定时唤醒）或溢出中断
+- 使能后还需在 NVIC 中配置 RTC_IRQn 才能进入中断服务程序
+- 修改中断使能后建议调用 RTC_WaitForLastTask 等待写入完成
 
 ### 2. RTC_EnterConfigMode
 
 ```c
 /**
- * @brief  进入RTC配置模式
+ * @brief  进入 RTC 配置模式，解锁对预分频器、计数器、闹钟等寄存器的写访问
  * @param  无
  * @retval 无
  * @example
  *     RTC_EnterConfigMode();
- *     进入RTC配置模式以修改RTC寄存器
  */
 void RTC_EnterConfigMode(void);
 ```
 
 **功能说明：**
-进入RTC配置模式，在此模式下可以修改RTC的配置寄存器，如预分频器、闹钟值等。
+- 修改 PRL、CNT、ALR 等寄存器前必须先调用
+- 与 RTC_ExitConfigMode 成对使用，退出后寄存器受硬件保护
+- 通常配合 PWR_BackupAccessCmd(ENABLE) 和备份域时钟使能
 
 ### 3. RTC_ExitConfigMode
 
 ```c
 /**
- * @brief  退出RTC配置模式
+ * @brief  退出 RTC 配置模式，锁定寄存器并使新配置生效
  * @param  无
  * @retval 无
  * @example
  *     RTC_ExitConfigMode();
- *     退出RTC配置模式
  */
 void RTC_ExitConfigMode(void);
 ```
 
 **功能说明：**
-退出RTC配置模式，配置完成后必须调用此函数退出配置模式。
+- 完成 SetCounter/SetPrescaler/SetAlarm 后必须调用
+- 退出后 RTC 硬件开始按新配置计数
+- 建议随后调用 RTC_WaitForLastTask 确认写操作完成
 
 ### 4. RTC_GetCounter
 
 ```c
 /**
- * @brief  获取RTC计数器的当前值
+ * @brief  读取 RTC 32 位计数器当前值，即自上电/复位以来累计的秒数
  * @param  无
  * @retval RTC计数器的32位值
  * @example
  *     uint32_t counter = RTC_GetCounter();
- *     获取RTC计数器的当前值
  */
 uint32_t RTC_GetCounter(void);
 ```
 
 **功能说明：**
-读取RTC计数器的当前值，返回32位的计数值。
+- 返回值即当前时间戳（秒），可换算为时分秒
+- 读取前应调用 RTC_WaitForSynchro 确保寄存器已同步
+- 32 位计数器约 136 年溢出，需配合 RTC_IT_OW 处理
 
 ### 5. RTC_SetCounter
 
 ```c
 /**
- * @brief  设置RTC计数器的值
+ * @brief  设置 RTC 计数器初值，用于校时或系统上电后初始化时间基准
  * @param  CounterValue: 要设置的计数器值
  * @retval 无
  * @example
  *     RTC_SetCounter(0);
- *     将RTC计数器设置为0
  */
 void RTC_SetCounter(uint32_t CounterValue);
 ```
 
 **功能说明：**
-设置RTC计数器的值，通常用于初始化时间或调整时间。
+- 须在 RTC_EnterConfigMode 与 RTC_ExitConfigMode 之间调用
+- 写入后调用 RTC_WaitForLastTask 等待硬件完成
+- 常用于首次上电将计数器归零或写入已知时间戳
 
 ### 6. RTC_SetPrescaler
 
 ```c
 /**
- * @brief  设置RTC预分频器的值
+ * @brief  设置 RTC 预分频器，将 LSE/LSI 时钟分频为 1 Hz 秒节拍
  * @param  PrescalerValue: 预分频器值，范围0-0xFFFFF
  * @retval 无
  * @example
  *     RTC_SetPrescaler(32767);
- *     设置RTC预分频器为32767
  */
 void RTC_SetPrescaler(uint32_t PrescalerValue);
 ```
 
 **功能说明：**
-设置RTC预分频器的值，用于将输入时钟分频到1Hz。预分频器值 = 输入时钟频率 - 1。
+- 预分频值 = 输入时钟频率 − 1（LSE 32.768 kHz 时设为 32767）
+- 须在配置模式下调用，通常只在初始化时设置一次
+- 分频正确后 RTC 计数器每秒递增 1
 
 ### 7. RTC_SetAlarm
 
 ```c
 /**
- * @brief  设置RTC闹钟值
+ * @brief  设置 RTC 闹钟匹配值，计数器等于该值时触发闹钟中断
  * @param  AlarmValue: 闹钟值
  * @retval 无
  * @example
  *     RTC_SetAlarm(3600);
- *     设置闹钟在3600秒后触发
  */
 void RTC_SetAlarm(uint32_t AlarmValue);
 ```
 
 **功能说明：**
-设置RTC闹钟值，当计数器值等于闹钟值时将触发闹钟中断。
+- 须在配置模式下调用，AlarmValue 为绝对计数值而非相对延时
+- 配合 RTC_ITConfig(RTC_IT_ALR, ENABLE) 实现定时唤醒
+- 触发后需在中断中清除挂起位，可重新设置下一次闹钟
 
 ### 8. RTC_GetDivider
 
 ```c
 /**
- * @brief  获取RTC分频器的当前值
+ * @brief  读取 RTC 分频器当前计数值，反映当前秒内亚秒级进度
  * @param  无
  * @retval RTC分频器的32位值
  * @example
  *     uint32_t divider = RTC_GetDivider();
- *     获取RTC分频器的当前值
  */
 uint32_t RTC_GetDivider(void);
 ```
 
 **功能说明：**
-读取RTC分频器的当前值，用于监控分频器状态。
+- 分频器从预分频值向下计数到 0 时产生秒脉冲
+- 可用于亚秒精度时间推算或调试 RTC 分频状态
+- 读取前建议先等待 RTC_WaitForSynchro
 
 ### 9. RTC_WaitForLastTask
 
 ```c
 /**
- * @brief  等待最后一个写操作完成
+ * @brief  阻塞等待 RTC 最后一次写操作完成（RTOFF 标志置位）
  * @param  无
  * @retval 无
  * @example
  *     RTC_SetCounter(0);
  *     RTC_WaitForLastTask();
- *     等待计数器设置完成
  */
 void RTC_WaitForLastTask(void);
 ```
 
 **功能说明：**
-等待RTC的最后一个写操作完成，确保数据写入成功。
+- 每次写 RTC 寄存器后应调用，确保数据已写入备份域
+- 轮询 RTC_FLAG_RTOFF，为 SET 时表示可继续下一次操作
+- 连续多次写操作之间不可省略此等待
 
 ### 10. RTC_WaitForSynchro
 
 ```c
 /**
- * @brief  等待RTC寄存器同步
+ * @brief  等待 RTC 寄存器与 APB 总线同步（RSF 标志置位），读寄存器前必须调用
  * @param  无
  * @retval 无
  * @example
  *     RTC_WaitForSynchro();
- *     等待RTC寄存器同步完成
  */
 void RTC_WaitForSynchro(void);
 ```
 
 **功能说明：**
-等待RTC寄存器同步完成，确保可以安全读取RTC寄存器。
+- 复位后、从待机唤醒后或切换 RTC 时钟源后必须调用
+- 轮询 RTC_FLAG_RSF，为 SET 后方可安全读取 CNT 等寄存器
+- 通常在 RCC_RTCCLKCmd 使能后作为初始化第一步
 
 ### 11. RTC_GetFlagStatus
 
 ```c
 /**
- * @brief  获取指定的RTC标志状态
+ * @brief  查询 RTC 标志位状态（同步、溢出、闹钟、秒事件等）
  * @param  RTC_FLAG: 要检查的RTC标志
  *         该参数可以是以下值之一：
  *           @arg RTC_FLAG_RTOFF: RTC操作关闭标志
@@ -259,19 +269,20 @@ void RTC_WaitForSynchro(void);
  *           @arg RESET: 标志已清除
  * @example
  *     FlagStatus flag = RTC_GetFlagStatus(RTC_FLAG_SEC);
- *     检查秒标志状态
  */
 FlagStatus RTC_GetFlagStatus(uint16_t RTC_FLAG);
 ```
 
 **功能说明：**
-检查指定的RTC标志状态，用于判断各种RTC事件是否发生。
+- 用于轮询方式检测秒/闹钟/溢出事件，无需中断
+- RTOFF 和 RSF 常用于初始化流程中的同步等待
+- 返回 SET 表示对应事件已发生
 
 ### 12. RTC_ClearFlag
 
 ```c
 /**
- * @brief  清除指定的RTC标志
+ * @brief  清除 RTC 事件标志（溢出、闹钟、秒），轮询模式下处理完事件后调用
  * @param  RTC_FLAG: 要清除的RTC标志
  *         该参数可以是以下值之一：
  *           @arg RTC_FLAG_OW: 溢出标志
@@ -280,19 +291,20 @@ FlagStatus RTC_GetFlagStatus(uint16_t RTC_FLAG);
  * @retval 无
  * @example
  *     RTC_ClearFlag(RTC_FLAG_SEC);
- *     清除秒标志
  */
 void RTC_ClearFlag(uint16_t RTC_FLAG);
 ```
 
 **功能说明：**
-清除指定的RTC标志位，通常在处理完相应事件后调用。
+- 仅清除标志位，不影响中断使能配置
+- 轮询 RTC_FLAG_SEC 等标志后必须清除，否则会重复触发
+- 不可用于清除 RTOFF/RSF 等硬件状态标志
 
 ### 13. RTC_GetITStatus
 
 ```c
 /**
- * @brief  获取指定的RTC中断状态
+ * @brief  查询 RTC 中断挂起状态，用于中断服务程序中判断中断源
  * @param  RTC_IT: 要检查的RTC中断
  *         该参数可以是以下值之一：
  *           @arg RTC_IT_OW: 溢出中断
@@ -304,19 +316,20 @@ void RTC_ClearFlag(uint16_t RTC_FLAG);
  *           @arg RESET: 中断未挂起
  * @example
  *     ITStatus status = RTC_GetITStatus(RTC_IT_SEC);
- *     检查秒中断状态
  */
 ITStatus RTC_GetITStatus(uint16_t RTC_IT);
 ```
 
 **功能说明：**
-检查指定的RTC中断状态，用于中断服务程序中判断中断源。
+- 在 RTC_IRQHandler 中区分秒、闹钟、溢出中断源
+- 返回 SET 表示该中断已挂起且已使能
+- 处理完毕后须调用 RTC_ClearITPendingBit 清除
 
 ### 14. RTC_ClearITPendingBit
 
 ```c
 /**
- * @brief  清除指定的RTC中断挂起位
+ * @brief  清除 RTC 中断挂起位，防止同一中断重复进入
  * @param  RTC_IT: 要清除的RTC中断
  *         该参数可以是以下值之一：
  *           @arg RTC_IT_OW: 溢出中断
@@ -325,13 +338,14 @@ ITStatus RTC_GetITStatus(uint16_t RTC_IT);
  * @retval 无
  * @example
  *     RTC_ClearITPendingBit(RTC_IT_SEC);
- *     清除秒中断挂起位
  */
 void RTC_ClearITPendingBit(uint16_t RTC_IT);
 ```
 
 **功能说明：**
-清除指定的RTC中断挂起位，通常在中断服务程序中调用。
+- 必须在中断服务程序末尾调用，否则中断会反复触发
+- 同时会清除对应的事件标志位
+- 三个中断源须分别判断、分别清除
 
 ## 使用示例
 

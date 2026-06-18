@@ -139,7 +139,7 @@ typedef struct
 
 ```c
 /**
- * @brief  将USARTx外设寄存器重新设置为复位值
+ * @brief  将 USART 所有寄存器恢复为复位默认值，用于重新配置前清空旧状态
  * @param  USARTx: 指定要重置的USART外设，可以是USART1、USART2、USART3、UART4或UART5
  * @retval 无
  * @example
@@ -149,13 +149,15 @@ void USART_DeInit(USART_TypeDef* USARTx);
 ```
 
 **功能说明：**
-此函数将指定的USART外设的所有寄存器重置为其复位值，用于外设的重新初始化。
+- 调用后外设回到上电默认，波特率与模式均被清除
+- 切换波特率、校验方式或同步/异步模式前可先 DeInit
+- 通信异常后可配合重新 Init 恢复
 
 ### 2. USART_Init
 
 ```c
 /**
- * @brief  根据USART_InitStruct中指定的参数初始化USARTx外设
+ * @brief  初始化串口参数（波特率、数据位、停止位、校验等），是异步通信的基础配置
  * @param  USARTx: 指定要初始化的USART外设
  * @param  USART_InitStruct: 指向USART_InitTypeDef结构的指针，包含指定USART外设的配置信息
  * @retval 无
@@ -173,13 +175,15 @@ void USART_Init(USART_TypeDef* USARTx, USART_InitTypeDef* USART_InitStruct);
 ```
 
 **功能说明：**
-此函数根据USART_InitStruct中的参数配置指定的USART外设，包括波特率、数据位长度、停止位、奇偶校验、传输模式和硬件流控制。
+- 一次性配置波特率、8/9 位、1/2 停止位、奇偶校验、收发使能
+- 需与对端（PC、模块、另一 MCU）参数一致
+- 需在 GPIO 复用和时钟使能后、USART_Cmd 前调用
 
 ### 3. USART_StructInit
 
 ```c
 /**
- * @brief  将USART_InitStruct中的每个参数设置为默认值
+ * @brief  将 USART_InitTypeDef 成员填为安全默认值，避免未赋值字段导致随机配置
  * @param  USART_InitStruct: 指向要初始化的USART_InitTypeDef结构的指针
  * @retval 无
  * @example
@@ -190,13 +194,15 @@ void USART_StructInit(USART_InitTypeDef* USART_InitStruct);
 ```
 
 **功能说明：**
-此函数将USART初始化结构体的所有成员设置为默认值，便于快速配置常用的USART参数。
+- 默认 9600、8N1、无流控、收发均使能
+- 先 StructInit 再按需修改波特率等
+- 适合快速搭建调试串口初始模板
 
 ### 4. USART_ClockInit
 
 ```c
 /**
- * @brief  根据USART_ClockInitStruct中指定的参数初始化USARTx的时钟配置
+ * @brief  配置同步模式下的 CK 时钟输出（极性、相位、是否输出），用于同步串行通信
  * @param  USARTx: 指定要配置时钟的USART外设，可以是USART1、USART2或USART3
  * @param  USART_ClockInitStruct: 指向USART_ClockInitTypeDef结构的指针
  * @retval 无
@@ -209,13 +215,15 @@ void USART_ClockInit(USART_TypeDef* USARTx, USART_ClockInitTypeDef* USART_ClockI
 ```
 
 **功能说明：**
-此函数配置USART的时钟相关参数，主要用于同步模式下的时钟配置。
+- 同步模式下 SLCK 引脚向对端提供位时钟
+- 普通 UART 异步通信可 Clock_Disable
+- 仅 USART1/2/3 支持，UART4/5 无同步时钟
 
 ### 5. USART_Cmd
 
 ```c
 /**
- * @brief  使能或失能指定的USART外设
+ * @brief  启动或停止 USART 外设；ENABLE 后开始收发，DISABLE 后停止
  * @param  USARTx: 指定要控制的USART外设
  * @param  NewState: USART外设的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -227,13 +235,15 @@ void USART_Cmd(USART_TypeDef* USARTx, FunctionalState NewState);
 ```
 
 **功能说明：**
-此函数用于使能或失能指定的USART外设，是USART工作的必要步骤。
+- USART_Init 完成后必须 ENABLE 才能 SendData/ReceiveData
+- DISABLE 可用于低功耗或切换配置前
+- 使能后 TX/RX 引脚才按配置工作
 
 ### 6. USART_ITConfig
 
 ```c
 /**
- * @brief  使能或失能指定的USART中断
+ * @brief  打开/关闭 USART 中断源（TXE/RXNE/IDLE 等），配合 NVIC 实现异步收发
  * @param  USARTx: 指定要配置中断的USART外设
  * @param  USART_IT: 指定要使能或失能的中断源
  * @param  NewState: 指定中断的新状态，可以是ENABLE或DISABLE
@@ -246,13 +256,15 @@ void USART_ITConfig(USART_TypeDef* USARTx, uint16_t USART_IT, FunctionalState Ne
 ```
 
 **功能说明：**
-此函数用于配置USART的中断源，可以选择性地使能或失能各种中断。
+- RXNE：每收到一字节进中断，适合不定长协议
+- TXE：发送缓冲空，可填下一字节
+- IDLE：一帧结束检测，常用于 DMA+空闲中断收包
 
 ### 7. USART_SendData
 
 ```c
 /**
- * @brief  通过USARTx外设发送单个数据
+ * @brief  向 DR 写入待发字节/字，硬件按配置格式串行发送到 TX 引脚
  * @param  USARTx: 指定要发送数据的USART外设
  * @param  Data: 要发送的数据，数据范围：0x00-0x1FF
  * @retval 无
@@ -264,13 +276,15 @@ void USART_SendData(USART_TypeDef* USARTx, uint16_t Data);
 ```
 
 **功能说明：**
-此函数用于通过指定的USART外设发送一个数据。发送前需要确保发送数据寄存器为空。
+- 写入前确认 TXE 置位，避免覆盖未发送数据
+- 9 位模式时 Data 低 9 位有效
+- 调试 printf、模块 AT 指令等均通过此函数发字节
 
 ### 8. USART_ReceiveData
 
 ```c
 /**
- * @brief  返回USARTx外设最近接收的数据
+ * @brief  从 DR 读取最近接收到的数据，轮询或中断收包的最终取数步骤
  * @param  USARTx: 指定要接收数据的USART外设
  * @retval 接收到的数据
  * @example
@@ -284,13 +298,15 @@ uint16_t USART_ReceiveData(USART_TypeDef* USARTx);
 ```
 
 **功能说明：**
-此函数用于读取接收数据寄存器中的数据。读取前应检查RXNE标志确保有数据可读。
+- 读取前确认 RXNE 置位
+- 读 DR 自动清除 RXNE
+- 9 位模式返回 9 位有效数据
 
 ### 9. USART_GetFlagStatus
 
 ```c
 /**
- * @brief  检查指定的USART标志位是否设置
+ * @brief  查询 USART 标志位（TXE/RXNE/TC/ORE 等），判断收发进度或错误
  * @param  USARTx: 指定要检查的USART外设
  * @param  USART_FLAG: 指定要检查的标志位
  * @retval USART_FLAG的新状态(SET或RESET)
@@ -305,13 +321,15 @@ FlagStatus USART_GetFlagStatus(USART_TypeDef* USARTx, uint16_t USART_FLAG);
 ```
 
 **功能说明：**
-此函数用于检查指定USART标志位的状态，常用于判断发送/接收状态和错误状态。
+- TXE：可发送；RXNE：有数据可读
+- TC：整帧发送完成；ORE/NE/FE/PE：各类错误
+- 轮询收发与流控的基础 API
 
 ### 10. USART_ClearFlag
 
 ```c
 /**
- * @brief  清除USARTx的指定标志位
+ * @brief  清除 USART 指定标志（如 TC、ORE），避免错误状态持续或重复检测
  * @param  USARTx: 指定要清除标志的USART外设
  * @param  USART_FLAG: 指定要清除的标志位
  * @retval 无
@@ -323,13 +341,15 @@ void USART_ClearFlag(USART_TypeDef* USARTx, uint16_t USART_FLAG);
 ```
 
 **功能说明：**
-此函数用于清除指定的USART状态标志位，避免重复触发中断或状态检测。
+- 溢出 ORE 等错误需先读 SR 再读 DR 或 ClearFlag 恢复
+- TC 清除常用于 RS485 方向切换时机
+- RXNE 通常读 DR 即清除
 
 ### 11. USART_GetITStatus
 
 ```c
 /**
- * @brief  检查指定的USART中断是否发生
+ * @brief  在中断服务程序中判断具体 USART 中断源是否挂起
  * @param  USARTx: 指定要检查的USART外设
  * @param  USART_IT: 指定要检查的中断源
  * @retval USART_IT的新状态(SET或RESET)
@@ -344,13 +364,15 @@ ITStatus USART_GetITStatus(USART_TypeDef* USARTx, uint16_t USART_IT);
 ```
 
 **功能说明：**
-此函数用于在中断服务程序中检查特定中断源的状态，确定中断触发原因。
+- 同时检查中断使能与挂起位
+- ISR 中区分 RXNE/TXE/IDLE/错误中断
+- 比 GetFlagStatus 更适合中断上下文
 
 ### 12. USART_DMACmd
 
 ```c
 /**
- * @brief  使能或失能指定USART的DMA接口
+ * @brief  打开/关闭 USART 的 DMA 请求，实现大批量串口数据无 CPU 逐字节搬运
  * @param  USARTx: 指定要配置DMA的USART外设
  * @param  USART_DMAReq: 指定DMA请求类型，可以是USART_DMAReq_Tx或USART_DMAReq_Rx
  * @param  NewState: DMA请求的新状态，可以是ENABLE或DISABLE
@@ -363,7 +385,9 @@ void USART_DMACmd(USART_TypeDef* USARTx, uint16_t USART_DMAReq, FunctionalState 
 ```
 
 **功能说明：**
-此函数用于配置USART的DMA功能，实现大量数据的高效传输。
+- 适合 GPS/NMEA、Modbus、日志等连续或大块数据
+- 需先配置 DMA 通道指向 USART DR
+- 常配合 IDLE 中断判定一帧接收完成
 
 ## 使用示例
 

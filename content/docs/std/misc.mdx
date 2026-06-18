@@ -75,7 +75,7 @@ typedef struct
 
 ```c
 /**
- * @brief  配置NVIC中断优先级分组
+ * @brief  划分 NVIC 抢占/子优先级位数，决定中断嵌套与同级排序规则，系统初始化时全局配置一次
  * @param  NVIC_PriorityGroup: 指定优先级分组，可以是以下值之一：
  *         - NVIC_PriorityGroup_0: 0位抢占优先级，4位子优先级
  *         - NVIC_PriorityGroup_1: 1位抢占优先级，3位子优先级
@@ -90,13 +90,15 @@ void NVIC_PriorityGroupConfig(uint32_t NVIC_PriorityGroup);
 ```
 
 **功能说明：**
-配置NVIC的中断优先级分组。该函数决定了抢占优先级和子优先级的位数分配，在整个应用程序中应该只调用一次，通常在系统初始化阶段配置。
+- 全工程通常只调用一次，更改分组会使已配优先级含义变化
+- Group_2 等分抢占与子优先级，适合多数裸机/RTOS 混合场景
+- 分组决定 `NVIC_Init` 中两字段的合法取值范围
 
 ### 2. NVIC_Init
 
 ```c
 /**
- * @brief  初始化NVIC外设
+ * @brief  为指定 IRQ 通道设置抢占/子优先级并使能中断，是外设中断可用的关键一步
  * @param  NVIC_InitStruct: 指向NVIC_InitTypeDef结构体的指针，包含NVIC的配置信息
  * @retval 无
  * @example
@@ -111,13 +113,15 @@ void NVIC_Init(NVIC_InitTypeDef* NVIC_InitStruct);
 ```
 
 **功能说明：**
-根据NVIC_InitStruct中指定的参数初始化NVIC外设。该函数配置指定中断通道的优先级并使能或失能该中断。
+- 须在外设 `xxx_ITConfig` 与全局 `__enable_irq` 之前或之后按项目习惯配置
+- 抢占数值越小优先级越高，可打断低抢占优先级 ISR
+- 同一通道重复 Init 会覆盖旧优先级配置
 
 ### 3. NVIC_SetVectorTable
 
 ```c
 /**
- * @brief  设置向量表的位置和偏移
+ * @brief  重定位中断向量表基址，用于 Bootloader 跳转、IAP 或在 RAM 中调试向量表
  * @param  NVIC_VectTab: 指定向量表是在RAM还是FLASH中，可以是以下值之一：
  *         - NVIC_VectTab_RAM: 向量表位于RAM中
  *         - NVIC_VectTab_FLASH: 向量表位于FLASH中
@@ -130,13 +134,15 @@ void NVIC_SetVectorTable(uint32_t NVIC_VectTab, uint32_t Offset);
 ```
 
 **功能说明：**
-设置向量表的位置和偏移量。当应用程序不是从默认地址（0x08000000）开始运行时，需要使用此函数重新定位向量表。
+- 偏移须为 512 字节（0x200）对齐，否则行为未定义
+- App 从非 0x08000000 启动时须与链接脚本起始地址一致
+- RAM 向量表适合调试时快速修补单条 ISR 入口
 
 ### 4. NVIC_SystemLPConfig
 
 ```c
 /**
- * @brief  配置系统的低功耗模式
+ * @brief  配置 Cortex-M 低功耗相关行为，如中断返回后自动睡眠或深度睡眠配合 STOP 模式
  * @param  LowPowerMode: 指定要配置的低功耗模式，可以是以下值之一：
  *         - NVIC_LP_SEVONPEND: 挂起事件唤醒
  *         - NVIC_LP_SLEEPDEEP: 深度睡眠模式
@@ -150,13 +156,15 @@ void NVIC_SystemLPConfig(uint8_t LowPowerMode, FunctionalState NewState);
 ```
 
 **功能说明：**
-选择性地配置系统的低功耗模式。该函数可以配置处理器在中断服务程序返回后自动进入睡眠模式，或配置深度睡眠模式等。
+- `SLEEPONEXIT` 适合 ISR 处理完即睡，主循环用 WFI 唤醒
+- `SLEEPDEEP` 与 PWR 模块 STOP/STANDBY 配合使用
+- 各 LowPowerMode 可独立 ENABLE/DISABLE
 
 ### 5. SysTick_CLKSourceConfig
 
 ```c
 /**
- * @brief  配置SysTick时钟源
+ * @brief  选择 SysTick 计数时钟为 HCLK 或 HCLK/8，影响 tick 周期与延时/RTOS 时基计算
  * @param  SysTick_CLKSource: 指定SysTick时钟源，可以是以下值之一：
  *         - SysTick_CLKSource_HCLK_Div8: HCLK/8作为SysTick时钟源
  *         - SysTick_CLKSource_HCLK: HCLK作为SysTick时钟源
@@ -168,7 +176,9 @@ void SysTick_CLKSourceConfig(uint32_t SysTick_CLKSource);
 ```
 
 **功能说明：**
-配置SysTick定时器的时钟源。SysTick是ARM Cortex-M3内核的系统定时器，常用于操作系统的时基或延时功能。
+- 须在 `SysTick_Config` 或写 LOAD 寄存器前配置
+- HCLK 精度更高；Div8 在 72MHz 下便于整除得到 1ms
+- 更改时钟源后须重算重装载值
 
 ## 使用示例
 

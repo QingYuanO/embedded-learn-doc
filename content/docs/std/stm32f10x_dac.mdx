@@ -125,7 +125,7 @@ typedef struct
 
 ```c
 /**
- * @brief  将DAC外设寄存器重置为默认复位值
+ * @brief  将 DAC 所有寄存器恢复为复位默认值，用于重新配置前清空旧状态
  * @param  无
  * @retval 无
  * @example
@@ -135,13 +135,14 @@ void DAC_DeInit(void);
 ```
 
 **功能说明：**
-将DAC外设的所有寄存器恢复到复位状态的默认值。
+- 调用后 DAC 回到上电默认配置，两通道均停止输出
+- 切换 DAC 用途（如从静态输出改为波形生成）前可先 DeInit
 
 ### 2. DAC_Init
 
 ```c
 /**
- * @brief  根据DAC_InitStruct中指定的参数初始化DAC外设
+ * @brief  初始化 DAC 通道（触发源、波形、输出缓冲），决定数模转换工作方式
  * @param  DAC_Channel: 要配置的DAC通道，可选值：
  *         - DAC_Channel_1: DAC通道1
  *         - DAC_Channel_2: DAC通道2
@@ -158,13 +159,15 @@ void DAC_Init(uint32_t DAC_Channel, DAC_InitTypeDef* DAC_InitStruct);
 ```
 
 **功能说明：**
-根据指定的参数初始化DAC通道，包括触发源、波形生成、输出缓冲器等配置。
+- 一次性配置触发源、波形生成、LFSR/三角波幅值、输出缓冲器
+- 输出电压 ≈ VREF+ × Data / 4096（12 位右对齐）
+- 需在 DAC_Cmd 之前调用
 
 ### 3. DAC_StructInit
 
 ```c
 /**
- * @brief  将DAC_InitStruct中的每个参数填入默认值
+ * @brief  将 DAC_InitTypeDef 成员填为安全默认值，避免未赋值字段导致随机配置
  * @param  DAC_InitStruct: 指向DAC_InitTypeDef结构的指针，将被初始化
  * @retval 无
  * @example
@@ -175,13 +178,14 @@ void DAC_StructInit(DAC_InitTypeDef* DAC_InitStruct);
 ```
 
 **功能说明：**
-使用默认值初始化DAC_InitTypeDef结构体，方便用户快速配置。
+- 默认无触发、无波形生成、输出缓冲器启用
+- 填充后再按需修改个别成员即可
 
 ### 4. DAC_Cmd
 
 ```c
 /**
- * @brief  启用或禁用指定的DAC通道
+ * @brief  启动或停止指定 DAC 通道；ENABLE 后开始输出，DISABLE 后关闭
  * @param  DAC_Channel: 要控制的DAC通道，可选值：
  *         - DAC_Channel_1: DAC通道1
  *         - DAC_Channel_2: DAC通道2
@@ -197,13 +201,14 @@ void DAC_Cmd(uint32_t DAC_Channel, FunctionalState NewState);
 ```
 
 **功能说明：**
-控制指定DAC通道的启用或禁用状态。
+- ENABLE 后通道开始将数据寄存器值转换为模拟电压
+- 需先完成 DAC_Init 和 SetChannel 数据写入
 
 ### 5. DAC_ITConfig
 
 ```c
 /**
- * @brief  启用或禁用指定的DAC中断（仅Value Line器件）
+ * @brief  使能/屏蔽 DAC DMA 下溢中断（仅 Value Line），配合 NVIC 处理 DMA 异常
  * @param  DAC_Channel: 要配置的DAC通道，可选值：
  *         - DAC_Channel_1: DAC通道1
  *         - DAC_Channel_2: DAC通道2
@@ -220,13 +225,14 @@ void DAC_ITConfig(uint32_t DAC_Channel, uint32_t DAC_IT, FunctionalState NewStat
 ```
 
 **功能说明：**
-配置DAC中断的启用状态，仅在STM32F10X Value Line器件中可用。
+- DMA 传输速度跟不上触发频率时会置 DMAUDR 标志
+- 需配合 NVIC 使能对应中断通道
 
 ### 6. DAC_DMACmd
 
 ```c
 /**
- * @brief  启用或禁用指定DAC通道的DMA请求
+ * @brief  使能/关闭指定 DAC 通道的 DMA 请求，用于 DMA 连续更新输出数据
  * @param  DAC_Channel: 要配置的DAC通道，可选值：
  *         - DAC_Channel_1: DAC通道1
  *         - DAC_Channel_2: DAC通道2
@@ -241,13 +247,14 @@ void DAC_DMACmd(uint32_t DAC_Channel, FunctionalState NewState);
 ```
 
 **功能说明：**
-控制指定DAC通道的DMA请求启用状态，用于DMA传输模式。
+- 触发源需配置为定时器或软件触发模式
+- 适合波形输出、音频播放等连续更新场景
 
 ### 7. DAC_SoftwareTriggerCmd
 
 ```c
 /**
- * @brief  启用或禁用指定DAC通道的软件触发
+ * @brief  软件触发指定通道转换，适用于软件定时更新输出
  * @param  DAC_Channel: 要配置的DAC通道，可选值：
  *         - DAC_Channel_1: DAC通道1
  *         - DAC_Channel_2: DAC通道2
@@ -262,13 +269,14 @@ void DAC_SoftwareTriggerCmd(uint32_t DAC_Channel, FunctionalState NewState);
 ```
 
 **功能说明：**
-通过软件触发指定DAC通道开始数模转换。
+- 触发源须设为 DAC_Trigger_Software
+- 写入数据后调用 ENABLE 即可启动一次转换
 
 ### 8. DAC_DualSoftwareTriggerCmd
 
 ```c
 /**
- * @brief  启用或禁用双通道软件触发
+ * @brief  同时软件触发双通道转换，实现两路同步输出
  * @param  NewState: 双通道软件触发的新状态，可选值：
  *         - ENABLE: 启用双通道软件触发
  *         - DISABLE: 禁用双通道软件触发
@@ -280,13 +288,14 @@ void DAC_DualSoftwareTriggerCmd(FunctionalState NewState);
 ```
 
 **功能说明：**
-同时触发DAC通道1和通道2开始数模转换。
+- 两通道在同一时刻启动转换，相位一致
+- 配合 DAC_SetDualChannelData 使用效果更佳
 
 ### 9. DAC_WaveGenerationCmd
 
 ```c
 /**
- * @brief  启用或禁用指定DAC通道的波形生成
+ * @brief  启用/关闭噪声波或三角波生成，用于内置波形输出
  * @param  DAC_Channel: 要配置的DAC通道，可选值：
  *         - DAC_Channel_1: DAC通道1
  *         - DAC_Channel_2: DAC通道2
@@ -304,13 +313,14 @@ void DAC_WaveGenerationCmd(uint32_t DAC_Channel, uint32_t DAC_Wave, FunctionalSt
 ```
 
 **功能说明：**
-控制指定DAC通道的波形生成功能，可生成噪声波或三角波。
+- 波形叠加在数据寄存器基准值之上
+- 需配合定时器触发源以固定波形频率
 
 ### 10. DAC_SetChannel1Data
 
 ```c
 /**
- * @brief  设置DAC通道1的数据保持寄存器值
+ * @brief  写入通道 1 数据保持寄存器，设定待转换的数字量
  * @param  DAC_Align: 数据对齐方式，可选值：
  *         - DAC_Align_12b_R: 12位右对齐
  *         - DAC_Align_12b_L: 12位左对齐
@@ -324,13 +334,14 @@ void DAC_SetChannel1Data(uint32_t DAC_Align, uint16_t Data);
 ```
 
 **功能说明：**
-设置DAC通道1的数字输入值，该值将被转换为相应的模拟电压输出。
+- 12 位右对齐时有效范围 0–4095，对应 PA4 输出电压
+- 无触发模式下写入后自动转换
 
 ### 11. DAC_SetChannel2Data
 
 ```c
 /**
- * @brief  设置DAC通道2的数据保持寄存器值
+ * @brief  写入通道 2 数据保持寄存器，设定待转换的数字量
  * @param  DAC_Align: 数据对齐方式，可选值：
  *         - DAC_Align_12b_R: 12位右对齐
  *         - DAC_Align_12b_L: 12位左对齐
@@ -344,13 +355,14 @@ void DAC_SetChannel2Data(uint32_t DAC_Align, uint16_t Data);
 ```
 
 **功能说明：**
-设置DAC通道2的数字输入值，该值将被转换为相应的模拟电压输出。
+- 功能同 SetChannel1Data，输出引脚为 PA5
+- 双通道应用时分别调用或改用 SetDualChannelData
 
 ### 12. DAC_SetDualChannelData
 
 ```c
 /**
- * @brief  设置双通道DAC的数据保持寄存器值
+ * @brief  原子写入双通道数据，保证两路同步更新
  * @param  DAC_Align: 数据对齐方式，可选值：
  *         - DAC_Align_12b_R: 12位右对齐
  *         - DAC_Align_12b_L: 12位左对齐
@@ -365,13 +377,14 @@ void DAC_SetDualChannelData(uint32_t DAC_Align, uint16_t Data2, uint16_t Data1);
 ```
 
 **功能说明：**
-同时设置DAC通道1和通道2的数据值，用于双通道同步输出。
+- 一次写入避免两通道更新时刻不一致
+- 参数顺序为 Data2（通道 2）、Data1（通道 1）
 
 ### 13. DAC_GetDataOutputValue
 
 ```c
 /**
- * @brief  返回指定DAC通道的数据输出寄存器值
+ * @brief  读取指定通道当前输出数据寄存器值，用于回读确认
  * @param  DAC_Channel: 要读取的DAC通道，可选值：
  *         - DAC_Channel_1: DAC通道1
  *         - DAC_Channel_2: DAC通道2
@@ -383,13 +396,14 @@ uint16_t DAC_GetDataOutputValue(uint32_t DAC_Channel);
 ```
 
 **功能说明：**
-读取指定DAC通道当前的数据输出寄存器值。
+- 返回最近一次成功转换后的数字量
+- 可用于校验写入是否生效
 
 ### 14. DAC_GetFlagStatus
 
 ```c
 /**
- * @brief  检查指定的DAC标志位是否被设置（仅Value Line器件）
+ * @brief  查询 DAC 标志位（如 DMA 下溢），用于轮询检测异常
  * @param  DAC_Channel: 要检查的DAC通道，可选值：
  *         - DAC_Channel_1: DAC通道1
  *         - DAC_Channel_2: DAC通道2
@@ -406,13 +420,14 @@ FlagStatus DAC_GetFlagStatus(uint32_t DAC_Channel, uint32_t DAC_FLAG);
 ```
 
 **功能说明：**
-检查指定DAC通道的标志位状态，仅在Value Line器件中可用。
+- 常用标志为 DAC_FLAG_DMAUDR（DMA 下溢）
+- 仅 Value Line 器件支持
 
 ### 15. DAC_ClearFlag
 
 ```c
 /**
- * @brief  清除指定的DAC标志位（仅Value Line器件）
+ * @brief  清除指定 DAC 标志位，处理异常后需调用
  * @param  DAC_Channel: 要清除标志的DAC通道，可选值：
  *         - DAC_Channel_1: DAC通道1
  *         - DAC_Channel_2: DAC通道2
@@ -426,13 +441,14 @@ void DAC_ClearFlag(uint32_t DAC_Channel, uint32_t DAC_FLAG);
 ```
 
 **功能说明：**
-清除指定DAC通道的标志位，仅在Value Line器件中可用。
+- 清除后标志位恢复 RESET
+- 轮询或中断处理中检测到异常后调用
 
 ### 16. DAC_GetITStatus
 
 ```c
 /**
- * @brief  检查指定的DAC中断是否发生（仅Value Line器件）
+ * @brief  查询 DAC 中断是否挂起，用于 ISR 中判断中断源
  * @param  DAC_Channel: 要检查的DAC通道，可选值：
  *         - DAC_Channel_1: DAC通道1
  *         - DAC_Channel_2: DAC通道2
@@ -449,13 +465,14 @@ ITStatus DAC_GetITStatus(uint32_t DAC_Channel, uint32_t DAC_IT);
 ```
 
 **功能说明：**
-检查指定DAC中断的状态，仅在Value Line器件中可用。
+- 同时检查中断使能位和标志位
+- 返回 SET 表示对应中断已挂起
 
 ### 17. DAC_ClearITPendingBit
 
 ```c
 /**
- * @brief  清除指定的DAC中断挂起位（仅Value Line器件）
+ * @brief  清除 DAC 中断挂起位，ISR 结束前必须调用
  * @param  DAC_Channel: 要清除中断的DAC通道，可选值：
  *         - DAC_Channel_1: DAC通道1
  *         - DAC_Channel_2: DAC通道2
@@ -469,7 +486,8 @@ void DAC_ClearITPendingBit(uint32_t DAC_Channel, uint32_t DAC_IT);
 ```
 
 **功能说明：**
-清除指定DAC中断的挂起位，仅在Value Line器件中可用。
+- 不清除会导致中断反复进入
+- 通常与 GetITStatus 配对使用
 
 ## 使用示例
 

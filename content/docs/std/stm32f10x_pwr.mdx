@@ -81,7 +81,7 @@ STM32F10x PWR外设包含以下主要寄存器：
 
 ```c
 /**
- * @brief  将PWR外设寄存器重置为默认值
+ * @brief  将 PWR 所有寄存器恢复为复位默认值，用于重新配置前清空旧状态
  * @param  无
  * @retval 无
  * @example
@@ -92,13 +92,14 @@ void PWR_DeInit(void);
 ```
 
 **功能说明：**
-将PWR外设的所有寄存器重置为默认值，包括PVD配置、唤醒引脚配置等。
+- 清除 PVD 配置、唤醒引脚等控制寄存器
+- 重新配置低功耗模式前可先 DeInit
 
 ### 2. PWR_BackupAccessCmd
 
 ```c
 /**
- * @brief  使能或禁用对备份寄存器和RTC的访问
+ * @brief  使能/禁用备份域访问权限，读写 BKP/RTC 前必须 ENABLE
  * @param  NewState: 备份域访问的新状态
  *         该参数可以是以下值之一：
  *           @arg ENABLE: 使能备份域访问
@@ -112,13 +113,14 @@ void PWR_BackupAccessCmd(FunctionalState NewState);
 ```
 
 **功能说明：**
-控制对备份寄存器和RTC的访问权限，使用备份域功能前必须使能访问权限。
+- 默认备份域受写保护
+- 使用 BKP 或 RTC 寄存器前须先调用 ENABLE
 
 ### 3. PWR_PVDCmd
 
 ```c
 /**
- * @brief  使能或禁用PVD（电源电压检测器）
+ * @brief  使能/禁用 PVD 电源电压检测，监控 VDD 是否低于阈值
  * @param  NewState: PVD功能的新状态
  *         该参数可以是以下值之一：
  *           @arg ENABLE: 使能PVD功能
@@ -132,13 +134,14 @@ void PWR_PVDCmd(FunctionalState NewState);
 ```
 
 **功能说明：**
-控制PVD功能的使能状态，使能后可以检测电源电压是否低于设定阈值。
+- 电压低于设定阈值时触发 EXTI Line16 事件
+- 需配合 PVDLevelConfig 和 NVIC 使用
 
 ### 4. PWR_PVDLevelConfig
 
 ```c
 /**
- * @brief  配置PVD检测电平
+ * @brief  设置 PVD 检测阈值（2.2V–2.9V），决定低压告警触发点
  * @param  PWR_PVDLevel: PVD检测电平
  *         该参数可以是以下值之一：
  *           @arg PWR_PVDLevel_2V2: 2.2V检测电平
@@ -158,13 +161,14 @@ void PWR_PVDLevelConfig(uint32_t PWR_PVDLevel);
 ```
 
 **功能说明：**
-设置PVD的检测电平，当电源电压低于设定值时将触发PVD事件。
+- 8 档可选，精度约 ±50 mV
+- 应在 PVDCmd(ENABLE) 前配置
 
 ### 5. PWR_WakeUpPinCmd
 
 ```c
 /**
- * @brief  使能或禁用唤醒引脚功能
+ * @brief  使能/禁用 WKUP 唤醒引脚（PA0），用于从 STOP/STANDBY 唤醒
  * @param  NewState: 唤醒引脚功能的新状态
  *         该参数可以是以下值之一：
  *           @arg ENABLE: 使能唤醒引脚功能
@@ -178,13 +182,14 @@ void PWR_WakeUpPinCmd(FunctionalState NewState);
 ```
 
 **功能说明：**
-控制唤醒引脚功能的使能状态，使能后可以通过唤醒引脚从STOP模式唤醒。
+- PA0 上升沿可唤醒系统
+- 进入低功耗模式前需使能
 
 ### 6. PWR_EnterSTOPMode
 
 ```c
 /**
- * @brief  进入STOP模式
+ * @brief  进入 STOP 低功耗模式，保留 SRAM，等待中断/事件唤醒
  * @param  PWR_Regulator: 稳压器状态
  *         该参数可以是以下值之一：
  *           @arg PWR_Regulator_ON: 稳压器开启
@@ -202,13 +207,15 @@ void PWR_EnterSTOPMode(uint32_t PWR_Regulator, uint8_t PWR_STOPEntry);
 ```
 
 **功能说明：**
-使系统进入STOP模式，在此模式下大部分外设停止工作，但SRAM和寄存器内容保持。
+- 可选稳压器正常或低功耗模式
+- 唤醒后需重新配置系统时钟（SystemInit）
+- 通过 WFI/WFE 等待唤醒
 
 ### 7. PWR_EnterSTANDBYMode
 
 ```c
 /**
- * @brief  进入STANDBY模式
+ * @brief  进入 STANDBY 超低功耗模式，SRAM 和寄存器内容丢失
  * @param  无
  * @retval 无
  * @example
@@ -219,13 +226,14 @@ void PWR_EnterSTANDBYMode(void);
 ```
 
 **功能说明：**
-使系统进入STANDBY模式，在此模式下SRAM和寄存器内容丢失，系统完全停止。
+- 功耗最低，仅 VBAT 域和备份寄存器保持
+- 唤醒后等同复位，程序从头执行
 
 ### 8. PWR_GetFlagStatus
 
 ```c
 /**
- * @brief  获取指定的PWR标志状态
+ * @brief  查询 PWR 标志位（唤醒、待机、PVD 输出）
  * @param  PWR_FLAG: 要检查的PWR标志
  *         该参数可以是以下值之一：
  *           @arg PWR_FLAG_WU: 唤醒标志
@@ -243,13 +251,14 @@ FlagStatus PWR_GetFlagStatus(uint32_t PWR_FLAG);
 ```
 
 **功能说明：**
-检查指定的PWR标志状态，用于判断各种电源事件是否发生。
+- WU：从 STOP 唤醒；SB：从 STANDBY 唤醒
+- PVDO：当前 VDD 是否低于 PVD 阈值
 
 ### 9. PWR_ClearFlag
 
 ```c
 /**
- * @brief  清除指定的PWR标志
+ * @brief  清除 PWR 标志位（WU/SB），处理完唤醒事件后需调用
  * @param  PWR_FLAG: 要清除的PWR标志
  *         该参数可以是以下值之一：
  *           @arg PWR_FLAG_WU: 唤醒标志
@@ -263,7 +272,8 @@ void PWR_ClearFlag(uint32_t PWR_FLAG);
 ```
 
 **功能说明：**
-清除指定的PWR标志位，通常在处理完相应事件后调用。
+- 仅可清除 WU 和 SB 标志
+- 低功耗唤醒后应检查并清除对应标志
 
 ## 使用示例
 

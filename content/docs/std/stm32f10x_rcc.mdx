@@ -147,7 +147,7 @@ typedef struct
 
 ```c
 /**
- * @brief  将RCC寄存器重设为默认值
+ * @brief  将 RCC 恢复为复位默认状态并切回 HSI 作 SYSCLK，用于时钟树重配或故障恢复起点
  * @param  无
  * @retval 无
  * @example
@@ -156,11 +156,16 @@ typedef struct
 void RCC_DeInit(void);
 ```
 
+**功能说明：**
+- 关闭 HSE/PLL 等，系统暂以 8MHz HSI 运行
+- 典型 `SystemInit` 第一步，再按目标频率重配
+- 不会关闭已使能的外设时钟门控位需后续重新配置
+
 ### 2. RCC_HSEConfig
 
 ```c
 /**
- * @brief  配置外部高速时钟(HSE)
+ * @brief  打开或关闭外部高速晶振 HSE，为 PLL 与高精度 SYSCLK 提供稳定基准
  * @param  RCC_HSE: 指定HSE的新状态
  * @retval 无
  * @example
@@ -169,11 +174,16 @@ void RCC_DeInit(void);
 void RCC_HSEConfig(uint32_t RCC_HSE);
 ```
 
+**功能说明：**
+- 常见 8MHz 晶振，须配合负载电容与 `RCC_WaitForHSEStartUp`
+- `RCC_HSE_Bypass` 用于外部时钟源直接输入
+- 关闭 HSE 前须确保 SYSCLK 不依赖 HSE/PLL
+
 ### 3. RCC_WaitForHSEStartUp
 
 ```c
 /**
- * @brief  等待HSE启动
+ * @brief  阻塞等待 HSE 起振就绪，避免在晶振未稳定时切换 PLL 或 SYSCLK 导致跑飞
  * @param  无
  * @retval HSE启动状态，SUCCESS或ERROR
  * @example
@@ -185,11 +195,16 @@ void RCC_HSEConfig(uint32_t RCC_HSE);
 ErrorStatus RCC_WaitForHSEStartUp(void);
 ```
 
+**功能说明：**
+- 返回 SUCCESS 表示 HSE 稳定，可配置 PLL
+- 超时返回 ERROR，需检查硬件或改用 HSI
+- 也可轮询 `RCC_FLAG_HSERDY` 配合超时逻辑
+
 ### 4. RCC_AdjustHSICalibrationValue
 
 ```c
 /**
- * @brief  调整内部高速时钟(HSI)校准值
+ * @brief  微调 HSI 振荡校准值，补偿温度/电压漂移，提高无晶振场景下 UART 等时序精度
  * @param  HSICalibrationValue: 指定校准微调值
  * @retval 无
  * @example
@@ -198,11 +213,16 @@ ErrorStatus RCC_WaitForHSEStartUp(void);
 void RCC_AdjustHSICalibrationValue(uint8_t HSICalibrationValue);
 ```
 
+**功能说明：**
+- 写入 RCC_CR 校准字段，出厂默认通常可用
+- 仅在使用 HSI 作 SYSCLK 或 PLL 源时有意义
+- 极端精度需求仍建议 HSE
+
 ### 5. RCC_HSICmd
 
 ```c
 /**
- * @brief  使能或失能内部高速时钟(HSI)
+ * @brief  控制内部 8MHz HSI 振荡器开关，无外部晶振时的默认时钟源或 PLL 备选输入
  * @param  NewState: HSI的新状态，可以是ENABLE或DISABLE
  * @retval 无
  * @example
@@ -211,11 +231,16 @@ void RCC_AdjustHSICalibrationValue(uint8_t HSICalibrationValue);
 void RCC_HSICmd(FunctionalState NewState);
 ```
 
+**功能说明：**
+- 复位后 HSI 默认开启；作 SYSCLK 时可关 HSE 省电
+- DISABLE 前确认 SYSCLK/PLL 不依赖 HSI
+- 启动比 HSE 快，适合快速唤醒
+
 ### 6. RCC_PLLConfig
 
 ```c
 /**
- * @brief  配置PLL时钟源和倍频系数
+ * @brief  选择 PLL 输入源与倍频系数，将 HSE/HSI 倍频到目标 SYSCLK（如 72MHz）
  * @param  RCC_PLLSource: 指定PLL入口时钟源
  * @param  RCC_PLLMul: 指定PLL倍频系数
  * @retval 无
@@ -225,11 +250,16 @@ void RCC_HSICmd(FunctionalState NewState);
 void RCC_PLLConfig(uint32_t RCC_PLLSource, uint32_t RCC_PLLMul);
 ```
 
+**功能说明：**
+- 须在 PLL 关闭时修改；HSE 8MHz ×9 常见得 72MHz
+- `HSE_Div2` 等分频用于满足 PLL 输入频率范围
+- 与 `FLASH_SetLatency` 匹配更高 SYSCLK
+
 ### 7. RCC_PLLCmd
 
 ```c
 /**
- * @brief  使能或失能PLL
+ * @brief  启动或关闭 PLL，使能后需等待就绪再切换 SYSCLK 到 PLLCLK
  * @param  NewState: PLL的新状态，可以是ENABLE或DISABLE
  * @retval 无
  * @example
@@ -238,11 +268,16 @@ void RCC_PLLConfig(uint32_t RCC_PLLSource, uint32_t RCC_PLLMul);
 void RCC_PLLCmd(FunctionalState NewState);
 ```
 
+**功能说明：**
+- 使能后轮询 `RCC_FLAG_PLLRDY`
+- 关闭 PLL 前须先把 SYSCLK 切回 HSI/HSE
+- USB 等外设可能要求 48MHz 来自 PLL 分频
+
 ### 8. RCC_SYSCLKConfig
 
 ```c
 /**
- * @brief  配置系统时钟
+ * @brief  切换系统主时钟源（HSI/HSE/PLL），决定 CPU 与 AHB 基准频率
  * @param  RCC_SYSCLKSource: 指定用作系统时钟的时钟源
  * @retval 无
  * @example
@@ -251,11 +286,16 @@ void RCC_PLLCmd(FunctionalState NewState);
 void RCC_SYSCLKConfig(uint32_t RCC_SYSCLKSource);
 ```
 
+**功能说明：**
+- 切换后须等 `RCC_GetSYSCLKSource` 反映新源
+- 升频前先提 Flash 等待周期，降频可后调
+- 动态切换可用于低功耗与高性能权衡
+
 ### 9. RCC_GetSYSCLKSource
 
 ```c
 /**
- * @brief  返回用作系统时钟的时钟源
+ * @brief  查询当前 SYSCLK 实际选用的时钟源，用于确认切换完成或诊断时钟配置
  * @param  无
  * @retval 系统时钟源
  * @example
@@ -264,11 +304,16 @@ void RCC_SYSCLKConfig(uint32_t RCC_SYSCLKSource);
 uint8_t RCC_GetSYSCLKSource(void);
 ```
 
+**功能说明：**
+- 读 CFGR 的 SWS 位，PLL 就绪时常为 0x08
+- `RCC_SYSCLKConfig` 后循环检查直至匹配
+- 调试时钟异常时的首要读数
+
 ### 10. RCC_HCLKConfig
 
 ```c
 /**
- * @brief  配置AHB时钟(HCLK)
+ * @brief  设置 AHB 预分频得到 HCLK，同步影响 Cortex 内核与 DMA 等 AHB 外设
  * @param  RCC_SYSCLK: 定义AHB时钟分频器
  * @retval 无
  * @example
@@ -277,11 +322,16 @@ uint8_t RCC_GetSYSCLKSource(void);
 void RCC_HCLKConfig(uint32_t RCC_SYSCLK);
 ```
 
+**功能说明：**
+- 常用 Div1 使 HCLK=SYSCLK；低功耗可再分频
+- 变更后应重算 SysTick 与各波特率
+- 影响 `RCC_GetClocksFreq` 输出的 HCLK
+
 ### 11. RCC_PCLK1Config
 
 ```c
 /**
- * @brief  配置低速APB时钟(PCLK1)
+ * @brief  设置 APB1 低速总线分频，TIM2-7、USART2/3、I2C 等挂在 PCLK1 上
  * @param  RCC_HCLK: 定义APB1时钟分频器
  * @retval 无
  * @example
@@ -290,11 +340,16 @@ void RCC_HCLKConfig(uint32_t RCC_SYSCLK);
 void RCC_PCLK1Config(uint32_t RCC_HCLK);
 ```
 
+**功能说明：**
+- 72MHz 系统下常见 PCLK1=36MHz（Div2）
+- APB1 定时器在分频非 1 时时钟可能 ×2，须查参考手册
+- 超过 PCLK1 最大频率会导致外设异常
+
 ### 12. RCC_PCLK2Config
 
 ```c
 /**
- * @brief  配置高速APB时钟(PCLK2)
+ * @brief  设置 APB2 高速总线分频，GPIO、USART1、ADC、TIM1/8 等挂在 PCLK2
  * @param  RCC_HCLK: 定义APB2时钟分频器
  * @retval 无
  * @example
@@ -303,11 +358,16 @@ void RCC_PCLK1Config(uint32_t RCC_HCLK);
 void RCC_PCLK2Config(uint32_t RCC_HCLK);
 ```
 
+**功能说明：**
+- 常用 Div1 使 PCLK2=HCLK=72MHz
+- ADC 时钟由 PCLK2 再分频，与 `RCC_ADCCLKConfig` 配合
+- 高级定时器时基以 PCLK2 为参考
+
 ### 13. RCC_ITConfig
 
 ```c
 /**
- * @brief  使能或失能指定的RCC中断
+ * @brief  打开 HSE/PLL/LSE 等就绪中断，避免轮询等待，适合起振时间长的场景
  * @param  RCC_IT: 指定要使能或失能的RCC中断源
  * @param  NewState: 指定RCC中断的新状态
  * @retval 无
@@ -317,11 +377,16 @@ void RCC_PCLK2Config(uint32_t RCC_HCLK);
 void RCC_ITConfig(uint8_t RCC_IT, FunctionalState NewState);
 ```
 
+**功能说明：**
+- 须配置 NVIC 并在 ISR 中 `RCC_ClearITPendingBit`
+- CSS 故障也会触发相关中断路径
+- 裸机常用轮询标志，RTOS 可用中断唤醒任务
+
 ### 14. RCC_USBCLKConfig
 
 ```c
 /**
- * @brief  配置USB时钟(USBCLK)
+ * @brief  选择 USB 外设 48MHz 时钟来源，USB 功能正常工作的必要配置
  * @param  RCC_USBCLKSource: 指定USB时钟的时钟源
  * @retval 无
  * @example
@@ -330,11 +395,16 @@ void RCC_ITConfig(uint8_t RCC_IT, FunctionalState NewState);
 void RCC_USBCLKConfig(uint32_t RCC_USBCLKSource);
 ```
 
+**功能说明：**
+- 72MHz PLL 时常用 PLL/1.5 得 48MHz
+- 须先使能 PLL 且频率组合合法
+- 仅带 USB 的型号需要此配置
+
 ### 15. RCC_ADCCLKConfig
 
 ```c
 /**
- * @brief  配置ADC时钟(ADCCLK)
+ * @brief  设置 ADC 专用时钟分频，使 ADCCLK 不超过 14MHz 保证转换精度
  * @param  RCC_PCLK2: 定义ADC时钟分频器
  * @retval 无
  * @example
@@ -343,11 +413,16 @@ void RCC_USBCLKConfig(uint32_t RCC_USBCLKSource);
 void RCC_ADCCLKConfig(uint32_t RCC_PCLK2);
 ```
 
+**功能说明：**
+- PCLK2=72MHz 时 Div6 得 12MHz 为常用安全值
+- 在 `ADC_Init` 与校准前配置
+- 过快 ADCCLK 会增加误差
+
 ### 16. RCC_LSEConfig
 
 ```c
 /**
- * @brief  配置外部低速时钟(LSE)
+ * @brief  控制 32.768kHz 外部低速晶振 LSE，为 RTC 与备份域提供精确时基
  * @param  RCC_LSE: 指定LSE的新状态
  * @retval 无
  * @example
@@ -356,11 +431,16 @@ void RCC_ADCCLKConfig(uint32_t RCC_PCLK2);
 void RCC_LSEConfig(uint8_t RCC_LSE);
 ```
 
+**功能说明：**
+- 须 `PWR_BackupAccessCmd` 后配置备份域
+- 起振慢，常轮询 `RCC_FLAG_LSERDY`
+- 支持 Bypass 接外部 32k 方波
+
 ### 17. RCC_LSICmd
 
 ```c
 /**
- * @brief  使能或失能内部低速时钟(LSI)
+ * @brief  控制内部约 40kHz LSI，供独立看门狗 IWDG 与 RTC 备选时钟
  * @param  NewState: LSI的新状态，可以是ENABLE或DISABLE
  * @retval 无
  * @example
@@ -369,11 +449,16 @@ void RCC_LSEConfig(uint8_t RCC_LSE);
 void RCC_LSICmd(FunctionalState NewState);
 ```
 
+**功能说明：**
+- IWDG 必须 LSI 或已配置的时钟源
+- 精度低于 LSE，RTC 走时一般优先 LSE
+- 使能后等待 `RCC_FLAG_LSIRDY`
+
 ### 18. RCC_RTCCLKConfig
 
 ```c
 /**
- * @brief  配置RTC时钟(RTCCLK)
+ * @brief  选择 RTC 时钟来自 LSE、LSI 或 HSE 分频，决定日历走时精度与功耗
  * @param  RCC_RTCCLKSource: 指定RTC时钟的时钟源
  * @retval 无
  * @example
@@ -382,11 +467,16 @@ void RCC_LSICmd(FunctionalState NewState);
 void RCC_RTCCLKConfig(uint32_t RCC_RTCCLKSource);
 ```
 
+**功能说明：**
+- 须在 `RCC_RTCCLKCmd(ENABLE)` 前且 RTC 未运行或备份域已复位时配置
+- LSE 适合实时时钟；LSI 免晶振
+- 切换源通常需复位备份域
+
 ### 19. RCC_RTCCLKCmd
 
 ```c
 /**
- * @brief  使能或失能RTC时钟
+ * @brief  向 RTC 模块提供时钟，使能后方能访问 RTC 寄存器与日历功能
  * @param  NewState: RTC时钟的新状态，可以是ENABLE或DISABLE
  * @retval 无
  * @example
@@ -395,11 +485,16 @@ void RCC_RTCCLKConfig(uint32_t RCC_RTCCLKSource);
 void RCC_RTCCLKCmd(FunctionalState NewState);
 ```
 
+**功能说明：**
+- 须先 `RCC_APB1Periph_PWR/BKP` 与备份访问
+- 与 `RCC_RTCCLKConfig` 顺序：先选源再使能
+- DISABLE 会停止 RTC 计数
+
 ### 20. RCC_GetClocksFreq
 
 ```c
 /**
- * @brief  返回不同片上时钟的频率
+ * @brief  根据当前 RCC 配置计算 SYSCLK/HCLK/PCLK/ADCCLK 实际频率，供波特率与延时换算
  * @param  RCC_Clocks: 指向RCC_ClocksTypeDef结构的指针
  * @retval 无
  * @example
@@ -409,11 +504,16 @@ void RCC_RTCCLKCmd(FunctionalState NewState);
 void RCC_GetClocksFreq(RCC_ClocksTypeDef* RCC_Clocks);
 ```
 
+**功能说明：**
+- 读寄存器动态计算，改时钟后应重新调用
+- USART、SysTick、定时器 ARR 依赖此结果
+- 不测量芯片，仅按配置推导
+
 ### 21. RCC_AHBPeriphClockCmd
 
 ```c
 /**
- * @brief  使能或失能AHB外设时钟
+ * @brief  开关 AHB 外设时钟门控，使用 DMA、SRAM 控制器等前必须使能
  * @param  RCC_AHBPeriph: 指定要设置时钟的AHB外设
  * @param  NewState: 指定外设时钟的新状态
  * @retval 无
@@ -423,11 +523,16 @@ void RCC_GetClocksFreq(RCC_ClocksTypeDef* RCC_Clocks);
 void RCC_AHBPeriphClockCmd(uint32_t RCC_AHBPeriph, FunctionalState NewState);
 ```
 
+**功能说明：**
+- 复位默认关闭，漏开时钟则寄存器访问无效
+- 多位或可同时开 DMA1/2
+- 低功耗不用时可 DISABLE 降功耗
+
 ### 22. RCC_APB2PeriphClockCmd
 
 ```c
 /**
- * @brief  使能或失能高速APB(APB2)外设时钟
+ * @brief  开关 APB2 高速外设时钟，GPIO/AFIO/ADC/USART1 等初始化前必调
  * @param  RCC_APB2Periph: 指定要设置时钟的APB2外设
  * @param  NewState: 指定外设时钟的新状态
  * @retval 无
@@ -437,11 +542,16 @@ void RCC_AHBPeriphClockCmd(uint32_t RCC_AHBPeriph, FunctionalState NewState);
 void RCC_APB2PeriphClockCmd(uint32_t RCC_APB2Periph, FunctionalState NewState);
 ```
 
+**功能说明：**
+- 最常用的时钟使能函数之一
+- GPIO 与 AFIO 常一起 ENABLE
+- 可位或一次开启多个 APB2 外设
+
 ### 23. RCC_APB1PeriphClockCmd
 
 ```c
 /**
- * @brief  使能或失能低速APB(APB1)外设时钟
+ * @brief  开关 APB1 低速外设时钟，TIM2-7、I2C、USART2/3、PWR 等使用前使能
  * @param  RCC_APB1Periph: 指定要设置时钟的APB1外设
  * @param  NewState: 指定外设时钟的新状态
  * @retval 无
@@ -451,11 +561,16 @@ void RCC_APB2PeriphClockCmd(uint32_t RCC_APB2Periph, FunctionalState NewState);
 void RCC_APB1PeriphClockCmd(uint32_t RCC_APB1Periph, FunctionalState NewState);
 ```
 
+**功能说明：**
+- APB1 最大 36MHz（72MHz 系统典型）
+- 定时器波特率计算注意 PCLK1 与倍频规则
+- 未用时 DISABLE 可省电
+
 ### 24. RCC_APB2PeriphResetCmd
 
 ```c
 /**
- * @brief  强制或释放高速APB(APB2)外设复位
+ * @brief  脉冲复位 APB2 外设，解决外设卡死或重新初始化前清寄存器状态
  * @param  RCC_APB2Periph: 指定要复位的APB2外设
  * @param  NewState: 指定外设复位状态
  * @retval 无
@@ -465,11 +580,16 @@ void RCC_APB1PeriphClockCmd(uint32_t RCC_APB1Periph, FunctionalState NewState);
 void RCC_APB2PeriphResetCmd(uint32_t RCC_APB2Periph, FunctionalState NewState);
 ```
 
+**功能说明：**
+- 典型序列：ENABLE 复位 → DISABLE 释放 → 再 Init
+- 复位期间外设寄存器恢复默认
+- 不要长时间保持 ENABLE
+
 ### 25. RCC_APB1PeriphResetCmd
 
 ```c
 /**
- * @brief  强制或释放低速APB(APB1)外设复位
+ * @brief  脉冲复位 APB1 外设，用于 TIM/I2C 等软复位而不影响整个系统
  * @param  RCC_APB1Periph: 指定要复位的APB1外设
  * @param  NewState: 指定外设复位状态
  * @retval 无
@@ -479,11 +599,16 @@ void RCC_APB2PeriphResetCmd(uint32_t RCC_APB2Periph, FunctionalState NewState);
 void RCC_APB1PeriphResetCmd(uint32_t RCC_APB1Periph, FunctionalState NewState);
 ```
 
+**功能说明：**
+- 与 `xxx_DeInit` 类似但由 RCC 总线复位
+- 释放复位后须重新 `xxx_Init`
+- 可单独复位某一 APB1 模块
+
 ### 26. RCC_BackupResetCmd
 
 ```c
 /**
- * @brief  强制或释放备份域复位
+ * @brief  复位备份域（RTC、BKP 寄存器等），更换 RTC 时钟源或清除备份数据时使用
  * @param  NewState: 备份域复位状态，可以是ENABLE或DISABLE
  * @retval 无
  * @example
@@ -492,11 +617,16 @@ void RCC_APB1PeriphResetCmd(uint32_t RCC_APB1Periph, FunctionalState NewState);
 void RCC_BackupResetCmd(FunctionalState NewState);
 ```
 
+**功能说明：**
+- 须 `PWR_BackupAccessCmd(ENABLE)` 才有效
+- 短脉冲 ENABLE 后 DISABLE
+- 会清除 BKP 数据与 RTC 配置
+
 ### 27. RCC_ClockSecuritySystemCmd
 
 ```c
 /**
- * @brief  使能或失能时钟安全系统
+ * @brief  使能时钟安全系统 CSS，HSE 失效时自动切 HSI 并触发 NMI，提高运行可靠性
  * @param  NewState: 时钟安全系统状态，可以是ENABLE或DISABLE
  * @retval 无
  * @example
@@ -505,11 +635,16 @@ void RCC_BackupResetCmd(FunctionalState NewState);
 void RCC_ClockSecuritySystemCmd(FunctionalState NewState);
 ```
 
+**功能说明：**
+- 依赖 HSE 的应用建议生产环境开启
+- 故障时进 NMI_Handler，须编写恢复逻辑
+- 与 `RCC_ITConfig(RCC_IT_CSS, ...)` 可配合
+
 ### 28. RCC_MCOConfig
 
 ```c
 /**
- * @brief  选择在MCO引脚上输出的时钟源
+ * @brief  将内部时钟输出到 MCO 引脚（如 PA8），便于示波器测量或同步外部电路
  * @param  RCC_MCO: 指定要输出的时钟源
  * @retval 无
  * @example
@@ -518,11 +653,16 @@ void RCC_ClockSecuritySystemCmd(FunctionalState NewState);
 void RCC_MCOConfig(uint8_t RCC_MCO);
 ```
 
+**功能说明：**
+- 须将 MCO 引脚配为复用推挽输出
+- 输出频率过高时注意 PCB 负载
+- 调试 PLL 是否锁定时常用 SYSCLK/2
+
 ### 29. RCC_GetFlagStatus
 
 ```c
 /**
- * @brief  检查指定的RCC标志位是否设置
+ * @brief  查询 HSE/PLL/LSE 就绪或复位原因等 RCC 标志，用于起振等待与上电诊断
  * @param  RCC_FLAG: 指定要检查的标志
  * @retval 标志状态，SET或RESET
  * @example
@@ -534,11 +674,16 @@ void RCC_MCOConfig(uint8_t RCC_MCO);
 FlagStatus RCC_GetFlagStatus(uint8_t RCC_FLAG);
 ```
 
+**功能说明：**
+- 常用 HSERDY、PLLRDY、LSERDY 轮询
+- 复位标志可判断 POR/软件复位等来源
+- 比固定 delay 更可靠
+
 ### 30. RCC_ClearFlag
 
 ```c
 /**
- * @brief  清除RCC复位标志
+ * @brief  清除 RCC 复位标志位，读取复位原因后清零以便下次判断
  * @param  无
  * @retval 无
  * @example
@@ -547,11 +692,16 @@ FlagStatus RCC_GetFlagStatus(uint8_t RCC_FLAG);
 void RCC_ClearFlag(void);
 ```
 
+**功能说明：**
+- 清除 PIN/POR/SFTRST 等累计标志
+- 一般在记录复位原因后调用一次
+- 不影响当前时钟配置
+
 ### 31. RCC_GetITStatus
 
 ```c
 /**
- * @brief  检查指定的RCC中断是否发生
+ * @brief  判断 RCC 中断（如 HSE 就绪）是否 pending，用于中断方式等待时钟稳定
  * @param  RCC_IT: 指定要检查的RCC中断源
  * @retval 中断状态，SET或RESET
  * @example
@@ -563,11 +713,16 @@ void RCC_ClearFlag(void);
 ITStatus RCC_GetITStatus(uint8_t RCC_IT);
 ```
 
+**功能说明：**
+- 须已 `RCC_ITConfig` 并使能 NVIC
+- ISR 内先查再清除 pending
+- 与标志位查询互补
+
 ### 32. RCC_ClearITPendingBit
 
 ```c
 /**
- * @brief  清除RCC中断待处理位
+ * @brief  清除 RCC 中断 pending，避免重复进入 ISR 或影响后续就绪检测
  * @param  RCC_IT: 指定要清除的RCC中断待处理位
  * @retval 无
  * @example
@@ -575,6 +730,11 @@ ITStatus RCC_GetITStatus(uint8_t RCC_IT);
  */
 void RCC_ClearITPendingBit(uint8_t RCC_IT);
 ```
+
+**功能说明：**
+- 通常在 RCC 中断服务函数末尾调用
+- 清除后相应 IT 状态查询为 RESET
+- 未清除可能导致连续中断
 
 ## 使用示例
 

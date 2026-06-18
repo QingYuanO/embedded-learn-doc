@@ -87,7 +87,7 @@ STM32F10x BKP外设包含以下寄存器：
 
 ```c
 /**
- * @brief  将BKP外设寄存器重置为默认值
+ * @brief  将 BKP 所有寄存器恢复为复位默认值，用于重新配置前清空旧状态
  * @param  无
  * @retval 无
  * @example
@@ -98,13 +98,14 @@ void BKP_DeInit(void);
 ```
 
 **功能说明：**
-将BKP外设的所有寄存器重置为默认值，包括侵入引脚配置、RTC输出配置等。
+- 清除侵入引脚配置、RTC 输出等控制寄存器
+- 不会清除备份数据寄存器内容
 
 ### 2. BKP_TamperPinLevelConfig
 
 ```c
 /**
- * @brief  配置侵入引脚的有效电平
+ * @brief  配置侵入检测引脚的有效触发电平（高/低）
  * @param  BKP_TamperPinLevel: 侵入引脚电平配置
  *         该参数可以是以下值之一：
  *           @arg BKP_TamperPinLevel_High: 高电平有效
@@ -118,13 +119,14 @@ void BKP_TamperPinLevelConfig(uint16_t BKP_TamperPinLevel);
 ```
 
 **功能说明：**
-配置侵入引脚的有效触发电平，当引脚电平达到设定值时将触发侵入检测。
+- 高电平或低电平触发侵入事件
+- 需与 TamperPinCmd 配合使能检测
 
 ### 3. BKP_TamperPinCmd
 
 ```c
 /**
- * @brief  使能或禁用侵入引脚功能
+ * @brief  使能/禁用侵入检测引脚，用于防拆/安全监控
  * @param  NewState: 侵入引脚功能的新状态
  *         该参数可以是以下值之一：
  *           @arg ENABLE: 使能侵入引脚功能
@@ -138,13 +140,14 @@ void BKP_TamperPinCmd(FunctionalState NewState);
 ```
 
 **功能说明：**
-控制侵入引脚功能的使能状态，使能后可以检测侵入事件。
+- ENABLE 后开始监测 PC13 侵入引脚
+- 触发侵入事件会清除全部备份寄存器
 
 ### 4. BKP_ITConfig
 
 ```c
 /**
- * @brief  使能或禁用BKP中断
+ * @brief  使能/屏蔽 BKP 侵入中断，配合 NVIC 响应安全事件
  * @param  NewState: BKP中断的新状态
  *         该参数可以是以下值之一：
  *           @arg ENABLE: 使能BKP中断
@@ -158,13 +161,14 @@ void BKP_ITConfig(FunctionalState NewState);
 ```
 
 **功能说明：**
-控制BKP中断的使能状态，使能后当发生侵入事件时会产生中断。
+- 侵入事件发生时产生 TAMPER 中断
+- 需配合 NVIC_EnableIRQ(TAMPER_IRQn)
 
 ### 5. BKP_RTCOutputConfig
 
 ```c
 /**
- * @brief  配置RTC输出到侵入引脚
+ * @brief  配置侵入引脚输出 RTC 信号（校准/闹钟/秒脉冲）
  * @param  BKP_RTCOutputSource: RTC输出源选择
  *         该参数可以是以下值之一：
  *           @arg BKP_RTCOutputSource_None: 无输出
@@ -180,13 +184,14 @@ void BKP_RTCOutputConfig(uint16_t BKP_RTCOutputSource);
 ```
 
 **功能说明：**
-配置侵入引脚作为RTC信号的输出引脚，可以输出校准时钟、闹钟或秒脉冲信号。
+- 复用 PC13 输出 RTC 校准时钟、闹钟或秒脉冲
+- 与侵入检测功能互斥，不可同时使用
 
 ### 6. BKP_SetRTCCalibrationValue
 
 ```c
 /**
- * @brief  设置RTC校准值
+ * @brief  设置 RTC 时钟校准值（0–127），补偿晶振频率偏差
  * @param  CalibrationValue: RTC校准值，范围0-127
  * @retval 无
  * @example
@@ -197,13 +202,14 @@ void BKP_SetRTCCalibrationValue(uint8_t CalibrationValue);
 ```
 
 **功能说明：**
-设置RTC时钟的校准值，用于补偿时钟频率偏差，提高时间精度。
+- 写入 BKP 校准寄存器，微调 RTC 走时精度
+- 需先 PWR_BackupAccessCmd(ENABLE)
 
 ### 7. BKP_WriteBackupRegister
 
 ```c
 /**
- * @brief  写入备份数据寄存器
+ * @brief  向指定备份寄存器写入 16 位数据，掉电后仍保持
  * @param  BKP_DR: 备份数据寄存器地址
  *         该参数可以是BKP_DR1到BKP_DR42中的任意一个
  * @param  Data: 要写入的16位数据
@@ -216,13 +222,14 @@ void BKP_WriteBackupRegister(uint16_t BKP_DR, uint16_t Data);
 ```
 
 **功能说明：**
-向指定的备份数据寄存器写入16位数据，数据在系统掉电或复位后仍然保持。
+- 共 42 个 DR 寄存器（BKP_DR1–DR42）
+- VBAT 供电时数据在复位/掉电后保留
 
 ### 8. BKP_ReadBackupRegister
 
 ```c
 /**
- * @brief  读取备份数据寄存器
+ * @brief  读取指定备份寄存器的 16 位数据
  * @param  BKP_DR: 备份数据寄存器地址
  *         该参数可以是BKP_DR1到BKP_DR42中的任意一个
  * @retval 备份数据寄存器的16位值
@@ -234,13 +241,14 @@ uint16_t BKP_ReadBackupRegister(uint16_t BKP_DR);
 ```
 
 **功能说明：**
-从指定的备份数据寄存器读取16位数据。
+- 常用于恢复掉电前保存的配置或计数
+- 可与 WriteBackupRegister 配对使用
 
 ### 9. BKP_GetFlagStatus
 
 ```c
 /**
- * @brief  获取侵入标志状态
+ * @brief  查询侵入检测标志，判断是否发生安全事件
  * @param  无
  * @retval 侵入标志状态
  *         该返回值可以是以下值之一：
@@ -254,13 +262,14 @@ FlagStatus BKP_GetFlagStatus(void);
 ```
 
 **功能说明：**
-检查是否发生了侵入事件，返回侵入标志的状态。
+- 返回 SET 表示检测到侵入事件
+- 可用于轮询或中断前的状态确认
 
 ### 10. BKP_ClearFlag
 
 ```c
 /**
- * @brief  清除侵入标志
+ * @brief  清除侵入检测标志，处理完安全事件后需调用
  * @param  无
  * @retval 无
  * @example
@@ -271,13 +280,14 @@ void BKP_ClearFlag(void);
 ```
 
 **功能说明：**
-清除侵入标志位，通常在处理完侵入事件后调用。
+- 清除后标志恢复 RESET
+- 处理侵入事件并确认备份数据后调用
 
 ### 11. BKP_GetITStatus
 
 ```c
 /**
- * @brief  获取BKP中断状态
+ * @brief  查询 BKP 侵入中断是否挂起，用于 ISR 中判断中断源
  * @param  无
  * @retval BKP中断状态
  *         该返回值可以是以下值之一：
@@ -291,13 +301,14 @@ ITStatus BKP_GetITStatus(void);
 ```
 
 **功能说明：**
-检查BKP中断是否已挂起，用于中断服务程序中判断中断源。
+- 同时检查中断使能位和标志位
+- 返回 SET 表示 TAMPER 中断已挂起
 
 ### 12. BKP_ClearITPendingBit
 
 ```c
 /**
- * @brief  清除BKP中断挂起位
+ * @brief  清除 BKP 中断挂起位，ISR 结束前必须调用
  * @param  无
  * @retval 无
  * @example
@@ -308,7 +319,8 @@ void BKP_ClearITPendingBit(void);
 ```
 
 **功能说明：**
-清除BKP中断的挂起位，通常在中断服务程序中调用。
+- 不清除会导致中断反复进入
+- 通常与 GetITStatus 配对使用
 
 ## 使用示例
 

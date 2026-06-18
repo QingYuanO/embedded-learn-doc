@@ -203,7 +203,7 @@ STM32F10x I2C外设包含以下寄存器：
 
 ```c
 /**
- * @brief  将I2C外设寄存器重设为默认值
+ * @brief  将 I2C 所有寄存器恢复为复位默认值，用于重新配置前清空旧状态或总线异常后恢复
  * @param  I2Cx: 选择要重置的I2C外设，可以是I2C1或I2C2
  * @retval 无
  * @example
@@ -213,13 +213,15 @@ void I2C_DeInit(I2C_TypeDef* I2Cx);
 ```
 
 **功能说明：**
-将指定I2C外设的所有寄存器恢复到复位状态，清除所有配置。
+- 调用后 I2C 回到上电默认配置，传输状态机被重置
+- 切换主从模式或更换时钟频率前可先 DeInit
+- 总线挂死、状态机异常时配合 SoftwareReset 使用
 
 ### 2. I2C_Init
 
 ```c
 /**
- * @brief  使用指定参数初始化I2C外设
+ * @brief  初始化 I2C 外设（时钟频率、主从模式、应答等），决定总线速率与基本工作方式
  * @param  I2Cx: 选择要初始化的I2C外设，可以是I2C1或I2C2
  * @param  I2C_InitStruct: 指向I2C_InitTypeDef结构体的指针，包含配置信息
  * @retval 无
@@ -234,13 +236,15 @@ void I2C_Init(I2C_TypeDef* I2Cx, I2C_InitTypeDef* I2C_InitStruct);
 ```
 
 **功能说明：**
-根据传入的结构体参数配置I2C外设，包括时钟频率、工作模式、应答功能等。
+- 一次性配置 SCL 频率、7/10 位地址模式、ACK 策略
+- 典型 100kHz（标准）或 400kHz（快速）用于 EEPROM、传感器等
+- 需在 GPIO 复用和时钟使能后、I2C_Cmd 前调用
 
 ### 3. I2C_StructInit
 
 ```c
 /**
- * @brief  使用默认值填充I2C_InitTypeDef结构体
+ * @brief  将 I2C_InitTypeDef 成员填为安全默认值，避免未赋值字段导致随机配置
  * @param  I2C_InitStruct: 指向要初始化的I2C_InitTypeDef结构体的指针
  * @retval 无
  * @example
@@ -251,13 +255,15 @@ void I2C_StructInit(I2C_InitTypeDef* I2C_InitStruct);
 ```
 
 **功能说明：**
-将I2C初始化结构体的所有成员设置为默认值，便于后续配置。
+- 默认 100kHz、标准 I2C 模式、7 位地址、应答使能
+- 先 StructInit 再按需修改成员，减少遗漏字段风险
+- 适合快速搭建可工作的初始配置
 
 ### 4. I2C_Cmd
 
 ```c
 /**
- * @brief  使能或失能指定的I2C外设
+ * @brief  启动或停止 I2C 外设；ENABLE 后外设参与总线通信，DISABLE 后停止
  * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
  * @param  NewState: I2C外设的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -268,13 +274,15 @@ void I2C_Cmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
 ```
 
 **功能说明：**
-使能或失能指定的I2C外设，控制I2C外设的开启和关闭。
+- I2C_Init 完成后必须 ENABLE 才能发起 START/收发数据
+- DISABLE 可用于低功耗或临时释放总线控制权
+- 从机模式下 ENABLE 后才会响应地址匹配
 
 ### 5. I2C_DMACmd
 
 ```c
 /**
- * @brief  使能或失能指定I2C的DMA请求
+ * @brief  打开/关闭 I2C 的 DMA 请求，配合 DMA 实现批量收发而无需 CPU 逐字节搬运
  * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
  * @param  NewState: I2C DMA传输的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -285,13 +293,15 @@ void I2C_DMACmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
 ```
 
 **功能说明：**
-配置I2C的DMA请求功能，使能后I2C可以通过DMA进行数据传输。
+- 使能后 DR 非空/空时自动触发 DMA 搬运
+- 适合大块 EEPROM 读写、传感器 FIFO 读取
+- 需先配置好对应 DMA 通道再打开
 
 ### 6. I2C_DMALastTransferCmd
 
 ```c
 /**
- * @brief  指定下一个DMA传输是否为最后一个传输
+ * @brief  标记下一次 DMA 传输为最后一笔，用于主机接收结束时自动发送 NACK 并产生 STOP
  * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
  * @param  NewState: DMA最后传输状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -302,13 +312,15 @@ void I2C_DMALastTransferCmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
 ```
 
 **功能说明：**
-设置DMA传输标志，指示当前传输是否为最后一次DMA传输。
+- 主机 DMA 接收多字节时，最后一字节需 NACK 告知从机结束
+- ENABLE 后硬件在最后一笔 DMA 完成后自动处理 NACK/STOP
+- 避免手动在最后一字节关闭 ACK 的时序问题
 
 ### 7. I2C_GenerateSTART
 
 ```c
 /**
- * @brief  产生I2C通信的START条件
+ * @brief  在总线上产生 START 条件，作为主机发起一次读/写传输的起点
  * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
  * @param  NewState: START条件产生状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -319,13 +331,15 @@ void I2C_GenerateSTART(I2C_TypeDef* I2Cx, FunctionalState NewState);
 ```
 
 **功能说明：**
-在I2C总线上产生START条件，开始一次I2C通信。
+- 主机模式下每次新事务前需产生 START
+- 产生后等待 EV5（主机模式选择）再发从机地址
+- 重复 START（Sr）用于切换读/写方向而不释放总线
 
 ### 8. I2C_GenerateSTOP
 
 ```c
 /**
- * @brief  产生I2C通信的STOP条件
+ * @brief  在总线上产生 STOP 条件，释放总线并结束当前传输事务
  * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
  * @param  NewState: STOP条件产生状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -336,13 +350,15 @@ void I2C_GenerateSTOP(I2C_TypeDef* I2Cx, FunctionalState NewState);
 ```
 
 **功能说明：**
-在I2C总线上产生STOP条件，结束一次I2C通信。
+- 一次完整读写结束后必须 STOP 释放 SCL/SDA
+- 未 STOP 时总线保持占用，其他主机无法访问
+- 异常恢复时也可强制 STOP 尝试释放总线
 
 ### 9. I2C_AcknowledgeConfig
 
 ```c
 /**
- * @brief  使能或失能指定I2C的应答功能
+ * @brief  控制接收时是否发送 ACK，用于多字节接收中在最后一字节发 NACK 结束传输
  * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
  * @param  NewState: I2C应答的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -353,13 +369,15 @@ void I2C_AcknowledgeConfig(I2C_TypeDef* I2Cx, FunctionalState NewState);
 ```
 
 **功能说明：**
-控制I2C外设的应答功能，在接收模式下决定是否发送ACK信号。
+- 主机接收时每收到一字节默认回 ACK 请求下一字节
+- 接收最后一字节前 DISABLE，告知从机停止发送
+- 从机发送被 NACK 后应停止发送并释放总线
 
 ### 10. I2C_OwnAddress2Config
 
 ```c
 /**
- * @brief  配置指定I2C的自身地址2
+ * @brief  配置从机第二自身地址，使同一 I2C 外设可响应两个不同 7 位地址
  * @param  I2Cx: 选择要配置的I2C外设，可以是I2C1或I2C2
  * @param  Address: 指定自身地址2的值
  * @retval 无
@@ -370,13 +388,15 @@ void I2C_OwnAddress2Config(I2C_TypeDef* I2Cx, uint8_t Address);
 ```
 
 **功能说明：**
-配置I2C外设的第二个自身地址，用于双地址模式。
+- 配合 DualAddressCmd 实现双地址从机
+- 适用于同一芯片需模拟两个 I2C 设备的场景
+- 地址 2 仅支持 7 位格式
 
 ### 11. I2C_DualAddressCmd
 
 ```c
 /**
- * @brief  使能或失能指定I2C的双地址模式
+ * @brief  打开/关闭双地址从机模式，同时监听 OwnAddress1 与 OwnAddress2
  * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
  * @param  NewState: I2C双地址模式的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -387,13 +407,15 @@ void I2C_DualAddressCmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
 ```
 
 **功能说明：**
-使能双地址模式，允许I2C外设响应两个不同的地址。
+- ENABLE 后主机对任一配置地址的寻址都会匹配
+- 需先配置 OAR1 和 OwnAddress2
+- 常用于多功能从机或地址迁移过渡期
 
 ### 12. I2C_GeneralCallCmd
 
 ```c
 /**
- * @brief  使能或失能指定I2C的广播呼叫功能
+ * @brief  打开/关闭广播呼叫响应，使从机可识别地址 0x00 的全局广播
  * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
  * @param  NewState: I2C广播呼叫的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -404,13 +426,15 @@ void I2C_GeneralCallCmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
 ```
 
 **功能说明：**
-使能广播呼叫功能，允许I2C外设响应地址0x00的广播通信。
+- 主机向 0x00 广播时，所有使能的从机同时响应
+- 常用于系统复位、同步配置等广播命令
+- 从机需自行判断广播数据是否针对本设备
 
 ### 13. I2C_Send7bitAddress
 
 ```c
 /**
- * @brief  发送一个7位地址字节来选择从设备
+ * @brief  发送 7 位从机地址及读写位，选定本次传输的目标从设备与方向
  * @param  I2Cx: 选择要发送地址的I2C外设，可以是I2C1或I2C2
  * @param  Address: 指定要发送的从设备地址
  * @param  I2C_Direction: 指定I2C设备是发送器还是接收器
@@ -422,13 +446,15 @@ void I2C_Send7bitAddress(I2C_TypeDef* I2Cx, uint8_t Address, uint8_t I2C_Directi
 ```
 
 **功能说明：**
-发送7位从设备地址和读写位，用于选择要通信的从设备。
+- START 后紧跟地址字节，最低位 0=写、1=读
+- 地址参数为 8 位格式（7 位地址左移 1 位），库会自动处理 R/W 位
+- 等待 EV6（地址发送/匹配成功）后再读写数据
 
 ### 14. I2C_SendData
 
 ```c
 /**
- * @brief  通过I2C外设发送一个数据字节
+ * @brief  向 DR 写入一字节数据，由硬件在 SCL 节拍上串行发出
  * @param  I2Cx: 选择要发送数据的I2C外设，可以是I2C1或I2C2
  * @param  Data: 要发送的数据字节
  * @retval 无
@@ -439,13 +465,15 @@ void I2C_SendData(I2C_TypeDef* I2Cx, uint8_t Data);
 ```
 
 **功能说明：**
-通过I2C数据寄存器发送一个字节的数据。
+- 主机写模式或从机被读时向总线发送数据
+- 写入前需确认 TXE/BTF 标志，避免覆盖未发送完的数据
+- 寄存器地址、命令字、负载均通过此函数发出
 
 ### 15. I2C_ReceiveData
 
 ```c
 /**
- * @brief  从指定的I2C外设接收一个数据字节
+ * @brief  从 DR 读取一字节接收数据，主机读或从机被写时使用
  * @param  I2Cx: 选择要接收数据的I2C外设，可以是I2C1或I2C2
  * @retval 接收到的数据字节
  * @example
@@ -455,13 +483,15 @@ uint8_t I2C_ReceiveData(I2C_TypeDef* I2Cx);
 ```
 
 **功能说明：**
-从I2C数据寄存器读取接收到的数据字节。
+- 读取 RXNE 置位后的 DR 内容
+- 主机读传感器/EEPROM 时循环调用直至收满
+- 读 DR 会自动清除 RXNE，并可能触发下一字节 ACK
 
 ### 16. I2C_ReadRegister
 
 ```c
 /**
- * @brief  读取指定I2C寄存器的值并返回
+ * @brief  直接读取 I2C 指定寄存器，用于调试或访问库未封装的控制位
  * @param  I2Cx: 选择要读取的I2C外设，可以是I2C1或I2C2
  * @param  I2C_Register: 指定要读取的寄存器
  * @retval 寄存器的值
@@ -472,13 +502,15 @@ uint16_t I2C_ReadRegister(I2C_TypeDef* I2Cx, uint8_t I2C_Register);
 ```
 
 **功能说明：**
-读取I2C外设指定寄存器的当前值。
+- 可读取 SR1、SR2、CR1 等任意 I2C 寄存器
+- 调试总线状态时比逐位查标志更方便
+- 正常驱动流程优先用 GetFlagStatus/CheckEvent
 
 ### 17. I2C_SoftwareResetCmd
 
 ```c
 /**
- * @brief  使能或失能指定I2C的软件复位
+ * @brief  执行 I2C 软件复位，清除内部状态机以从总线死锁或 AF 错误中恢复
  * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
  * @param  NewState: I2C软件复位的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -489,13 +521,15 @@ void I2C_SoftwareResetCmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
 ```
 
 **功能说明：**
-执行I2C外设的软件复位，用于错误恢复和状态重置。
+- 典型流程：ENABLE 复位 → DISABLE 解除 → 重新 Init/Cmd
+- 用于 BERR、AF 等错误后状态机卡死
+- 复位期间外设不参与总线，需确保物理总线已空闲
 
 ### 18. I2C_NACKPositionConfig
 
 ```c
 /**
- * @brief  选择指定I2C的NACK位置
+ * @brief  配置双缓冲接收时 NACK 的发送时机，配合 DMA 多字节接收使用
  * @param  I2Cx: 选择要配置的I2C外设，可以是I2C1或I2C2
  * @param  I2C_NACKPosition: 指定NACK位置
  * @retval 无
@@ -506,13 +540,15 @@ void I2C_NACKPositionConfig(I2C_TypeDef* I2Cx, uint16_t I2C_NACKPosition);
 ```
 
 **功能说明：**
-配置NACK信号的发送位置，用于多字节接收的控制。
+- Current：在当前字节接收完成后发 NACK
+- Next：在下一字节接收完成后发 NACK
+- 影响 DMA 接收最后一字节的 ACK/NACK 时序
 
 ### 19. I2C_SMBusAlertConfig
 
 ```c
 /**
- * @brief  驱动指定I2C的SMBusAlert引脚为高电平或低电平
+ * @brief  驱动 SMBus Alert 引脚电平，用于 SMBus 主机向系统报告警报或响应警报
  * @param  I2Cx: 选择要配置的I2C外设，可以是I2C1或I2C2
  * @param  I2C_SMBusAlert: 指定SMBusAlert引脚电平
  * @retval 无
@@ -523,13 +559,15 @@ void I2C_SMBusAlertConfig(I2C_TypeDef* I2Cx, uint16_t I2C_SMBusAlert);
 ```
 
 **功能说明：**
-配置SMBus警报引脚的电平状态。
+- SMBus 设备故障时拉低 Alert 通知主机
+- 主机可拉低 Alert 发起 Alert Response Address 访问
+- 仅 SMBus 模式且硬件连接 Alert 引脚时有效
 
 ### 20. I2C_TransmitPEC
 
 ```c
 /**
- * @brief  使能或失能指定I2C的PEC传输
+ * @brief  控制是否在传输末尾附加 PEC 校验字节，用于 SMBus 数据完整性校验
  * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
  * @param  NewState: I2C PEC传输的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -540,13 +578,15 @@ void I2C_TransmitPEC(I2C_TypeDef* I2Cx, FunctionalState NewState);
 ```
 
 **功能说明：**
-控制PEC（包错误检查）字节的传输。
+- ENABLE 后硬件在数据后自动发送 CRC-8 校验字节
+- 接收方可用 GetPEC 比对验证
+- SMBus 电池管理等协议常要求 PEC
 
 ### 21. I2C_PECPositionConfig
 
 ```c
 /**
- * @brief  选择指定I2C的PEC位置
+ * @brief  选择 PEC 字节在当前还是下一数据位置发送/接收，配合双缓冲时序
  * @param  I2Cx: 选择要配置的I2C外设，可以是I2C1或I2C2
  * @param  I2C_PECPosition: 指定PEC位置
  * @retval 无
@@ -557,13 +597,15 @@ void I2C_PECPositionConfig(I2C_TypeDef* I2Cx, uint16_t I2C_PECPosition);
 ```
 
 **功能说明：**
-配置PEC字节在传输中的位置。
+- 与 NACKPosition 类似，控制 PEC 相对数据字节的时序
+- 多字节 SMBus 块读写时需正确配置
+- 配置错误会导致 PEC 错位校验失败
 
 ### 22. I2C_CalculatePEC
 
 ```c
 /**
- * @brief  使能或失能指定I2C的PEC值计算
+ * @brief  打开/关闭硬件 PEC（CRC-8）自动计算，收发过程中实时累加校验值
  * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
  * @param  NewState: I2C PEC计算的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -574,13 +616,15 @@ void I2C_CalculatePEC(I2C_TypeDef* I2Cx, FunctionalState NewState);
 ```
 
 **功能说明：**
-使能或失能PEC值的自动计算功能。
+- 使能后硬件对地址+数据流自动计算 PEC
+- 无需软件逐字节 CRC，降低 CPU 负担
+- 需配合 TransmitPEC 在帧末发送/接收校验字节
 
 ### 23. I2C_GetPEC
 
 ```c
 /**
- * @brief  返回指定I2C的PEC值
+ * @brief  读取硬件已计算的 PEC 值，用于发送前写入或接收后比对校验
  * @param  I2Cx: 选择要获取PEC值的I2C外设，可以是I2C1或I2C2
  * @retval PEC值
  * @example
@@ -590,13 +634,15 @@ uint8_t I2C_GetPEC(I2C_TypeDef* I2Cx);
 ```
 
 **功能说明：**
-获取当前计算的PEC值。
+- 发送侧：取计算值作为最后一字节发出
+- 接收侧：与对端发来的 PEC 比较判断数据完整性
+- 需在 CalculatePEC 使能且传输完成后读取
 
 ### 24. I2C_ARPCmd
 
 ```c
 /**
- * @brief  使能或失能指定I2C的ARP功能
+ * @brief  打开/关闭 SMBus ARP（地址解析协议），支持动态分配从机地址
  * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
  * @param  NewState: I2C ARP的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -607,13 +653,15 @@ void I2C_ARPCmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
 ```
 
 **功能说明：**
-使能或失能ARP（地址解析协议）功能。
+- ARP 允许 SMBus 主机为多个相同默认地址的设备分配唯一地址
+- 适用于热插拔、多相同类型从机场景
+- 需配合 SMBus 协议栈使用，标准 I2C 一般不需要
 
 ### 25. I2C_StretchClockCmd
 
 ```c
 /**
- * @brief  使能或失能指定I2C的时钟延展功能
+ * @brief  控制从机是否允许时钟延展（拉低 SCL 暂停主机），处理来不及响应的情况
  * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
  * @param  NewState: I2C时钟延展的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -624,13 +672,15 @@ void I2C_StretchClockCmd(I2C_TypeDef* I2Cx, FunctionalState NewState);
 ```
 
 **功能说明：**
-控制时钟延展功能，当失能时从设备不能延长SCL的低电平时间。
+- 从机接收数据过快时可延展 SCL 争取处理时间
+- DISABLE 后从机不能暂停时钟，响应必须及时
+- 某些实时主机不支持时钟延展，需按从机能力配置
 
 ### 26. I2C_FastModeDutyCycleConfig
 
 ```c
 /**
- * @brief  选择指定I2C的快速模式占空比
+ * @brief  设置快速模式（400kHz）下 SCL 高低电平占空比，满足从机时序要求
  * @param  I2Cx: 选择要配置的I2C外设，可以是I2C1或I2C2
  * @param  I2C_DutyCycle: 指定快速模式占空比
  * @retval 无
@@ -641,13 +691,15 @@ void I2C_FastModeDutyCycleConfig(I2C_TypeDef* I2Cx, uint16_t I2C_DutyCycle);
 ```
 
 **功能说明：**
-配置I2C快速模式下的时钟占空比。
+- 400kHz 快速模式下 CCR 计算依赖占空比选择
+- DutyCycle_2（2:1）为常用默认；16:9 适配特定从机
+- 仅 ClockSpeed 大于 100kHz 时有效
 
 ### 27. I2C_CheckEvent
 
 ```c
 /**
- * @brief  检查最后一个I2C事件是否等于传递的事件
+ * @brief  轮询检查 I2C 是否进入指定事件状态（如 EV5/EV6），用于无中断的状态机驱动
  * @param  I2Cx: 选择要检查的I2C外设，可以是I2C1或I2C2
  * @param  I2C_EVENT: 指定要检查的事件
  * @retval 事件状态，SUCCESS或ERROR
@@ -661,13 +713,15 @@ ErrorStatus I2C_CheckEvent(I2C_TypeDef* I2Cx, uint32_t I2C_EVENT);
 ```
 
 **功能说明：**
-检查I2C状态寄存器中是否发生了指定的事件，用于轮询方式检测I2C状态。
+- 一次判断 SR1+SR2 组合是否匹配预定义事件宏
+- 比单独查多个标志更简洁，适合轮询式主机/从机驱动
+- 超时场景需外层加计数或定时器避免死等
 
 ### 28. I2C_GetLastEvent
 
 ```c
 /**
- * @brief  返回最后一个I2C事件
+ * @brief  读取 SR1 与 SR2 组合编码的当前事件值，供自定义状态机解析
  * @param  I2Cx: 选择要获取事件的I2C外设，可以是I2C1或I2C2
  * @retval 最后一个事件值
  * @example
@@ -677,13 +731,15 @@ uint32_t I2C_GetLastEvent(I2C_TypeDef* I2Cx);
 ```
 
 **功能说明：**
-获取I2C状态寄存器的组合值，包含SR1和SR2寄存器信息。
+- 返回值可与事件宏比较，或 switch 分支处理
+- 中断与轮询均可使用，灵活度高于 CheckEvent
+- 读取后部分标志需配合 ClearFlag 清除
 
 ### 29. I2C_GetFlagStatus
 
 ```c
 /**
- * @brief  检查指定的I2C标志位是否被设置
+ * @brief  查询单个 I2C 标志位（如 BUSY、TXE、ADDR），判断当前传输进度或错误
  * @param  I2Cx: 选择要检查的I2C外设，可以是I2C1或I2C2
  * @param  I2C_FLAG: 指定要检查的标志位
  * @retval 标志位状态，SET或RESET
@@ -697,13 +753,15 @@ FlagStatus I2C_GetFlagStatus(I2C_TypeDef* I2Cx, uint32_t I2C_FLAG);
 ```
 
 **功能说明：**
-检查指定I2C标志位的状态，用于获取I2C外设的当前状态。
+- 常用：BUSY 判断总线空闲、TXE/RXNE 控制收发节奏
+- AF/BERR 等错误标志也需在此检测
+- 比 CheckEvent 粒度更细，适合精细时序控制
 
 ### 30. I2C_ClearFlag
 
 ```c
 /**
- * @brief  清除指定I2C的待处理标志位
+ * @brief  清除指定 I2C 标志（如 ADDR、AF），避免重复触发或阻塞后续传输
  * @param  I2Cx: 选择要清除标志的I2C外设，可以是I2C1或I2C2
  * @param  I2C_FLAG: 指定要清除的标志位
  * @retval 无
@@ -714,13 +772,15 @@ void I2C_ClearFlag(I2C_TypeDef* I2Cx, uint32_t I2C_FLAG);
 ```
 
 **功能说明：**
-清除指定的I2C标志位，通常用于清除错误标志或状态标志。
+- 地址匹配 ADDR 标志需读 SR1/SR2 或调此函数清除
+- 错误标志 AF、BERR 清除后才能继续新事务
+- 部分标志硬件自动清除，以参考手册为准
 
 ### 31. I2C_ITConfig
 
 ```c
 /**
- * @brief  使能或失能指定的I2C中断
+ * @brief  打开/关闭 I2C 中断源（事件/缓冲/错误），配合 NVIC 实现异步收发
  * @param  I2Cx: 选择要控制的I2C外设，可以是I2C1或I2C2
  * @param  I2C_IT: 指定要使能或失能的I2C中断源
  * @param  NewState: 指定I2C中断的新状态，可以是ENABLE或DISABLE
@@ -732,13 +792,15 @@ void I2C_ITConfig(I2C_TypeDef* I2Cx, uint16_t I2C_IT, FunctionalState NewState);
 ```
 
 **功能说明：**
-配置I2C中断的使能状态，控制哪些I2C事件可以产生中断。
+- EVT：START/ADDR/STOP 等状态变化
+- BUF：TXE/RXNE 数据就绪；ERR：AF/BERR 等
+- 中断驱动可减少轮询 CPU 占用，适合多字节传输
 
 ### 32. I2C_GetITStatus
 
 ```c
 /**
- * @brief  检查指定的I2C中断是否发生
+ * @brief  在中断服务程序中判断具体 I2C 中断源是否挂起
  * @param  I2Cx: 选择要检查的I2C外设，可以是I2C1或I2C2
  * @param  I2C_IT: 指定要检查的I2C中断源
  * @retval 中断状态，SET或RESET
@@ -752,13 +814,15 @@ ITStatus I2C_GetITStatus(I2C_TypeDef* I2Cx, uint32_t I2C_IT);
 ```
 
 **功能说明：**
-检查指定I2C中断源的状态，用于中断服务程序中判断中断原因。
+- 同时检查使能位与挂起位，避免误响应未使能中断
+- ISR 中按 IT 类型分支处理收发或错误
+- 与 GetFlagStatus 类似但面向中断上下文
 
 ### 33. I2C_ClearITPendingBit
 
 ```c
 /**
- * @brief  清除指定I2C的中断待处理位
+ * @brief  清除 I2C 中断挂起位，ISR 处理完毕后必须调用以免重复进中断
  * @param  I2Cx: 选择要清除中断的I2C外设，可以是I2C1或I2C2
  * @param  I2C_IT: 指定要清除的I2C中断待处理位
  * @retval 无
@@ -769,7 +833,9 @@ void I2C_ClearITPendingBit(I2C_TypeDef* I2Cx, uint32_t I2C_IT);
 ```
 
 **功能说明：**
-清除指定I2C中断的待处理位，通常在中断服务程序中调用。
+- 处理完 ADDR/RXNE/AF 等中断后清除对应挂起位
+- 某些标志需先读 DR 再清除，遵循参考手册顺序
+- 未清除会导致中断反复触发
 
 ## 使用示例
 

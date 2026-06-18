@@ -165,7 +165,7 @@ typedef struct
 
 ```c
 /**
- * @brief  将DMA通道寄存器复位为默认值
+ * @brief  将 DMA 通道寄存器恢复为复位默认值，用于重新配置前清空旧传输状态
  * @param  DMAy_Channelx: 指定的DMA通道，可以是DMA1_Channel1到DMA1_Channel7或DMA2_Channel1到DMA2_Channel5
  * @retval 无
  * @example
@@ -175,13 +175,15 @@ void DMA_DeInit(DMA_Channel_TypeDef* DMAy_Channelx);
 ```
 
 **功能说明：**
-将指定的DMA通道寄存器复位为默认值，清除所有配置。
+- 清除方向、地址、计数等全部通道配置
+- 切换传输源/目的或模式前先 DeInit
+- 传输异常后可重置通道再 Init
 
 ### 2. DMA_Init
 
 ```c
 /**
- * @brief  根据DMA_InitStruct中的参数初始化DMA通道
+ * @brief  初始化 DMA 通道（源/目的地址、方向、宽度、模式等），建立外设与内存间的搬运路径
  * @param  DMAy_Channelx: 指定的DMA通道
  * @param  DMA_InitStruct: 指向DMA_InitTypeDef结构体的指针，包含配置信息
  * @retval 无
@@ -197,13 +199,15 @@ void DMA_Init(DMA_Channel_TypeDef* DMAy_Channelx, DMA_InitTypeDef* DMA_InitStruc
 ```
 
 **功能说明：**
-根据指定的参数初始化DMA通道，配置传输方向、数据宽度、传输模式等。
+- 配置外设到内存、内存到外设或内存到内存
+- 设置数据宽度、地址是否递增、循环/普通模式
+- 需在 DMA_Cmd 前完成，并匹配外设 DMA 请求线
 
 ### 3. DMA_StructInit
 
 ```c
 /**
- * @brief  将DMA_InitStruct的每个成员设置为默认值
+ * @brief  将 DMA_InitTypeDef 成员填为安全默认值，避免未赋值字段导致随机配置
  * @param  DMA_InitStruct: 指向DMA_InitTypeDef结构体的指针
  * @retval 无
  * @example
@@ -214,13 +218,15 @@ void DMA_StructInit(DMA_InitTypeDef* DMA_InitStruct);
 ```
 
 **功能说明：**
-用默认值填充DMA_InitTypeDef结构体，为后续配置提供基础。
+- 提供合理的默认地址、宽度、优先级等
+- 先 StructInit 再按需修改各成员
+- 降低多字段 DMA 配置的遗漏风险
 
 ### 4. DMA_Cmd
 
 ```c
 /**
- * @brief  使能或禁用指定的DMA通道
+ * @brief  启动或停止 DMA 通道；ENABLE 后按配置自动搬运，DISABLE 后暂停
  * @param  DMAy_Channelx: 指定的DMA通道
  * @param  NewState: DMA通道的新状态，可以是ENABLE或DISABLE
  * @retval 无
@@ -232,13 +238,15 @@ void DMA_Cmd(DMA_Channel_TypeDef* DMAy_Channelx, FunctionalState NewState);
 ```
 
 **功能说明：**
-使能或禁用指定的DMA通道，控制DMA传输的开始和停止。
+- Init 完成且外设 DMA 请求使能后 ENABLE 开始传输
+- DISABLE 可中止当前传输（剩余计数停止递减）
+- 修改 CNDTR 前须先 DISABLE 通道
 
 ### 5. DMA_ITConfig
 
 ```c
 /**
- * @brief  使能或禁用指定DMA通道的中断
+ * @brief  打开/关闭 DMA 中断（传输完成/半传输/错误），配合 NVIC 获知搬运进度
  * @param  DMAy_Channelx: 指定的DMA通道
  * @param  DMA_IT: 指定的DMA中断源，可以是DMA_IT_TC、DMA_IT_HT、DMA_IT_TE的组合
  * @param  NewState: 中断的新状态，可以是ENABLE或DISABLE
@@ -250,13 +258,15 @@ void DMA_ITConfig(DMA_Channel_TypeDef* DMAy_Channelx, uint32_t DMA_IT, Functiona
 ```
 
 **功能说明：**
-配置DMA通道的中断功能，可以同时使能多个中断源。
+- TC：整缓冲传完，常用于通知应用处理数据
+- HT：半缓冲完成，适合双缓冲乒乓操作
+- TE：传输错误，需排查地址或总线问题
 
 ### 6. DMA_SetCurrDataCounter
 
 ```c
 /**
- * @brief  设置指定DMA通道当前数据传输数量
+ * @brief  设置本次传输的数据单元个数，决定 DMA 搬多少数据后停止
  * @param  DMAy_Channelx: 指定的DMA通道
  * @param  DataNumber: 要传输的数据数量（1-65535）
  * @retval 无
@@ -267,13 +277,15 @@ void DMA_SetCurrDataCounter(DMA_Channel_TypeDef* DMAy_Channelx, uint16_t DataNum
 ```
 
 **功能说明：**
-设置DMA通道当前要传输的数据数量，仅在通道禁用时可以设置。
+- 仅在通道 DISABLE 时写入 CNDTR
+- 重复启动传输前需重新设置计数
+- 单元大小由 Init 中的 Memory/Periph DataSize 决定
 
 ### 7. DMA_GetCurrDataCounter
 
 ```c
 /**
- * @brief  获取指定DMA通道当前剩余的数据传输数量
+ * @brief  读取通道剩余未传输的数据单元数，用于监控进度或判断完成
  * @param  DMAy_Channelx: 指定的DMA通道
  * @retval 剩余的数据传输数量
  * @example
@@ -283,13 +295,15 @@ uint16_t DMA_GetCurrDataCounter(DMA_Channel_TypeDef* DMAy_Channelx);
 ```
 
 **功能说明：**
-返回DMA通道当前剩余的数据传输数量，可用于监控传输进度。
+- 传输进行中 CNDTR 递减，为 0 表示完成
+- 可计算已传输量 = 初始值 - 剩余值
+- 轮询等待完成时可替代中断
 
 ### 8. DMA_GetFlagStatus
 
 ```c
 /**
- * @brief  检查指定的DMA标志位是否设置
+ * @brief  查询 DMA 标志位（TC/HT/TE），判断传输完成、半完成或错误
  * @param  DMAy_FLAG: 指定的DMA标志位
  * @retval FlagStatus: 标志位状态（SET或RESET）
  * @example
@@ -301,13 +315,15 @@ FlagStatus DMA_GetFlagStatus(uint32_t DMAy_FLAG);
 ```
 
 **功能说明：**
-检查指定DMA标志位的状态，用于判断传输状态和错误情况。
+- 轮询模式下等待 TC 再处理缓冲
+- TE 置位表示传输错误
+- 标志与通道号对应（如 TC1 对应 Channel1）
 
 ### 9. DMA_ClearFlag
 
 ```c
 /**
- * @brief  清除指定的DMA标志位
+ * @brief  清除 DMA 标志位，避免重复检测到同一完成/错误事件
  * @param  DMAy_FLAG: 指定要清除的DMA标志位
  * @retval 无
  * @example
@@ -317,13 +333,15 @@ void DMA_ClearFlag(uint32_t DMAy_FLAG);
 ```
 
 **功能说明：**
-清除指定的DMA标志位，通常在中断服务程序中使用。
+- 轮询处理 TC/HT 后必须清除
+- 中断模式下也可配合使用
+- 未清除会导致误以为再次完成
 
 ### 10. DMA_GetITStatus
 
 ```c
 /**
- * @brief  检查指定的DMA中断是否发生
+ * @brief  在中断服务程序中判断具体 DMA 中断源是否挂起
  * @param  DMAy_IT: 指定的DMA中断标志
  * @retval ITStatus: 中断状态（SET或RESET）
  * @example
@@ -335,13 +353,15 @@ ITStatus DMA_GetITStatus(uint32_t DMAy_IT);
 ```
 
 **功能说明：**
-检查指定DMA中断标志的状态，用于中断服务程序中判断中断源。
+- 检查使能位与挂起位组合
+- ISR 中区分 TC/HT/TE 分支
+- 比 GetFlagStatus 更适合中断上下文
 
 ### 11. DMA_ClearITPendingBit
 
 ```c
 /**
- * @brief  清除指定的DMA中断挂起位
+ * @brief  清除 DMA 中断挂起位，ISR 处理完毕后必须调用以免重复进中断
  * @param  DMAy_IT: 指定要清除的DMA中断挂起位
  * @retval 无
  * @example
@@ -351,7 +371,9 @@ void DMA_ClearITPendingBit(uint32_t DMAy_IT);
 ```
 
 **功能说明：**
-清除指定的DMA中断挂起位，必须在中断服务程序中调用以清除中断。
+- 处理完 TC/HT/TE 中断后调用
+- 未清除会导致中断反复触发
+- 与 ClearFlag 配合确保状态干净
 
 ## 使用示例
 

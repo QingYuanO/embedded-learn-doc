@@ -41,24 +41,25 @@ STM32F10x WWDG外设包含以下主要寄存器：
 
 ```c
 /**
- * @brief  将WWDG外设寄存器重置为默认值
+ * @brief  将 WWDG 寄存器恢复为复位默认值，用于重新配置前清空旧状态
  * @param  无
  * @retval 无
  * @example
  *     WWDG_DeInit();
- *     将WWDG外设恢复到初始状态
  */
 void WWDG_DeInit(void);
 ```
 
 **功能说明：**
-将WWDG外设的所有寄存器重置为默认值，包括预分频器、窗口值、计数器等配置。
+- 复位 CR、CFR 等寄存器到上电默认值
+- 仅在 WWDG 未启动时有效；启动后无法 DeInit
+- 切换看门狗参数前可先调用，再重新配置
 
 ### 2. WWDG_SetPrescaler
 
 ```c
 /**
- * @brief  设置WWDG预分频器
+ * @brief  设置 WWDG 预分频系数（1/2/4/8），决定计数器递减速率与超时时间
  * @param  WWDG_Prescaler: WWDG预分频器值
  *         该参数可以是以下值之一：
  *           @arg WWDG_Prescaler_1: 预分频器1
@@ -68,87 +69,92 @@ void WWDG_DeInit(void);
  * @retval 无
  * @example
  *     WWDG_SetPrescaler(WWDG_Prescaler_8);
- *     设置WWDG预分频器为8
  */
 void WWDG_SetPrescaler(uint32_t WWDG_Prescaler);
 ```
 
 **功能说明：**
-设置WWDG的预分频器值，用于调整看门狗的时钟频率和超时时间。
+- 时钟源为 PCLK1/4096 再经预分频，须在 WWDG_Enable 之前配置
+- 超时 ≈ (Counter+1) × 4096 × Prescaler / PCLK1
+- 分频越大超时越长，典型配置 Prescaler_8
 
 ### 3. WWDG_SetWindowValue
 
 ```c
 /**
- * @brief  设置WWDG窗口值
+ * @brief  设置窗口看门狗窗口下限值，仅当计数器 ≤ 窗口值时喂狗才有效
  * @param  WindowValue: WWDG窗口值，范围0-0x7F
  * @retval 无
  * @example
  *     WWDG_SetWindowValue(0x40);
- *     设置WWDG窗口值为0x40
  */
 void WWDG_SetWindowValue(uint8_t WindowValue);
 ```
 
 **功能说明：**
-设置WWDG的窗口值，定义允许喂狗的时间窗口。只有在窗口时间内喂狗才有效。
+- 窗口值必须小于计数器当前值，否则喂狗会立即触发复位
+- 过早喂狗（计数器 &gt; 窗口值）和超时未喂狗均导致复位
+- 须在 WWDG_Enable 之前设置，是 WWDG 区别于 IWDG 的核心特性
 
 ### 4. WWDG_EnableIT
 
 ```c
 /**
- * @brief  使能WWDG中断
+ * @brief  使能 WWDG 早期唤醒中断，计数器减到 0x40 时产生中断以便紧急处理
  * @param  无
  * @retval 无
  * @example
  *     WWDG_EnableIT();
- *     使能WWDG中断
  */
 void WWDG_EnableIT(void);
 ```
 
 **功能说明：**
-使能WWDG中断功能，当看门狗即将超时时会产生中断。
+- 中断在计数器到达 0x40 时触发，距复位尚有时间
+- 须配合 NVIC_EnableIRQ(WWDG_IRQn) 使用
+- 中断中可保存关键数据并调用 WWDG_SetCounter 喂狗
 
 ### 5. WWDG_SetCounter
 
 ```c
 /**
- * @brief  设置WWDG计数器值
+ * @brief  喂狗：重装载 WWDG 计数器，须在窗口时间内调用才有效
  * @param  Counter: WWDG计数器值，范围0x40-0x7F
  * @retval 无
  * @example
  *     WWDG_SetCounter(0x7F);
- *     设置WWDG计数器值为最大值
  */
 void WWDG_SetCounter(uint8_t Counter);
 ```
 
 **功能说明：**
-设置WWDG计数器的初始值，计数器值必须在0x40-0x7F范围内。
+- 写入值须 ≥ 0x40，通常设为 0x7F 以获得最长超时
+- 仅当当前计数 ≤ 窗口值时写入有效，否则触发复位
+- 是运行期间唯一需要的喂狗操作
 
 ### 6. WWDG_Enable
 
 ```c
 /**
- * @brief  使能WWDG
+ * @brief  启动窗口看门狗并设置计数器初值，启动后无法软件关闭
  * @param  Counter: WWDG计数器值，范围0x40-0x7F
  * @retval 无
  * @example
  *     WWDG_Enable(0x7F);
- *     使能WWDG功能，计数器初始值为0x7F
  */
 void WWDG_Enable(uint8_t Counter);
 ```
 
 **功能说明：**
-使能WWDG功能并设置计数器初始值，一旦使能后无法禁用。
+- 同时完成启动和计数器初值设置，须在预分频器和窗口值配置后调用
+- 一旦启动仅硬件复位可停止，需先 RCC_APB1PeriphClockCmd 使能时钟
+- Counter 通常取 0x7F，配合窗口值 0x40 形成约一半周期的喂狗窗口
 
 ### 7. WWDG_GetFlagStatus
 
 ```c
 /**
- * @brief  获取WWDG标志状态
+ * @brief  查询 WWDG 早期唤醒中断标志（EWIF），判断是否即将超时
  * @param  无
  * @retval 标志状态
  *         该返回值可以是以下值之一：
@@ -156,30 +162,32 @@ void WWDG_Enable(uint8_t Counter);
  *           @arg RESET: 标志已清除
  * @example
  *     FlagStatus flag = WWDG_GetFlagStatus();
- *     检查WWDG标志状态
  */
 FlagStatus WWDG_GetFlagStatus(void);
 ```
 
 **功能说明：**
-检查WWDG的标志状态，用于判断看门狗是否即将超时。
+- SET 表示计数器已减至 0x40，即将超时复位
+- 可在主循环轮询，也可在中断服务程序中确认中断源
+- 读取后须调用 WWDG_ClearFlag 清除
 
 ### 8. WWDG_ClearFlag
 
 ```c
 /**
- * @brief  清除WWDG标志
+ * @brief  清除 WWDG 早期唤醒中断标志（EWIF），防止中断重复进入
  * @param  无
  * @retval 无
  * @example
  *     WWDG_ClearFlag();
- *     清除WWDG标志
  */
 void WWDG_ClearFlag(void);
 ```
 
 **功能说明：**
-清除WWDG的标志位，通常在处理完相应事件后调用。
+- 须在 WWDG_IRQHandler 开头或处理完毕后调用
+- 清除标志后可在中断中执行紧急保存并喂狗
+- 不清除则中断会持续挂起
 
 ## 使用示例
 
