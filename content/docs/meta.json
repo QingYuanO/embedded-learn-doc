@@ -2,6 +2,7 @@
   "pages": [
     "jxkj-stm32",
     "std",
-    "hal"
+    "hal",
+    "peripheral"
   ]
 }

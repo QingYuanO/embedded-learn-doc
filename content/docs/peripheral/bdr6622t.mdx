@@ -1,0 +1,607 @@
+---
+title: BDR6622T 步进电机驱动
+description: 巴丁微电子 BDR6622T 双 H 桥步进驱动芯片，STM32F10x 标准库 GPIO + 定时器换相控制示例
+---
+
+> 面向嵌入式入门，以 **STM32F10x 标准外设库（StdPeriph Library）** 为例。  
+> BDR6622T **没有 STEP/DIR 接口**，MCU 需通过 **IN1～IN4** 输出四相励磁时序驱动步进电机。
+
+---
+
+## 目录
+
+1. [芯片简介](#一芯片简介)
+2. [与 STEP/DIR 驱动器的区别](#二与-stepdir-驱动器的区别)
+3. [硬件连接](#三硬件连接)
+4. [控制原理](#四控制原理)
+5. [换相表](#五换相表)
+6. [标准库工程结构](#六标准库工程结构)
+7. [驱动代码](#七驱动代码)
+8. [定时器步进示例](#八定时器步进示例)
+9. [main 调用示例](#九main-调用示例)
+10. [注意事项](#十注意事项)
+
+---
+
+## 一、芯片简介
+
+**BDR6622T** 是巴丁微电子（Bardeen Micro）推出的 **双 H 桥电机驱动器**，HTSSOP-16 封装。
+
+| 项目 | 说明 |
+|------|------|
+| 结构 | 内部 **2 个全桥**（H 桥 1 + H 桥 2） |
+| 可驱动 | 2 个直流有刷电机，或 **1 个双极性 4 线步进电机** |
+| 电机电源 VM | 2.7 V～15 V |
+| 逻辑电源 VCC | 与 MCU 同域（通常 3.3 V / 5 V） |
+| 输出电流 | 每通道约 **700 mA** |
+| 控制接口 | **IN1、IN2、IN3、IN4** 逻辑输入 + **nSLEEP** |
+| 运行模式 | 整步、半步（由 MCU 软件换相实现） |
+| 保护 | 过流、欠压锁定、过温关断 |
+
+典型应用：POS 机、打印机、智能表、舞台灯光、小型步进云台等。
+
+---
+
+## 二、与 STEP/DIR 驱动器的区别
+
+| 对比项 | A4988 / DRV8825 | BDR6622T |
+|--------|-----------------|----------|
+| 控制引脚 | STEP + DIR | IN1～IN4 |
+| 换相 | 芯片内部自动 | **MCU 软件查表换相** |
+| 调速 | STEP 脉冲频率 | **换相间隔**（定时器周期） |
+| 正反转 | DIR 电平 | 换相表 **正序 / 倒序** |
+| MCU 负担 | 低（只发脉冲） | 较高（每步更新 4 路 GPIO） |
+
+BDR6622T 本质是 **双 H 桥 + 逻辑输入**，步进电机的相位时序完全由 MCU 负责。
+
+---
+
+## 三、硬件连接
+
+### 3.1 信号说明
+
+| 芯片引脚 | 方向 | 功能 |
+|----------|------|------|
+| IN1、IN2 | 输入 | 控制 H 桥 1 → 步进电机 **A 相**（OUT1/OUT2） |
+| IN3、IN4 | 输入 | 控制 H 桥 2 → 步进电机 **B 相**（OUT3/OUT4） |
+| nSLEEP | 输入 | 高 = 正常工作，低 = 休眠（输出关断） |
+| VM | 电源 | 电机供电（按电机额定电压选择，如 5 V / 12 V） |
+| VCC | 电源 | 逻辑供电 |
+| GND | 地 | 与 MCU 共地 |
+
+> 具体引脚编号请查阅 [BDR6622T 数据手册](https://share.eepw.com.cn/share/download/id/390919)。
+
+### 3.2 双极 4 线步进电机接线
+
+```
+步进电机              BDR6622T
+────────              ──────────
+A+  ────────────────  OUT1
+A-  ────────────────  OUT2        ← H 桥 1（IN1/IN2）
+B+  ────────────────  OUT3
+B-  ────────────────  OUT4        ← H 桥 2（IN3/IN4）
+```
+
+### 3.3 与 STM32 连接（示例）
+
+本示例引脚分配如下（可按实际 PCB 修改 `BDR6622T.h` 中的宏）：
+
+| BDR6622T | STM32 引脚 | 说明 |
+|----------|------------|------|
+| IN1 | PA0 | GPIO 推挽输出 |
+| IN2 | PA1 | GPIO 推挽输出 |
+| IN3 | PA2 | GPIO 推挽输出 |
+| IN4 | PA3 | GPIO 推挽输出 |
+| nSLEEP | PA4 | GPIO 推挽输出，上电置高 |
+| GND | GND | 共地 |
+| VCC | 3.3 V | 逻辑电 |
+| VM | 5～12 V | 电机电源（独立供电，靠近芯片加去耦电容） |
+
+```
+STM32F103                    BDR6622T
+────────                     ──────────
+PA0 ── IN1
+PA1 ── IN2
+PA2 ── IN3
+PA3 ── IN4
+PA4 ── nSLEEP
+3.3V ── VCC
+GND  ── GND
+              VM ── 电机电源 (+ 100nF + 10uF 去耦)
+              OUT1/2 ── 电机 A 相
+              OUT3/4 ── 电机 B 相
+```
+
+---
+
+## 四、控制原理
+
+### 4.1 H 桥与 IN 输入
+
+每个 H 桥由 **两个逻辑输入** 控制电流方向：
+
+| IN（高桥） | IN（低桥） | 桥输出 |
+|------------|------------|--------|
+| 0 | 0 | 关断 |
+| 1 | 0 | 正向电流 |
+| 0 | 1 | 反向电流 |
+| 1 | 1 | 制动（两端低） |
+
+- **IN1/IN2** → A 相线圈电流方向  
+- **IN3/IN4** → B 相线圈电流方向  
+
+### 4.2 步进如何产生
+
+1. MCU 按 **整步或半步表** 依次更新 IN1～IN4  
+2. 每切换一次表项 → 电机走 **一步**  
+3. 用 **定时器中断** 定换相间隔 → 间隔越短，转速越快  
+
+```
+定时器溢出中断（如 2 ms 一次）
+        ↓
+step_index ± 1
+        ↓
+查表 → 写 IN1～IN4
+        ↓
+电机走一步
+```
+
+### 4.3 正转与反转
+
+- **正转**：步序 0 → 1 → 2 → 3 → 0 …  
+- **反转**：步序 3 → 2 → 1 → 0 → 3 …  
+
+只需在定时器中断里对 `step_index` 做 `+1` 或 `-1`。
+
+---
+
+## 五、换相表
+
+### 5.1 整步（4 步，双相励磁）
+
+力矩大，步距角为电机标称值（如 1.8° 电机每步 1.8°）。
+
+| 步序 | IN1 | IN2 | IN3 | IN4 | 励磁 |
+|------|-----|-----|-----|-----|------|
+| 0 | 1 | 0 | 1 | 0 | A+ B+ |
+| 1 | 0 | 1 | 1 | 0 | A- B+ |
+| 2 | 0 | 1 | 0 | 1 | A- B- |
+| 3 | 1 | 0 | 0 | 1 | A+ B- |
+
+### 5.2 半步（8 步）
+
+运行更平滑，分辨率提高一倍。
+
+| 步序 | IN1 | IN2 | IN3 | IN4 |
+|------|-----|-----|-----|-----|
+| 0 | 1 | 0 | 0 | 0 |
+| 1 | 1 | 0 | 1 | 0 |
+| 2 | 0 | 0 | 1 | 0 |
+| 3 | 0 | 1 | 1 | 0 |
+| 4 | 0 | 1 | 0 | 0 |
+| 5 | 0 | 1 | 0 | 1 |
+| 6 | 0 | 0 | 0 | 1 |
+| 7 | 1 | 0 | 0 | 1 |
+
+---
+
+## 六、标准库工程结构
+
+```
+User/
+├── main.c
+├── stm32f10x_it.c          // TIM2_IRQHandler
+├── BDR6622T.h
+└── BDR6622T.c
+```
+
+依赖标准库头文件：
+
+```c
+#include "stm32f10x.h"          /* 芯片寄存器与类型定义 */
+#include "stm32f10x_gpio.h"     /* GPIO 初始化、置位/复位 */
+#include "stm32f10x_rcc.h"      /* 外设时钟使能 */
+#include "stm32f10x_tim.h"      /* TIM2 定换相节拍 */
+#include "misc.h"               /* NVIC 中断优先级配置 */
+```
+
+---
+
+## 七、驱动代码
+
+### 7.1 BDR6622T.h
+
+```c title="BDR6622T.h"
+#ifndef __BDR6622T_H
+#define __BDR6622T_H
+
+#include "stm32f10x.h"
+
+/* ---------- 引脚定义（可按硬件修改） ---------- */
+#define BDR6622T_GPIO       GPIOA
+#define BDR6622T_RCC        RCC_APB2Periph_GPIOA
+
+#define BDR6622T_IN1_PIN    GPIO_Pin_0   /* PA0 → IN1，H 桥 1 高桥侧 */
+#define BDR6622T_IN2_PIN    GPIO_Pin_1   /* PA1 → IN2，H 桥 1 低桥侧（A 相） */
+#define BDR6622T_IN3_PIN    GPIO_Pin_2   /* PA2 → IN3，H 桥 2 高桥侧 */
+#define BDR6622T_IN4_PIN    GPIO_Pin_3   /* PA3 → IN4，H 桥 2 低桥侧（B 相） */
+#define BDR6622T_NSLEEP_PIN GPIO_Pin_4   /* PA4 → nSLEEP，高电平唤醒芯片 */
+
+#define BDR6622T_IN_ALL     (BDR6622T_IN1_PIN | BDR6622T_IN2_PIN | \
+                             BDR6622T_IN3_PIN | BDR6622T_IN4_PIN | \
+                             BDR6622T_NSLEEP_PIN)
+
+/* 换相模式：整步 4 步 / 半步 8 步，决定查表长度与步距角 */
+typedef enum
+{
+    BDR6622T_MODE_FULL = 4,   /* 整步 4 相，力矩大 */
+    BDR6622T_MODE_HALF = 8    /* 半步 8 相，运行更平滑 */
+} BDR6622T_StepMode;
+
+/* 旋转方向：用于 step_index 每次 ±1 的符号 */
+typedef enum
+{
+    BDR6622T_DIR_CW  = 1,     /* 顺时针，正序查表 */
+    BDR6622T_DIR_CCW = -1     /* 逆时针，倒序查表 */
+} BDR6622T_Direction;
+
+void BDR6622T_Init(void);
+void BDR6622T_Sleep(FunctionalState state);
+void BDR6622T_SetStepMode(BDR6622T_StepMode mode);
+void BDR6622T_SetDirection(BDR6622T_Direction dir);
+void BDR6622T_StepOnce(void);              /* 手动走一步（阻塞场景） */
+void BDR6622T_Stop(void);                  /* 四相关断，停止励磁 */
+
+/* TIM2 定换相间隔：中断里调用 BDR6622T_StepOnce() */
+void BDR6622T_StepTimer_Init(uint16_t prescaler, uint16_t period);
+void BDR6622T_StepTimer_Start(void);
+void BDR6622T_StepTimer_Stop(void);
+void BDR6622T_StepTimer_SetFreqHz(uint32_t step_freq_hz);  /* 运行时改步频 */
+
+#endif
+```
+
+### 7.2 BDR6622T.c
+
+```c title="BDR6622T.c"
+#include "BDR6622T.h"
+
+/* 整步 4 相表：每行 {IN1, IN2, IN3, IN4}，双相励磁 */
+static const uint8_t full_step_table[4][4] = {
+    {1, 0, 1, 0},   /* 步 0：A+ B+ */
+    {0, 1, 1, 0},   /* 步 1：A- B+ */
+    {0, 1, 0, 1},   /* 步 2：A- B- */
+    {1, 0, 0, 1},   /* 步 3：A+ B- */
+};
+
+/* 半步 8 相表：单相/双相交替，分辨率提高一倍 */
+static const uint8_t half_step_table[8][4] = {
+    {1, 0, 0, 0},
+    {1, 0, 1, 0},
+    {0, 0, 1, 0},
+    {0, 1, 1, 0},
+    {0, 1, 0, 0},
+    {0, 1, 0, 1},
+    {0, 0, 0, 1},
+    {1, 0, 0, 1},
+};
+
+static BDR6622T_StepMode s_step_mode = BDR6622T_MODE_FULL;
+static BDR6622T_Direction s_direction = BDR6622T_DIR_CW;
+static int8_t s_step_index = 0;           /* 当前查表下标，中断里 ±1 */
+static uint32_t s_tim_clk_hz = 72000000;  /* 预留：可按实际 TIM 时钟修改 */
+
+/* 将 4 路逻辑电平写到 IN1～IN4 引脚 */
+static void BDR6622T_WritePhase(uint8_t in1, uint8_t in2, uint8_t in3, uint8_t in4)
+{
+    if (in1) GPIO_SetBits(BDR6622T_GPIO, BDR6622T_IN1_PIN);
+    else     GPIO_ResetBits(BDR6622T_GPIO, BDR6622T_IN1_PIN);
+
+    if (in2) GPIO_SetBits(BDR6622T_GPIO, BDR6622T_IN2_PIN);
+    else     GPIO_ResetBits(BDR6622T_GPIO, BDR6622T_IN2_PIN);
+
+    if (in3) GPIO_SetBits(BDR6622T_GPIO, BDR6622T_IN3_PIN);
+    else     GPIO_ResetBits(BDR6622T_GPIO, BDR6622T_IN3_PIN);
+
+    if (in4) GPIO_SetBits(BDR6622T_GPIO, BDR6622T_IN4_PIN);
+    else     GPIO_ResetBits(BDR6622T_GPIO, BDR6622T_IN4_PIN);
+}
+
+/* 按 index 查表并输出相位；负数/溢出时做模运算 */
+static void BDR6622T_ApplyIndex(int8_t index)
+{
+    uint8_t steps = (s_step_mode == BDR6622T_MODE_HALF) ? 8 : 4;
+    const uint8_t (*table)[4] = (s_step_mode == BDR6622T_MODE_HALF)
+                                ? half_step_table : full_step_table;
+
+    if (index < 0) index += steps;   /* 反转时 index 可能为负 */
+    index %= steps;
+
+    BDR6622T_WritePhase(table[index][0], table[index][1],
+                        table[index][2], table[index][3]);
+}
+
+void BDR6622T_Init(void)
+{
+    GPIO_InitTypeDef gpio;
+
+    RCC_APB2PeriphClockCmd(BDR6622T_RCC, ENABLE);
+
+    gpio.GPIO_Pin   = BDR6622T_IN_ALL;
+    gpio.GPIO_Mode  = GPIO_Mode_Out_PP;   /* 推挽输出驱动逻辑输入 */
+    gpio.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(BDR6622T_GPIO, &gpio);
+
+    /* nSLEEP 置高，退出休眠、使能 H 桥输出 */
+    GPIO_SetBits(BDR6622T_GPIO, BDR6622T_NSLEEP_PIN);
+
+    s_step_index = 0;
+    BDR6622T_ApplyIndex(0);             /* 上电输出初始相位，避免随机态 */
+}
+
+void BDR6622T_Sleep(FunctionalState state)
+{
+    if (state == ENABLE)
+        GPIO_ResetBits(BDR6622T_GPIO, BDR6622T_NSLEEP_PIN);  /* 低 = 休眠 */
+    else
+        GPIO_SetBits(BDR6622T_GPIO, BDR6622T_NSLEEP_PIN);    /* 高 = 正常工作 */
+}
+
+void BDR6622T_SetStepMode(BDR6622T_StepMode mode)
+{
+    s_step_mode = mode;
+    s_step_index = 0;
+    BDR6622T_ApplyIndex(0);             /* 切换模式后从步 0 重新对齐 */
+}
+
+void BDR6622T_SetDirection(BDR6622T_Direction dir)
+{
+    s_direction = dir;                  /* 仅改符号，下次 StepOnce 生效 */
+}
+
+void BDR6622T_StepOnce(void)
+{
+    s_step_index += s_direction;        /* +1 正转，-1 反转 */
+    BDR6622T_ApplyIndex(s_step_index);
+}
+
+void BDR6622T_Stop(void)
+{
+    /* 四相全部关断，线圈不励磁（转子可能失位） */
+    BDR6622T_WritePhase(0, 0, 0, 0);
+}
+
+/* ---------- TIM2 定步频（换相节拍） ---------- */
+
+void BDR6622T_StepTimer_Init(uint16_t prescaler, uint16_t period)
+{
+    TIM_TimeBaseInitTypeDef tim;
+    NVIC_InitTypeDef nvic;
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+
+    TIM_TimeBaseStructInit(&tim);
+    tim.TIM_Prescaler         = prescaler;              /* 降频得到计数 tick */
+    tim.TIM_Period            = period;                 /* ARR：计满产生 Update 中断 */
+    tim.TIM_ClockDivision     = TIM_CKD_DIV1;
+    tim.TIM_CounterMode       = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM2, &tim);
+
+    TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);          /* 溢出中断 → 换相 */
+
+    nvic.NVIC_IRQChannel                   = TIM2_IRQn;
+    nvic.NVIC_IRQChannelPreemptionPriority = 2;
+    nvic.NVIC_IRQChannelSubPriority        = 0;
+    nvic.NVIC_IRQChannelCmd                = ENABLE;
+    NVIC_Init(&nvic);
+}
+
+void BDR6622T_StepTimer_Start(void)
+{
+    TIM_SetCounter(TIM2, 0);
+    TIM_Cmd(TIM2, ENABLE);              /* 启动后按 ARR 周期进中断 */
+}
+
+void BDR6622T_StepTimer_Stop(void)
+{
+    TIM_Cmd(TIM2, DISABLE);
+    BDR6622T_Stop();                    /* 停定时器同时关断线圈 */
+}
+
+void BDR6622T_StepTimer_SetFreqHz(uint32_t step_freq_hz)
+{
+    uint32_t psc;
+    uint32_t arr;
+
+    if (step_freq_hz == 0)
+    {
+        BDR6622T_StepTimer_Stop();
+        return;
+    }
+
+    /* TIM2 在 APB1，72MHz 系统下 TIM 时钟通常为 72MHz */
+    psc = 7200 - 1;                     /* 72MHz / 7200 = 10kHz 时基 */
+    arr = (10000 / step_freq_hz);       /* 步频 = 10kHz / (ARR+1) */
+    if (arr == 0) arr = 1;
+    arr -= 1;                           /* 寄存器写入值为 ARR-1 */
+
+    TIM_Cmd(TIM2, DISABLE);
+    TIM_PrescalerConfig(TIM2, (uint16_t)psc, TIM_PSCReloadMode_Immediate);
+    TIM_SetAutoreload(TIM2, (uint16_t)arr);
+    TIM_SetCounter(TIM2, 0);
+    TIM_Cmd(TIM2, ENABLE);
+}
+```
+
+### 7.3 中断服务函数
+
+```c title="stm32f10x_it.c（片段）"
+#include "stm32f10x_it.h"
+#include "stm32f10x_tim.h"
+#include "BDR6622T.h"
+
+/* TIM2 溢出中断：每个周期走一步（更新 IN1～IN4） */
+void TIM2_IRQHandler(void)
+{
+    if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET)
+    {
+        TIM_ClearITPendingBit(TIM2, TIM_IT_Update);  /* 必须先清标志 */
+        BDR6622T_StepOnce();                         /* 查表换相 */
+    }
+}
+```
+
+---
+
+## 八、定时器步进示例
+
+### 8.1 频率计算
+
+假设系统时钟 72 MHz，TIM2 在 APB1：
+
+```
+TIM2 计数时钟 = 72MHz / (PSC + 1)
+步进频率     = TIM2计数时钟 / (ARR + 1)
+```
+
+示例：`PSC = 7200-1`，`ARR = 20-1`：
+
+```
+计数时钟 = 72MHz / 7200 = 10kHz
+步进频率 = 10kHz / 20 = 500 步/秒
+```
+
+1.8° 步进电机整步模式下 200 步/圈 → 500 步/秒 ≈ **2.5 转/秒**。
+
+### 8.2 初始化调用
+
+```c
+BDR6622T_Init();                              /* GPIO + nSLEEP + 初始相位 */
+BDR6622T_SetStepMode(BDR6622T_MODE_FULL);     /* 整步模式，200 步/圈 @1.8° */
+BDR6622T_SetDirection(BDR6622T_DIR_CW);       /* 顺时针 */
+
+/* 500 步/秒：PSC=7199 → 10kHz，ARR=19 → 10kHz/20=500Hz */
+BDR6622T_StepTimer_Init(7200 - 1, 20 - 1);
+BDR6622T_StepTimer_Start();                   /* 启动 TIM2，中断里自动换相 */
+```
+
+或使用封装函数动态改频：
+
+```c
+BDR6622T_StepTimer_Init(7200 - 1, 20 - 1);    /* 先配好 TIM2 时基与 NVIC */
+BDR6622T_StepTimer_SetFreqHz(300);            /* 运行时改为 300 步/秒，无需重启 */
+```
+
+---
+
+## 九、main 调用示例
+
+```c title="main.c"
+#include "stm32f10x.h"
+#include "BDR6622T.h"
+
+/* 简易忙等延时（实际工程建议用 SysTick 或 TIM） */
+static void Delay_ms(volatile uint32_t ms)
+{
+    while (ms--) { }
+}
+
+int main(void)
+{
+    /* 若使用 HSE+PLL，此处通常已调用 SystemInit()，配置 72MHz 系统时钟 */
+    SystemInit();
+
+    BDR6622T_Init();
+    BDR6622T_SetStepMode(BDR6622T_MODE_HALF);   /* 半步 8 相，运行更平滑 */
+    BDR6622T_SetDirection(BDR6622T_DIR_CW);
+
+    /* 以 400 步/秒正转 3 秒（TIM2 中断驱动换相） */
+    BDR6622T_StepTimer_SetFreqHz(400);
+    Delay_ms(3000);
+
+    /* 停止：关 TIM2 并关断四相 */
+    BDR6622T_StepTimer_Stop();
+
+    /* 反转，200 步/秒再转 3 秒 */
+    BDR6622T_SetDirection(BDR6622T_DIR_CCW);
+    BDR6622T_StepTimer_SetFreqHz(200);
+    Delay_ms(3000);
+
+    BDR6622T_StepTimer_Stop();
+
+    /* nSLEEP 拉低，芯片休眠降低静态功耗 */
+    BDR6622T_Sleep(ENABLE);
+
+    while (1)
+    {
+    }
+}
+```
+
+### 9.1 走固定步数（阻塞方式）
+
+若不需要持续旋转，可在循环中调用 `BDR6622T_StepOnce()` 并自行延时：
+
+```c
+/* 阻塞方式走固定步数：每步手动换相 + 软件延时 */
+void BDR6622T_MoveSteps(uint16_t steps, uint32_t delay_ms_per_step)
+{
+    uint16_t i;
+    for (i = 0; i < steps; i++)
+    {
+        BDR6622T_StepOnce();                /* 查表更新 IN1～IN4 */
+        Delay_ms(delay_ms_per_step);        /* 控制步间间隔 → 等效转速 */
+    }
+}
+```
+
+200 步（1.8° 电机整步一圈）示例：
+
+```c
+BDR6622T_SetStepMode(BDR6622T_MODE_FULL);     /* 整步 200 步 = 1.8° 电机一圈 */
+BDR6622T_SetDirection(BDR6622T_DIR_CW);
+BDR6622T_MoveSteps(200, 5);                   /* 每步 5ms → 200×5ms=1s/圈 ≈ 60RPM */
+```
+
+---
+
+## 十、注意事项
+
+1. **电源与去耦**  
+   VM 与 VCC 分别供电；VM 旁建议 **100 nF + 10 μF**，VCC 旁 **100 nF**，尽量靠近芯片。
+
+2. **共地**  
+   MCU、驱动器、电机电源必须 **共地**。
+
+3. **起步频率**  
+   不要一上来就用很高步频，容易 **失步**（转子跟不上磁场）。建议从 100～200 步/秒 起步，再逐步提高。
+
+4. **停止方式**  
+   - `BDR6622T_Stop()`：四相全关，线圈不耗电，转子可能失位  
+   - 四相全 1（制动）：耗电大，可保持位置  
+
+5. **电流能力**  
+   单通道约 700 mA，适合 **42 型小步进**、28BYJ-48 改双极等；大扭矩电机需确认电流是否够用。
+
+6. **与 TIM PWM 的关系**  
+   BDR6622T **不支持** STEP/DIR，**不能**像 A4988 那样用 TIM 输出 PWM 脉冲直接驱动；TIM 仅用于 **定时换相**（更新 IN1～IN4）。
+
+7. **引脚确认**  
+   本文 IN1～IN4 接 PA0～PA3 仅为示例，实际开发请以 **原理图 + 数据手册** 为准。
+
+8. **标准库工程**  
+   需定义 `USE_STDPERIPH_DRIVER`、`STM32F10X_MD`（或 HD 等对应型号），并包含 `stm32f10x_conf.h` 中 GPIO、RCC、TIM、misc 模块。
+
+---
+
+## 总结
+
+| 要点 | 说明 |
+|------|------|
+| 控制方式 | IN1～IN4 四相励磁，MCU 查表换相 |
+| 调速 | 定时器中断间隔 → 步进频率 |
+| 正反转 | 换相表正序 / 倒序 |
+| 标准库 | GPIO 写相位 + TIM2 定节拍 |
+| 不适用 | STEP/DIR 脉冲接口 |
+
+掌握 **换相表 + 定时器步进** 即可用 BDR6622T 驱动双极步进电机；更复杂的加减速曲线可在定时器中断中动态修改 `step_freq_hz` 实现。

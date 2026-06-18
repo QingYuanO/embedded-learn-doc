@@ -1,0 +1,398 @@
+---
+title: DRV8825 步进电机驱动
+description: TI DRV8825 STEP/DIR 步进驱动模块，STM32F10x 标准库 GPIO + 定时器 STEP 脉冲输出示例
+---
+
+> 面向嵌入式入门，以 **STM32F10x 标准外设库（StdPeriph Library）** 为例。  
+> DRV8825 与 A4988 同为 **STEP + DIR** 接口，细分最高可达 **1/32**，适合更高精度场景。
+
+---
+
+## 目录
+
+1. [芯片简介](#一芯片简介)
+2. [硬件连接](#二硬件连接)
+3. [控制原理](#三控制原理)
+4. [细分与电流](#四细分与电流)
+5. [标准库驱动代码](#五标准库驱动代码)
+6. [main 示例](#六main-示例)
+7. [与 A4988 对比](#七与-a4988-对比)
+8. [注意事项](#八注意事项)
+
+---
+
+## 一、芯片简介
+
+**DRV8825** 是德州仪器（TI）的 **PWM 微步进电机驱动器**，Purple 8825 模块在创客圈非常常见。
+
+| 项目 | 说明 |
+|------|------|
+| 接口 | **STEP**、**DIR**、**nENBL**、M0～M2、**nFAULT** |
+| 逻辑电平 | 2 V～5.25 V |
+| 电机电源 VM | 8.2 V～45 V |
+| 最大电流 | 约 2.5 A/相（需散热） |
+| 细分 | 全步～**1/32** |
+| 特色 | 32 细分、Decay 模式引脚、故障输出 |
+
+---
+
+## 二、硬件连接
+
+### 2.1 模块引脚
+
+| 引脚 | 方向 | 功能 |
+|------|------|------|
+| STEP | 输入 | 上升沿走 1 微步 |
+| DIR | 输入 | 旋转方向 |
+| nENBL | 输入 | **低有效**使能 |
+| M0～M2 | 输入 | 细分选择 |
+| nFAULT | 输出 | 低 = 故障（过温/过流等），开漏 |
+| DECAY | 输入 | 衰减模式（模块常固定） |
+| VMOT | 电源 | 8.2～45 V |
+| GND | 地 | 共地 |
+| A+ / A- / B+ / B- | 输出 | 电机两相 |
+
+### 2.2 与 STM32 连接（示例）
+
+| DRV8825 | STM32 |
+|---------|-------|
+| STEP | PA0 |
+| DIR | PA1 |
+| nENBL | PA2 |
+| M0 | PA3 |
+| M1 | PA4 |
+| M2 | PA5 |
+| nFAULT | PA6（上拉输入，可选） |
+
+---
+
+## 三、控制原理
+
+与 A4988 相同：**DIR 定方向，STEP 脉冲定步数与转速**。
+
+```
+每圈步数 = 200 × 细分倍数   （1.8° 电机）
+RPM = STEP_Hz × 60 / 每圈步数
+```
+
+1/32 细分、3200 步/秒 → 3200×60/6400 = **30 RPM**。
+
+---
+
+## 四、细分与电流
+
+### 4.1 细分真值表（M0～M2）
+
+| M2 | M1 | M0 | 细分 |
+|----|----|----|------|
+| L | L | L | 全步 |
+| L | L | H | 1/2 |
+| L | H | L | 1/4 |
+| L | H | H | 1/8 |
+| H | L | L | 1/16 |
+| H | L | H | 1/32 |
+| H | H | L | 1/32 |
+| H | H | H | 1/32 |
+
+### 4.2 电流调节
+
+```
+I_max ≈ VREF × 2
+```
+
+（典型模块 R_sense = 0.1 Ω 时的近似关系，以模块说明为准。）
+
+---
+
+## 五、标准库驱动代码
+
+### 5.1 DRV8825.h
+
+```c title="DRV8825.h"
+#ifndef __DRV8825_H
+#define __DRV8825_H
+
+#include "stm32f10x.h"
+
+/* ---------- 引脚定义（可按硬件修改） ---------- */
+#define DRV8825_GPIO        GPIOA
+#define DRV8825_RCC         RCC_APB2Periph_GPIOA
+
+#define DRV8825_STEP_PIN    GPIO_Pin_0   /* PA0 → STEP：上升沿走 1 微步 */
+#define DRV8825_DIR_PIN     GPIO_Pin_1   /* PA1 → DIR：方向，高/低对应 CW/CCW */
+#define DRV8825_EN_PIN      GPIO_Pin_2   /* PA2 → nENBL：低有效使能 */
+#define DRV8825_M0_PIN      GPIO_Pin_3   /* PA3 → M0：细分选择位 0 */
+#define DRV8825_M1_PIN      GPIO_Pin_4   /* PA4 → M1：细分选择位 1 */
+#define DRV8825_M2_PIN      GPIO_Pin_5   /* PA5 → M2：细分选择位 2 */
+#define DRV8825_FAULT_PIN   GPIO_Pin_6   /* PA6 → nFAULT：开漏故障输出，低=故障 */
+
+/* 所有输出引脚掩码（不含 nFAULT 输入） */
+#define DRV8825_OUT_PINS    (DRV8825_STEP_PIN | DRV8825_DIR_PIN | DRV8825_EN_PIN | \
+                             DRV8825_M0_PIN | DRV8825_M1_PIN | DRV8825_M2_PIN)
+
+/* 细分档位枚举，数值表示每整步的微步数 */
+typedef enum
+{
+    DRV8825_MICROSTEP_FULL = 0,   /* 全步 */
+    DRV8825_MICROSTEP_2    = 2,   /* 1/2 细分 */
+    DRV8825_MICROSTEP_4    = 4,   /* 1/4 细分 */
+    DRV8825_MICROSTEP_8    = 8,   /* 1/8 细分 */
+    DRV8825_MICROSTEP_16   = 16,  /* 1/16 细分 */
+    DRV8825_MICROSTEP_32   = 32   /* 1/32 细分（最高精度） */
+} DRV8825_MicroStep;
+
+/* 旋转方向：DIR 引脚电平在 SetDirection 中映射 */
+typedef enum
+{
+    DRV8825_DIR_CW  = 0,   /* 顺时针：DIR 拉低 */
+    DRV8825_DIR_CCW = 1    /* 逆时针：DIR 拉高 */
+} DRV8825_Direction;
+
+void DRV8825_Init(void);
+void DRV8825_Enable(FunctionalState state);
+void DRV8825_SetMicroStep(DRV8825_MicroStep microstep);
+void DRV8825_SetDirection(DRV8825_Direction dir);
+void DRV8825_StepPulse(void);           /* 手动产生 1 个 STEP 脉冲 */
+uint8_t DRV8825_IsFault(void);          /* 读取 nFAULT，1=故障 */
+
+/* TIM2 定时中断产生 STEP 脉冲（步频 = 转速） */
+void DRV8825_StepTimer_Init(uint16_t prescaler, uint16_t period);
+void DRV8825_StepTimer_Start(void);
+void DRV8825_StepTimer_Stop(void);
+void DRV8825_StepTimer_SetFreqHz(uint32_t step_hz);
+
+#endif
+```
+
+### 5.2 DRV8825.c
+
+```c title="DRV8825.c"
+#include "DRV8825.h"
+
+/* 写 M0/M1/M2 细分选择引脚，对应数据手册真值表 */
+static void DRV8825_WriteM(uint8_t m0, uint8_t m1, uint8_t m2)
+{
+    if (m0) GPIO_SetBits(DRV8825_GPIO, DRV8825_M0_PIN);
+    else    GPIO_ResetBits(DRV8825_GPIO, DRV8825_M0_PIN);
+    if (m1) GPIO_SetBits(DRV8825_GPIO, DRV8825_M1_PIN);
+    else    GPIO_ResetBits(DRV8825_GPIO, DRV8825_M1_PIN);
+    if (m2) GPIO_SetBits(DRV8825_GPIO, DRV8825_M2_PIN);
+    else    GPIO_ResetBits(DRV8825_GPIO, DRV8825_M2_PIN);
+}
+
+void DRV8825_Init(void)
+{
+    GPIO_InitTypeDef gpio;
+
+    /* 使能 GPIOA 时钟 */
+    RCC_APB2PeriphClockCmd(DRV8825_RCC, ENABLE);
+
+    /* STEP/DIR/nENBL/M0～M2 配置为推挽输出 */
+    gpio.GPIO_Pin   = DRV8825_OUT_PINS;
+    gpio.GPIO_Mode  = GPIO_Mode_Out_PP;
+    gpio.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(DRV8825_GPIO, &gpio);
+
+    /* nFAULT 开漏输出，MCU 侧上拉输入检测故障 */
+    gpio.GPIO_Pin  = DRV8825_FAULT_PIN;
+    gpio.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(DRV8825_GPIO, &gpio);
+
+    GPIO_ResetBits(DRV8825_GPIO, DRV8825_STEP_PIN);  /* STEP 空闲为低 */
+    DRV8825_SetMicroStep(DRV8825_MICROSTEP_32);      /* 默认 1/32 细分 */
+    DRV8825_Enable(ENABLE);                          /* 拉低 nENBL 使能驱动 */
+}
+
+void DRV8825_Enable(FunctionalState state)
+{
+    /* nENBL 低有效：ENABLE 时拉低，DISABLE 时拉高关断 H 桥 */
+    if (state == ENABLE)
+        GPIO_ResetBits(DRV8825_GPIO, DRV8825_EN_PIN);
+    else
+        GPIO_SetBits(DRV8825_GPIO, DRV8825_EN_PIN);
+}
+
+void DRV8825_SetMicroStep(DRV8825_MicroStep microstep)
+{
+    /* M2:M1:M0 组合决定细分，见第四节真值表 */
+    switch (microstep)
+    {
+        case DRV8825_MICROSTEP_FULL: DRV8825_WriteM(0,0,0); break;
+        case DRV8825_MICROSTEP_2:    DRV8825_WriteM(1,0,0); break;
+        case DRV8825_MICROSTEP_4:    DRV8825_WriteM(0,1,0); break;
+        case DRV8825_MICROSTEP_8:    DRV8825_WriteM(1,1,0); break;
+        case DRV8825_MICROSTEP_16:   DRV8825_WriteM(0,0,1); break;
+        case DRV8825_MICROSTEP_32:
+        default:                     DRV8825_WriteM(1,0,1); break;
+    }
+}
+
+void DRV8825_SetDirection(DRV8825_Direction dir)
+{
+    /* DIR 在 STEP 脉冲前稳定即可；CW=低，CCW=高 */
+    if (dir == DRV8825_DIR_CW)
+        GPIO_ResetBits(DRV8825_GPIO, DRV8825_DIR_PIN);
+    else
+        GPIO_SetBits(DRV8825_GPIO, DRV8825_DIR_PIN);
+}
+
+void DRV8825_StepPulse(void)
+{
+    /* 产生 STEP 上升沿：驱动芯片在上升沿走 1 微步 */
+    GPIO_SetBits(DRV8825_GPIO, DRV8825_STEP_PIN);
+    GPIO_ResetBits(DRV8825_GPIO, DRV8825_STEP_PIN);
+}
+
+uint8_t DRV8825_IsFault(void)
+{
+    /* nFAULT 低有效（开漏），读到 0 表示过温/过流等故障 */
+    return GPIO_ReadInputDataBit(DRV8825_GPIO, DRV8825_FAULT_PIN) == Bit_RESET;
+}
+
+/* ---------- TIM2 定步频（STEP 脉冲节拍） ---------- */
+
+void DRV8825_StepTimer_Init(uint16_t prescaler, uint16_t period)
+{
+    TIM_TimeBaseInitTypeDef tim;
+    NVIC_InitTypeDef nvic;
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+
+    TIM_TimeBaseStructInit(&tim);
+    tim.TIM_Prescaler     = prescaler;
+    tim.TIM_Period        = period;
+    tim.TIM_ClockDivision = TIM_CKD_DIV1;
+    tim.TIM_CounterMode   = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM2, &tim);
+
+    TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);  /* 溢出中断 → 发 STEP 脉冲 */
+
+    nvic.NVIC_IRQChannel                   = TIM2_IRQn;
+    nvic.NVIC_IRQChannelPreemptionPriority = 2;
+    nvic.NVIC_IRQChannelSubPriority        = 0;
+    nvic.NVIC_IRQChannelCmd                = ENABLE;
+    NVIC_Init(&nvic);
+}
+
+void DRV8825_StepTimer_Start(void)
+{
+    TIM_SetCounter(TIM2, 0);
+    TIM_Cmd(TIM2, ENABLE);
+}
+
+void DRV8825_StepTimer_Stop(void)
+{
+    TIM_Cmd(TIM2, DISABLE);
+}
+
+void DRV8825_StepTimer_SetFreqHz(uint32_t step_hz)
+{
+    uint32_t arr;
+
+    if (step_hz == 0)
+    {
+        DRV8825_StepTimer_Stop();
+        return;
+    }
+
+    /* TIM2 在 APB1，72MHz 系统下 TIM 时钟通常为 72MHz
+     * PSC=7200-1 → 计数频率 10kHz
+     * 步频 = 10000 / (ARR+1)，即 arr = 10000/step_hz - 1 */
+    arr = 10000 / step_hz;
+    if (arr == 0) arr = 1;
+    arr -= 1;
+
+    TIM_Cmd(TIM2, DISABLE);
+    TIM_PrescalerConfig(TIM2, 7200 - 1, TIM_PSCReloadMode_Immediate);
+    TIM_SetAutoreload(TIM2, (uint16_t)arr);
+    TIM_SetCounter(TIM2, 0);
+    TIM_Cmd(TIM2, ENABLE);
+}
+```
+
+### 5.3 中断服务函数
+
+```c title="stm32f10x_it.c（片段）"
+#include "stm32f10x_tim.h"
+#include "DRV8825.h"
+
+void TIM2_IRQHandler(void)
+{
+    if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET)
+    {
+        TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+
+        /* 故障保护：nFAULT 拉低时立即停止脉冲并关断驱动 */
+        if (DRV8825_IsFault())
+        {
+            DRV8825_StepTimer_Stop();
+            DRV8825_Enable(DISABLE);
+            return;
+        }
+
+        /* 每个定时溢出产生 1 个 STEP 上升沿 → 走 1 微步 */
+        DRV8825_StepPulse();
+    }
+}
+```
+
+---
+
+## 六、main 示例
+
+```c title="main.c"
+#include "stm32f10x.h"
+#include "DRV8825.h"
+
+/* 简易延时（实际项目建议用 SysTick） */
+static void Delay_ms(volatile uint32_t ms)
+{
+    while (ms--) { }
+}
+
+int main(void)
+{
+    SystemInit();
+
+    DRV8825_Init();
+    DRV8825_SetMicroStep(DRV8825_MICROSTEP_32);  /* 1/32 细分 → 6400 步/圈（1.8° 电机） */
+    DRV8825_SetDirection(DRV8825_DIR_CW);          /* DIR 拉低，顺时针 */
+
+    /* 6400 步/秒 ÷ 6400 步/圈 × 60 ≈ 30 RPM */
+    DRV8825_StepTimer_SetFreqHz(6400);
+    Delay_ms(3000);  /* 运行约 3 秒 */
+
+    DRV8825_StepTimer_Stop();
+    DRV8825_Enable(DISABLE);  /* 拉高 nENBL，释放电机（可手动转动） */
+
+    while (1) { }
+}
+```
+
+---
+
+## 七、与 A4988 对比
+
+| 项目 | A4988 | DRV8825 |
+|------|-------|---------|
+| 最高细分 | 1/16 | **1/32** |
+| VM 上限 | 35 V | **45 V** |
+| 故障引脚 | 无 | **nFAULT** |
+| 使能引脚 | ENABLE | nENBL |
+| 细分引脚 | MS1～MS3 | M0～M2 |
+| 代码结构 | 几乎相同 | 几乎相同 |
+
+---
+
+## 八、注意事项
+
+1. **nFAULT**：故障时拉低，建议上拉输入并在中断或主循环中检测。  
+2. **32 细分**：步频需求是 16 细分的 2 倍，MCU 与机械负载要跟上。  
+3. **Decay 引脚**：模块常已接好；自行 PCB 时参考数据手册。  
+4. **与 TMC2208**：DRV8825 无静音 Chop 模式，高细分下仍可能有明显电流噪声。
+
+---
+
+## 总结
+
+DRV8825 用法与 A4988 一致：**DIR + STEP 脉冲**；标准库用 **GPIO 控制方向/使能/细分**，**TIM2 中断产生 STEP 脉冲** 即可驱动。

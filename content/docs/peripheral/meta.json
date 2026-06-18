@@ -1,0 +1,12 @@
+{
+  "title": "外设芯片",
+  "icon": "Cpu",
+  "pages": [
+    "bdr6622t",
+    "a4988",
+    "drv8825",
+    "tmc2208",
+    "ms41949"
+  ],
+  "root": true
+}

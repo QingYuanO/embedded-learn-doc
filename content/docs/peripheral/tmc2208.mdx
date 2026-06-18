@@ -1,0 +1,413 @@
+---
+title: TMC2208 步进电机驱动
+description: Trinamic TMC2208 STEP/DIR 静音步进驱动，STM32F10x 标准库独立模式（Standalone）控制示例
+---
+
+> 面向嵌入式入门，以 **STM32F10x 标准外设库（StdPeriph Library）** 为例。  
+> 本文介绍 **独立模式（Standalone）**：与 A4988 一样使用 **STEP + DIR**，无需 UART 配置即可运行。
+
+---
+
+## 目录
+
+1. [芯片简介](#一芯片简介)
+2. [工作模式](#二工作模式)
+3. [硬件连接](#三硬件连接)
+4. [控制原理](#四控制原理)
+5. [独立模式细分](#五独立模式细分)
+6. [标准库驱动代码](#六标准库驱动代码)
+7. [main 示例](#七main-示例)
+8. [UART 模式简介](#八uart-模式简介)
+9. [注意事项](#九注意事项)
+
+---
+
+## 一、芯片简介
+
+**TMC2208** 是 Trinamic（现 ADI）的 **集成静音驱动芯片**，3D 打印机中常用来替代 A4988 以降低噪声。
+
+| 项目 | 说明 |
+|------|------|
+| 接口（独立模式） | **STEP**、**DIR**、**EN**、MS1、MS2 |
+| 接口（UART 模式） | 单线 UART 配置 + STEP/DIR |
+| 逻辑电平 | 3.3 V / 5 V |
+| 电机电源 VM | 4.75 V～36 V |
+| RMS 电流 | 约 1.4 A（散热 dependent） |
+| 特色 | **StealthChop** 静音、SpreadCycle 高扭矩 |
+| 诊断 | **DIAG** 开漏输出 |
+
+---
+
+## 二、工作模式
+
+| 模式 | MS1/MS2 | UART | 说明 |
+|------|---------|------|------|
+| **独立模式（Standalone）** | 接高/低定细分 | 不接 | 与 A4988 用法相同，**本文重点** |
+| UART 模式 | 按手册配置 | PDN_UART 接单线 | 可软件设电流、细分、Chop 模式 |
+
+独立模式下 **PDN_UART 引脚悬空或上拉**，芯片按 MS1/MS2 运行，MCU 只需 STEP/DIR/EN。
+
+---
+
+## 三、硬件连接
+
+### 3.1 独立模式引脚
+
+| 引脚 | 功能 |
+|------|------|
+| STEP | 上升沿 1 微步 |
+| DIR | 方向 |
+| EN | **低有效**使能 |
+| MS1、MS2 | 细分（独立模式） |
+| DIAG | 故障/堵转指示，开漏，可选接 MCU |
+| VIO | 逻辑 3.3 V |
+| VM | 电机 12～24 V |
+| GND | 共地 |
+
+### 3.2 与 STM32 连接（示例）
+
+| TMC2208 | STM32 |
+|---------|-------|
+| STEP | PA0 |
+| DIR | PA1 |
+| EN | PA2 |
+| MS1 | PA3 |
+| MS2 | PA4 |
+| DIAG | PA5（上拉输入，可选） |
+
+```
+STM32          TMC2208 模块
+─────          ────────────
+PA0 ── STEP
+PA1 ── DIR
+PA2 ── EN
+PA3 ── MS1
+PA4 ── MS2
+GND ── GND
+       VIO ── 3.3V
+       VM  ── 12~24V
+```
+
+---
+
+## 四、控制原理
+
+与 A4988 / DRV8825 相同：
+
+```
+DIR  → 方向
+STEP → 脉冲频率 = 步进频率 = 转速
+```
+
+TMC2208 在 **StealthChop** 下低速几乎听不到步进声；高速可自动或配置切换到 SpreadCycle 保证扭矩（UART 模式配置更灵活，独立模式使用出厂默认策略）。
+
+---
+
+## 五、独立模式细分
+
+MS1、MS2 通过模块上的电阻或跳线设置（不同模块丝印略有差异，以模块说明为准）。常见配置：
+
+| MS1 | MS2 | 典型细分 |
+|-----|-----|----------|
+| L | L | 1/8 |
+| H | L | 1/2 |
+| L | H | 1/4 |
+| H | H | 1/16 |
+
+部分模块默认 **1/16**，MS 引脚已硬连线，MCU 无需再控 MS1/MS2。
+
+---
+
+## 六、标准库驱动代码
+
+### 6.1 TMC2208.h
+
+```c title="TMC2208.h"
+#ifndef __TMC2208_H
+#define __TMC2208_H
+
+#include "stm32f10x.h"
+
+/* ---------- 引脚定义（可按硬件修改） ---------- */
+#define TMC2208_GPIO        GPIOA
+#define TMC2208_RCC         RCC_APB2Periph_GPIOA
+
+#define TMC2208_STEP_PIN    GPIO_Pin_0   /* PA0 → STEP：上升沿走 1 微步 */
+#define TMC2208_DIR_PIN     GPIO_Pin_1   /* PA1 → DIR：方向，高/低对应 CW/CCW */
+#define TMC2208_EN_PIN      GPIO_Pin_2   /* PA2 → EN：低有效使能 */
+#define TMC2208_MS1_PIN     GPIO_Pin_3   /* PA3 → MS1：独立模式细分选择位 1 */
+#define TMC2208_MS2_PIN     GPIO_Pin_4   /* PA4 → MS2：独立模式细分选择位 2 */
+#define TMC2208_DIAG_PIN    GPIO_Pin_5   /* PA5 → DIAG：开漏诊断输出，低=故障/堵转 */
+
+/* 所有输出引脚掩码（不含 DIAG 输入） */
+#define TMC2208_OUT_PINS    (TMC2208_STEP_PIN | TMC2208_DIR_PIN | TMC2208_EN_PIN | \
+                             TMC2208_MS1_PIN | TMC2208_MS2_PIN)
+
+typedef enum
+{
+    TMC2208_DIR_CW  = 0,   /* 顺时针：DIR 拉低 */
+    TMC2208_DIR_CCW = 1    /* 逆时针：DIR 拉高 */
+} TMC2208_Direction;
+
+/* 独立模式常见细分（按模块调整） */
+typedef enum
+{
+    TMC2208_MICROSTEP_2  = 2,   /* 1/2 细分 */
+    TMC2208_MICROSTEP_4  = 4,   /* 1/4 细分 */
+    TMC2208_MICROSTEP_8  = 8,   /* 1/8 细分 */
+    TMC2208_MICROSTEP_16 = 16   /* 1/16 细分（多数模块默认） */
+} TMC2208_MicroStep;
+
+void TMC2208_Init(void);
+void TMC2208_Enable(FunctionalState state);
+void TMC2208_SetMicroStep(TMC2208_MicroStep microstep);
+void TMC2208_SetDirection(TMC2208_Direction dir);
+void TMC2208_StepPulse(void);           /* 手动产生 1 个 STEP 脉冲 */
+uint8_t TMC2208_IsDiagActive(void);     /* 读取 DIAG，1=诊断有效（故障/堵转） */
+
+/* TIM2 定时中断产生 STEP 脉冲（步频 = 转速） */
+void TMC2208_StepTimer_Init(uint16_t prescaler, uint16_t period);
+void TMC2208_StepTimer_Start(void);
+void TMC2208_StepTimer_Stop(void);
+void TMC2208_StepTimer_SetFreqHz(uint32_t step_hz);
+
+#endif
+```
+
+### 6.2 TMC2208.c
+
+```c title="TMC2208.c"
+#include "TMC2208.h"
+
+/* 写 MS1/MS2 细分选择引脚，对应独立模式真值表 */
+static void TMC2208_WriteMS(uint8_t ms1, uint8_t ms2)
+{
+    if (ms1) GPIO_SetBits(TMC2208_GPIO, TMC2208_MS1_PIN);
+    else     GPIO_ResetBits(TMC2208_GPIO, TMC2208_MS1_PIN);
+    if (ms2) GPIO_SetBits(TMC2208_GPIO, TMC2208_MS2_PIN);
+    else     GPIO_ResetBits(TMC2208_GPIO, TMC2208_MS2_PIN);
+}
+
+void TMC2208_Init(void)
+{
+    GPIO_InitTypeDef gpio;
+
+    /* 使能 GPIOA 时钟 */
+    RCC_APB2PeriphClockCmd(TMC2208_RCC, ENABLE);
+
+    /* STEP/DIR/EN/MS1/MS2 配置为推挽输出 */
+    gpio.GPIO_Pin   = TMC2208_OUT_PINS;
+    gpio.GPIO_Mode  = GPIO_Mode_Out_PP;
+    gpio.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(TMC2208_GPIO, &gpio);
+
+    /* DIAG 开漏输出，MCU 侧上拉输入检测故障/堵转 */
+    gpio.GPIO_Pin  = TMC2208_DIAG_PIN;
+    gpio.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(TMC2208_GPIO, &gpio);
+
+    GPIO_ResetBits(TMC2208_GPIO, TMC2208_STEP_PIN);  /* STEP 空闲为低 */
+
+    /* 默认 1/16，若模块已硬编码 MS 可省略 SetMicroStep */
+    TMC2208_SetMicroStep(TMC2208_MICROSTEP_16);
+    TMC2208_Enable(ENABLE);  /* 拉低 EN 使能驱动 */
+}
+
+void TMC2208_Enable(FunctionalState state)
+{
+    /* EN 低有效：ENABLE 时拉低，DISABLE 时拉高关断 H 桥 */
+    if (state == ENABLE)
+        GPIO_ResetBits(TMC2208_GPIO, TMC2208_EN_PIN);
+    else
+        GPIO_SetBits(TMC2208_GPIO, TMC2208_EN_PIN);
+}
+
+void TMC2208_SetMicroStep(TMC2208_MicroStep microstep)
+{
+    /* MS1:MS2 组合决定细分，见第五节真值表 */
+    switch (microstep)
+    {
+        case TMC2208_MICROSTEP_2:  TMC2208_WriteMS(1, 0); break;
+        case TMC2208_MICROSTEP_4:  TMC2208_WriteMS(0, 1); break;
+        case TMC2208_MICROSTEP_8:  TMC2208_WriteMS(0, 0); break;
+        case TMC2208_MICROSTEP_16:
+        default:                   TMC2208_WriteMS(1, 1); break;
+    }
+}
+
+void TMC2208_SetDirection(TMC2208_Direction dir)
+{
+    /* DIR 在 STEP 脉冲前稳定即可；CW=低，CCW=高 */
+    if (dir == TMC2208_DIR_CW)
+        GPIO_ResetBits(TMC2208_GPIO, TMC2208_DIR_PIN);
+    else
+        GPIO_SetBits(TMC2208_GPIO, TMC2208_DIR_PIN);
+}
+
+void TMC2208_StepPulse(void)
+{
+    /* 产生 STEP 上升沿：驱动芯片在上升沿走 1 微步 */
+    GPIO_SetBits(TMC2208_GPIO, TMC2208_STEP_PIN);
+    GPIO_ResetBits(TMC2208_GPIO, TMC2208_STEP_PIN);
+}
+
+uint8_t TMC2208_IsDiagActive(void)
+{
+    /* DIAG 低有效（开漏），读到 0 表示故障或 StallGuard 堵转触发 */
+    return GPIO_ReadInputDataBit(TMC2208_GPIO, TMC2208_DIAG_PIN) == Bit_RESET;
+}
+
+/* ---------- TIM2 定步频（STEP 脉冲节拍） ---------- */
+
+void TMC2208_StepTimer_Init(uint16_t prescaler, uint16_t period)
+{
+    TIM_TimeBaseInitTypeDef tim;
+    NVIC_InitTypeDef nvic;
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+
+    TIM_TimeBaseStructInit(&tim);
+    tim.TIM_Prescaler     = prescaler;
+    tim.TIM_Period        = period;
+    tim.TIM_ClockDivision = TIM_CKD_DIV1;
+    tim.TIM_CounterMode   = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM2, &tim);
+
+    TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);  /* 溢出中断 → 发 STEP 脉冲 */
+
+    nvic.NVIC_IRQChannel                   = TIM2_IRQn;
+    nvic.NVIC_IRQChannelPreemptionPriority = 2;
+    nvic.NVIC_IRQChannelSubPriority        = 0;
+    nvic.NVIC_IRQChannelCmd                = ENABLE;
+    NVIC_Init(&nvic);
+}
+
+void TMC2208_StepTimer_Start(void)
+{
+    TIM_SetCounter(TIM2, 0);
+    TIM_Cmd(TIM2, ENABLE);
+}
+
+void TMC2208_StepTimer_Stop(void)
+{
+    TIM_Cmd(TIM2, DISABLE);
+}
+
+void TMC2208_StepTimer_SetFreqHz(uint32_t step_hz)
+{
+    uint32_t arr;
+
+    if (step_hz == 0)
+    {
+        TMC2208_StepTimer_Stop();
+        return;
+    }
+
+    /* TIM2 在 APB1，72MHz 系统下 TIM 时钟通常为 72MHz
+     * PSC=7200-1 → 计数频率 10kHz
+     * 步频 = 10000 / (ARR+1)，即 arr = 10000/step_hz - 1 */
+    arr = 10000 / step_hz;
+    if (arr == 0) arr = 1;
+    arr -= 1;
+
+    TIM_Cmd(TIM2, DISABLE);
+    TIM_PrescalerConfig(TIM2, 7200 - 1, TIM_PSCReloadMode_Immediate);
+    TIM_SetAutoreload(TIM2, (uint16_t)arr);
+    TIM_SetCounter(TIM2, 0);
+    TIM_Cmd(TIM2, ENABLE);
+}
+```
+
+### 6.3 中断服务函数
+
+```c title="stm32f10x_it.c（片段）"
+#include "stm32f10x_tim.h"
+#include "TMC2208.h"
+
+void TIM2_IRQHandler(void)
+{
+    if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET)
+    {
+        TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+
+        /* 每个定时溢出产生 1 个 STEP 上升沿 → 走 1 微步
+         * TMC2208 StealthChop 模式下低速步进几乎无声 */
+        TMC2208_StepPulse();
+    }
+}
+```
+
+---
+
+## 七、main 示例
+
+```c title="main.c"
+#include "stm32f10x.h"
+#include "TMC2208.h"
+
+/* 简易延时（实际项目建议用 SysTick） */
+static void Delay_ms(volatile uint32_t ms)
+{
+    while (ms--) { }
+}
+
+int main(void)
+{
+    SystemInit();
+
+    TMC2208_Init();
+    TMC2208_SetMicroStep(TMC2208_MICROSTEP_16);  /* 1/16 细分 → 3200 步/圈（1.8° 电机） */
+    TMC2208_SetDirection(TMC2208_DIR_CW);          /* DIR 拉低，顺时针 */
+
+    /* 低速静音运行：400 步/秒 ÷ 3200 步/圈 × 60 ≈ 7.5 RPM
+     * StealthChop 在低速区间效果最佳 */
+    TMC2208_StepTimer_SetFreqHz(400);
+    Delay_ms(10000);  /* 运行约 10 秒 */
+
+    TMC2208_StepTimer_Stop();
+    TMC2208_Enable(DISABLE);  /* 拉高 EN，释放电机（可手动转动） */
+
+    while (1) { }
+}
+```
+
+---
+
+## 八、UART 模式简介
+
+进阶用法可通过 **PDN_UART** 单线 UART 配置：
+
+- 运行电流（IRUN/IHOLD）
+- 细分（可超过独立模式档位）
+- StealthChop / SpreadCycle 切换阈值
+- StallGuard 堵转检测
+
+需配合 Trinamic 寄存器协议或 `TMCStepper` 等库，**超出本文标准库基础示例范围**。入门建议先用 **独立模式 + STEP/DIR** 跑通，再升级 UART。
+
+---
+
+## 九、注意事项
+
+1. **VIO 与 VM**：逻辑 3.3 V 与电机电源分开；**必须先共地**。  
+2. **散热**：TMC2208 仍会因大电流发热，保持风道。  
+3. **MS 引脚**：很多模块已固定 1/16，改 MS 前看模块背面电阻/跳线。  
+4. **STEP 时序**：与 A4988 类似，脉宽大于约 100 ns 即可，中断翻转足够。  
+5. **DIAG**：可接 EXTI 做堵转/故障检测（UART 配置 StallGuard 后更有意义）。  
+6. **与 A4988 替换**：引脚基本兼容，注意 EN/MS 有效电平与细分表差异。
+
+---
+
+## 四款驱动对比
+
+| 驱动 | 接口 | 最高细分 | 特色 |
+|------|------|----------|------|
+| BDR6622T | IN1～IN4 | 半步（软件） | 无 STEP，MCU 换相 |
+| A4988 | STEP/DIR | 1/16 | 廉价常见 |
+| DRV8825 | STEP/DIR | 1/32 | nFAULT、高电压 |
+| TMC2208 | STEP/DIR | 1/16（独立） | **静音** StealthChop |
+
+---
+
+## 总结
+
+TMC2208 在独立模式下与 A4988 **用法相同**：`DIR` 定方向，`TIM2` 定时中断发 `STEP` 脉冲。优势是 **运行更安静**；进阶电流/静音优化可走 UART 配置。

@@ -1,0 +1,621 @@
+---
+title: MS41949 步进电机驱动
+description: 瑞盟 MS41949 四通道 SPI 步进驱动，256 细分，STM32F10x 标准库 SPI 控制示例（镜头变焦/对焦）
+---
+
+> 面向嵌入式入门，以 **STM32F10x 标准外设库（StdPeriph Library）** 为例。  
+> MS41949 通过 **SPI 寄存器** 控制四路步进 + 一路直流，**不是 STEP/DIR**，常见于 **摄像机镜头** 驱动。
+
+---
+
+## 目录
+
+1. [芯片简介](#一芯片简介)
+2. [与其他驱动的区别](#二与其他驱动的区别)
+3. [硬件连接](#三硬件连接)
+4. [SPI 通信协议](#四spi-通信协议)
+5. [关键寄存器（A 通道）](#五关键寄存器a-通道)
+6. [速度与步数计算](#六速度与步数计算)
+7. [标准库驱动代码](#七标准库驱动代码)
+8. [镜头 A 通道运动示例](#八镜头-a-通道运动示例)
+9. [main 调用示例](#九main-调用示例)
+10. [注意事项](#十注意事项)
+
+---
+
+## 一、芯片简介
+
+**MS41949** 是杭州瑞盟科技（Relmon）的 **四通道、低压 5 V 微步进驱动芯片**，QFN48 封装。
+
+| 项目 | 说明 |
+|------|------|
+| 步进通道 | **4 路**（A/B/C/D），每路 1 个双极步进，共 8 个 H 桥 |
+| 直流通道 | **1 路** E 通道（OUTE1/OUTE2），约 ±0.5 A |
+| 控制接口 | **四线 SPI**（CS、SCK、SIN、SOUT） |
+| 同步信号 | **VFA～VFD**（各通道帧同步，镜头应用接传感器 VF） |
+| 细分 | **64 / 128 / 256** 微步（芯片内部正弦 PWM） |
+| 负载电压 | **2.7 V～5.5 V**（MVCCx） |
+| H 桥电流 | 每桥约 **±0.8 A** |
+| 逻辑电源 | DVDD 5 V，AVDD 3.3 V |
+| 时钟 | **OSCIN** 需外接晶振（典型 **27 MHz**） |
+| 特色 | 电压驱动 + 扭矩纹波修正，**超低噪声** |
+
+典型应用：**监控摄像头 / 网络摄像机** 的 **变焦（Zoom）、对焦（Focus）、光圈（Iris）** 马达，以及机器人、精密小机构。
+
+---
+
+## 二、与其他驱动的区别
+
+| 对比 | A4988 / TMC2208 | BDR6622T | **MS41949** |
+|------|-----------------|----------|-------------|
+| 控制 | STEP + DIR | IN1～IN4 换相 | **SPI 写寄存器** |
+| 路数 | 1 路步进 | 1 路步进 | **4 路步进 + 1 路 DC** |
+| 换相/细分 | 芯片内（或 MS 引脚） | MCU 查表 | **芯片内 256 细分** |
+| 典型电压 | 8～35 V | 2.7～15 V | **5 V 低压** |
+| 典型场景 | 3D 打印 | 小型步进 | **镜头马达** |
+
+---
+
+## 三、硬件连接
+
+### 3.1 主要引脚
+
+| 引脚 | 类型 | 功能 |
+|------|------|------|
+| CS | 输入 | SPI 片选（**高电平有效**，见第四节） |
+| SCK | 输入 | SPI 时钟 |
+| SIN | 输入 | SPI 数据输入（MOSI） |
+| SOUT | 输出 | SPI 数据输出（MISO，读寄存器用） |
+| RSTB | 输入 | **低** = 复位/待机，**高** = 正常工作 |
+| OSCIN / OSCOUT | 晶振 | 系统时钟，典型 **27 MHz** |
+| VFA～VFD | 输入 | A～D 通道 **VF 同步**（帧同步脉冲） |
+| AOUT1～4 等 | 输出 | 各通道 H 桥输出 → 步进电机 |
+| OUTE1/OUTE2 | 输出 | E 路直流电机 |
+| MVCCx | 电源 | 各通道电机 5 V |
+| DVDD | 电源 | 数字 5 V |
+| AVDD | 电源 | 模拟 3.3 V |
+
+### 3.2 与 STM32 连接（示例）
+
+| MS41949 | STM32 | 说明 |
+|---------|-------|------|
+| CS | PA4 | GPIO，SPI 片选（高有效） |
+| SCK | PA5 | SPI1_SCK |
+| SIN | PA7 | SPI1_MOSI |
+| SOUT | PA6 | SPI1_MISO |
+| RSTB | PA8 | GPIO 推挽 |
+| VFA | PB0 | 可选：GPIO 模拟 VF 或接传感器同步 |
+
+```
+STM32 SPI1              MS41949
+──────────              ────────
+PA5 SCK   ────────────  SCK
+PA7 MOSI  ────────────  SIN
+PA6 MISO  ────────────  SOUT
+PA4 GPIO  ────────────  CS
+PA8 GPIO  ────────────  RSTB
+3.3V      ────────────  AVDD
+5V        ────────────  DVDD / MVCCx
+GND       ────────────  DGND / MGNDx
+
+MS41949 侧另需：
+  OSCIN/OSCOUT ── 27MHz 晶振 + 负载电容
+  VFA (A 通道) ── 帧同步方波（镜头板来自传感器；单测可用 TIM 输出）
+  AOUT*        ── 对焦/变焦步进电机
+```
+
+---
+
+## 四、SPI 通信协议
+
+### 4.1 时序要点
+
+- 一次传输 **24 位**
+- **CS = 1** 期间在 SCK 上升沿采样 SIN / 输出 SOUT
+- **CS 下降沿** 结束本次传输；**CS = 0** 时接口复位
+- 写寄存器时 **OSCIN 必须有 27 MHz 时钟**
+- SCK 最高约 **5 MHz**
+
+### 4.2 24 位帧格式
+
+```
+位序号:  0  1  2  3  4  5  6   7   8 ... 23
+含义:   A0 A1 A2 A3 A4 A5 C0  C1  D0 ... D15
+
+C0: 0 = 写，1 = 读
+C1: 保留
+A0～A5: 寄存器地址（6 位）
+D0～D15: 16 位数据
+```
+
+先发送 **位 0（A0）**，即 **LSB 先行**。
+
+写寄存器打包示例：
+
+```c
+/* 写寄存器 24 位帧打包
+ * addr: 6 位寄存器地址 A0～A5（低 6 位）
+ * data: 16 位寄存器数据 D0～D15
+ * C0=0、C1=0 表示写操作（读时 C0=1）
+ * 帧格式：[A0..A5][C0][C1][D0..D15]，位 0（A0）最先发送（LSB 先行） */
+uint32_t frame = (addr & 0x3Fu) | ((uint32_t)(data & 0xFFFFu) << 8);
+```
+
+### 4.3 通道与地址
+
+| 通道 | 用途（镜头） | 寄存器地址区 |
+|------|--------------|--------------|
+| A | 对焦 Focus | **0x20～0x2A** |
+| B | 变焦 Zoom | **0x27～0x2A**（与 A 镜像，DT/PPW 等同算法） |
+| C | 光圈 Iris 等 | **0x00～0x0A** |
+| D | 辅助 | **0x07～0x0A** 等 |
+
+> AB 与 CD 寄存器 **功能相同、地址不同**；A 与 B 为 **镜像通道**。
+
+---
+
+## 五、关键寄存器（A 通道）
+
+以 **A 通道对焦马达** 为例（完整位域见数据手册）：
+
+| 地址 | 名称 | 作用 |
+|------|------|------|
+| 0x20 | DT1AB / PWMMODEAB | 起始等待时间、PWM 频率模式 |
+| 0x22 | PHMODA / DT2A | 相位校正、起始激励延时 |
+| 0x23 | PPWAα / PPWAβ | α/β 相 **电流幅度**（峰值脉冲宽度） |
+| 0x24 | MICROA / PSUM / CCWCWA / ENDISA | 细分 64/128/256、**步数**、**方向**、使能 |
+| 0x25 | INTCTA[15:0] | **步进周期**（速度） |
+
+### 5.1 0x24 控制位（节选）
+
+| 位域 | 含义 |
+|------|------|
+| ENDISA | 1 = 通道 A 使能 |
+| CCWCWA | 0 = 正转，1 = 反转 |
+| BRAKEA | 1 = 刹车（立即停，位置可能不准） |
+| PSUM[7:0] | 每个 VF 周期内走多少 **微步**；0 = 停 |
+| MICRO[1:0] | 00=256 细分，01=128，10=64 |
+
+### 5.2 典型初始化顺序
+
+1. **RSTB** 低 → 延时 → 高（退出待机，寄存器复位）
+2. 写 **0x20** DT1AB、PWM 模式（激励前必须配置）
+3. 写 **0x22** DT2A、PHMODA
+4. 写 **0x23** PPWA（电流/幅度）
+5. 写 **0x24** MICRO、**ENDISA=1**
+6. 每个 **VF 脉冲** 到来时，写 **0x25 INTCTA** + **0x24 PSUM** 触发运动
+
+---
+
+## 六、速度与步数计算
+
+数据手册公式（OSCIN = 27 MHz，f_VF 为 VFA 同步频率）：
+
+**1）步进周期 INTCT（决定速度）**
+
+```
+INTCT × 768 = OSCIN / f_step
+```
+
+**2）每 VF 帧步数 PSUM（与 INTCT 配合）**
+
+```
+INTCT × PSUM × 24 = OSCIN / f_VF
+```
+
+**示例**（OSCIN = 27 MHz，f_VF = 60 Hz，目标 800 pps）：
+
+- 相电流正弦波频率 100 Hz → INTCT ≈ 352
+- PSUM ≈ 53，再微调 INTCT ≈ 354
+
+若 `INTCT × PSUM × 24` 小于右式，转动不连续；大于则超出部分被取消。
+
+---
+
+## 七、标准库驱动代码
+
+### 7.1 MS41949.h
+
+```c title="MS41949.h"
+#ifndef __MS41949_H
+#define __MS41949_H
+
+#include "stm32f10x.h"
+
+/* SPI1 + GPIO 引脚定义（可按实际硬件修改） */
+#define MS41949_SPI              SPI1
+#define MS41949_SPI_RCC          RCC_APB2Periph_SPI1
+#define MS41949_GPIO_RCC         RCC_APB2Periph_GPIOA
+
+/* CS 片选：MS41949 为 CS 高电平有效（与常见 SPI Flash 低有效相反） */
+#define MS41949_CS_GPIO          GPIOA
+#define MS41949_CS_PIN           GPIO_Pin_4
+
+/* RSTB：低电平复位/待机，高电平正常工作 */
+#define MS41949_RSTB_GPIO        GPIOA
+#define MS41949_RSTB_PIN         GPIO_Pin_8
+
+/* OSCIN 晶振频率，用于 INTCT / PSUM 速度步数计算 */
+#define MS41949_OSCIN_HZ         27000000u
+
+/* A 通道寄存器地址（6 位，对应 24 位帧 A0～A5） */
+#define MS41949_REG_DT1AB        0x20u   /* 起始等待时间、PWM 模式 */
+#define MS41949_REG_PHMOD_DT2A   0x22u   /* 相位校正、起始激励延时 */
+#define MS41949_REG_PPWA         0x23u   /* α/β 相电流幅度 */
+#define MS41949_REG_CTRL_A       0x24u   /* 细分、PSUM 步数、方向、使能 */
+#define MS41949_REG_INTCTA       0x25u   /* 步进周期（速度） */
+
+/* 四路步进通道枚举 */
+typedef enum
+{
+    MS41949_CH_A = 0,
+    MS41949_CH_B,
+    MS41949_CH_C,
+    MS41949_CH_D
+} MS41949_Channel;
+
+/* 旋转方向：CCWCWA 位，0=正转，1=反转 */
+typedef enum
+{
+    MS41949_DIR_FORWARD  = 0,
+    MS41949_DIR_BACKWARD = 1
+} MS41949_Direction;
+
+/* 微步细分：00=256，01=128，10=64 */
+typedef enum
+{
+    MS41949_MICRO_256 = 0,
+    MS41949_MICRO_128 = 1,
+    MS41949_MICRO_64  = 2
+} MS41949_MicroStep;
+
+void MS41949_SPI_Init(void);
+void MS41949_Reset(void);
+void MS41949_WriteReg(uint8_t addr, uint16_t data);   /* 写寄存器：打包 24 位帧经 SPI 发送 */
+uint16_t MS41949_ReadReg(uint8_t addr);               /* 读寄存器：C0=1 触发读，SOUT 返回 16 位数据 */
+
+void MS41949_ChannelA_Init(void);
+void MS41949_ChannelA_Enable(FunctionalState state);
+void MS41949_ChannelA_SetDirection(MS41949_Direction dir);
+void MS41949_ChannelA_Move(uint8_t psum, uint16_t intct);  /* 写 INTCT + PSUM，在下一 VF 沿触发运动 */
+
+/* INTCT 计算：INTCT × 768 = OSCIN / f_step */
+uint16_t MS41949_CalcIntct(uint32_t f_step_hz);
+/* PSUM 计算：INTCT × PSUM × 24 = OSCIN / f_VF */
+uint8_t  MS41949_CalcPsum(uint16_t intct, uint32_t f_vf_hz);
+
+#endif
+```
+
+### 7.2 MS41949.c — SPI 底层
+
+```c title="MS41949.c"
+#include "MS41949.h"
+
+/* CS 拉高：MS41949 片选有效（高电平有效，与常见 SPI 外设相反） */
+static void MS41949_CS_High(void)
+{
+    GPIO_SetBits(MS41949_CS_GPIO, MS41949_CS_PIN);
+}
+
+/* CS 拉低：片选无效，SPI 接口复位，结束本次 24 位传输 */
+static void MS41949_CS_Low(void)
+{
+    GPIO_ResetBits(MS41949_CS_GPIO, MS41949_CS_PIN);
+}
+
+/* 发送一字节，LSB 先行（与 MS41949 24 位帧位序一致） */
+static void MS41949_SPI_ByteLSB(uint8_t byte)
+{
+    while (SPI_I2S_GetFlagStatus(MS41949_SPI, SPI_I2S_FLAG_TXE) == RESET) { }
+    SPI_I2S_SendData(MS41949_SPI, byte);
+    while (SPI_I2S_GetFlagStatus(MS41949_SPI, SPI_I2S_FLAG_RXNE) == RESET) { }
+    (void)SPI_I2S_ReceiveData(MS41949_SPI);  /* 丢弃 MISO 回读，写操作时 SOUT 无效 */
+}
+
+/* 发送完整 24 位帧（3 字节，低字节先发）
+ * 时序：CS 先低后高 → 在 CS=1 期间发 3 字节 → CS 下降沿锁存 */
+static void MS41949_Transfer24(uint32_t frame)
+{
+    /* 拆成 3 字节：b0=位0～7（地址+控制位），b1=位8～15，b2=位16～23 */
+    uint8_t b0 = (uint8_t)(frame & 0xFFu);
+    uint8_t b1 = (uint8_t)((frame >> 8) & 0xFFu);
+    uint8_t b2 = (uint8_t)((frame >> 16) & 0xFFu);
+
+    MS41949_CS_Low();   /* 确保 CS 从低开始，产生上升沿 */
+    MS41949_CS_High();  /* CS=1：SPI 接口激活，开始采样 SCK/SIN */
+
+    MS41949_SPI_ByteLSB(b0);  /* 先发 A0～A5、C0、C1、D0～D7 */
+    MS41949_SPI_ByteLSB(b1);  /* 再发 D8～D15 低 8 位 */
+    MS41949_SPI_ByteLSB(b2);  /* 再发 D15～D8 高 8 位（若帧仅 24 位则 b2 高位为 0） */
+
+    MS41949_CS_Low();   /* CS 下降沿：结束传输，芯片锁存寄存器写入 */
+}
+
+void MS41949_SPI_Init(void)
+{
+    GPIO_InitTypeDef gpio;
+    SPI_InitTypeDef spi;
+
+    RCC_APB2PeriphClockCmd(MS41949_GPIO_RCC | MS41949_SPI_RCC, ENABLE);
+
+    /* SPI1 复用引脚：SCK(PA5)、MISO(PA6)、MOSI(PA7) */
+    gpio.GPIO_Pin   = GPIO_Pin_5 | GPIO_Pin_6 | GPIO_Pin_7;
+    gpio.GPIO_Mode  = GPIO_Mode_AF_PP;
+    gpio.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &gpio);
+
+    /* CS、RSTB 为普通 GPIO 输出（CS 不由 SPI 硬件 NSS 控制） */
+    gpio.GPIO_Pin   = MS41949_CS_PIN | MS41949_RSTB_PIN;
+    gpio.GPIO_Mode  = GPIO_Mode_Out_PP;
+    gpio.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &gpio);
+
+    MS41949_CS_Low();   /* 初始 CS=0：接口空闲/复位状态 */
+    GPIO_SetBits(MS41949_RSTB_GPIO, MS41949_RSTB_PIN);  /* RSTB 高：退出待机 */
+
+    SPI_I2S_DeInit(MS41949_SPI);
+    spi.SPI_Direction         = SPI_Direction_2Lines_FullDuplex;
+    spi.SPI_Mode              = SPI_Mode_Master;
+    spi.SPI_DataSize          = SPI_DataSize_8b;
+    spi.SPI_CPOL              = SPI_CPOL_Low;   /* SCK 空闲低 */
+    spi.SPI_CPHA              = SPI_CPHA_1Edge; /* 第 1 边沿采样（上升沿） */
+    spi.SPI_NSS               = SPI_NSS_Soft;   /* CS 由软件 GPIO 控制 */
+    spi.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_32;  /* SCK ≤ 5 MHz */
+    spi.SPI_FirstBit          = SPI_FirstBit_LSB;  /* LSB 先行，匹配 24 位帧 A0 先发 */
+    spi.SPI_CRCPolynomial     = 7;
+    SPI_Init(MS41949_SPI, &spi);
+    SPI_Cmd(MS41949_SPI, ENABLE);
+}
+
+/* 硬件复位：RSTB 低 → 延时 → 高，芯片寄存器恢复默认值 */
+void MS41949_Reset(void)
+{
+    GPIO_ResetBits(MS41949_RSTB_GPIO, MS41949_RSTB_PIN);
+    for (volatile uint32_t i = 0; i < 100000; i++) { }
+    GPIO_SetBits(MS41949_RSTB_GPIO, MS41949_RSTB_PIN);
+    for (volatile uint32_t i = 0; i < 100000; i++) { }
+}
+
+/* 写寄存器：打包 24 位写帧（C0=0）并发送 */
+void MS41949_WriteReg(uint8_t addr, uint16_t data)
+{
+    /* 低 6 位=地址 A0～A5，位 8～23=16 位数据 D0～D15，C0/C1=0 表示写 */
+    uint32_t frame = (uint32_t)(addr & 0x3Fu) | ((uint32_t)(data & 0xFFFFu) << 8);
+    MS41949_Transfer24(frame);
+}
+
+/* 读寄存器：C0=1 触发读，SOUT 在 SCK 上升沿输出 16 位数据 */
+uint16_t MS41949_ReadReg(uint8_t addr)
+{
+    /* 地址 + C0=1（读标志），C1=0 */
+    uint32_t tx = (uint32_t)(addr & 0x3Fu) | (1u << 6);
+    uint8_t b0, b1, b2;
+    uint16_t rx;
+
+    MS41949_CS_Low();
+    MS41949_CS_High();  /* CS 高有效，激活读传输 */
+
+    MS41949_SPI_ByteLSB((uint8_t)(tx & 0xFFu));
+    b0 = (uint8_t)SPI_I2S_ReceiveData(MS41949_SPI);  /* 第 1 字节回读（含地址回显等） */
+
+    MS41949_SPI_ByteLSB((uint8_t)((tx >> 8) & 0xFFu));
+    b1 = (uint8_t)SPI_I2S_ReceiveData(MS41949_SPI);  /* 数据低 8 位 D0～D7 */
+
+    MS41949_SPI_ByteLSB((uint8_t)((tx >> 16) & 0xFFu));
+    b2 = (uint8_t)SPI_I2S_ReceiveData(MS41949_SPI);  /* 数据高 8 位 D8～D15 */
+
+    MS41949_CS_Low();   /* CS 下降沿结束读操作 */
+
+    rx = (uint16_t)b1 | ((uint16_t)b2 << 8);  /* 组合 16 位寄存器值 */
+    (void)b0;
+    return rx;
+}
+```
+
+### 7.3 通道 A 初始化与运动
+
+```c title="MS41949.c（续）"
+/* A 通道初始化：按手册顺序写激励前必须的寄存器 */
+void MS41949_ChannelA_Init(void)
+{
+    MS41949_Reset();
+
+    /* 0x20：DT1AB 起始等待 + PWMMODE/PWMRES 默认配置（激励前必须写入） */
+    MS41949_WriteReg(MS41949_REG_DT1AB, 0x2A00u);
+
+    /* 0x22：PHMODA 相位校正=0，DT2A 起始激励延时=0x03 */
+    MS41949_WriteReg(MS41949_REG_PHMOD_DT2A, 0x0300u);
+
+    /* 0x23：PPWA α/β 相电流幅度，0x4040 为示例，需按电机负载调整 */
+    MS41949_WriteReg(MS41949_REG_PPWA, 0x4040u);
+
+    /* 0x24：MICRO=256 细分，ENDISA=1 使能 A 通道（PSUM 暂为 0，不运动） */
+    MS41949_WriteReg(MS41949_REG_CTRL_A, 0x0100u);
+}
+
+/* 使能/禁用 A 通道：修改 0x24 的 ENDISA 位后写回 */
+void MS41949_ChannelA_Enable(FunctionalState state)
+{
+    uint16_t v = MS41949_ReadReg(MS41949_REG_CTRL_A);
+    if (state == ENABLE)
+        v |= (1u << 8);   /* ENDISA=1：通道 A 输出使能 */
+    else
+        v &= ~(1u << 8);  /* ENDISA=0：关闭输出（转动中勿突然 Disable） */
+    MS41949_WriteReg(MS41949_REG_CTRL_A, v);
+}
+
+/* 设置旋转方向：修改 0x24 的 CCWCWA 位 */
+void MS41949_ChannelA_SetDirection(MS41949_Direction dir)
+{
+    uint16_t v = MS41949_ReadReg(MS41949_REG_CTRL_A);
+    if (dir == MS41949_DIR_BACKWARD)
+        v |= (1u << 10);   /* CCWCWA=1：反转 */
+    else
+        v &= ~(1u << 10);  /* CCWCWA=0：正转 */
+    MS41949_WriteReg(MS41949_REG_CTRL_A, v);
+}
+
+/* 触发本 VF 帧运动：先写 INTCT（速度），再写 PSUM（步数）
+ * 芯片在 VFA 上升沿锁存 INTCT/PSUM，开始本帧内 psum 个微步 */
+void MS41949_ChannelA_Move(uint8_t psum, uint16_t intct)
+{
+    uint16_t ctrl;
+
+    /* 0x25：步进周期 INTCT，决定每微步的时间（速度） */
+    MS41949_WriteReg(MS41949_REG_INTCTA, intct);
+
+    /* 0x24：保留高位（细分/方向/使能），低 8 位写入 PSUM 步数 */
+    ctrl = MS41949_ReadReg(MS41949_REG_CTRL_A);
+    ctrl = (ctrl & 0xFF00u) | (uint16_t)psum;  /* PSUM=0 时停止 */
+    MS41949_WriteReg(MS41949_REG_CTRL_A, ctrl);
+}
+
+/* INTCT 计算：公式 INTCT × 768 = OSCIN / f_step
+ * f_step：目标步进频率（pps，每秒微步数） */
+uint16_t MS41949_CalcIntct(uint32_t f_step_hz)
+{
+    if (f_step_hz == 0) return 0;
+    return (uint16_t)(MS41949_OSCIN_HZ / (f_step_hz * 768u));
+}
+
+/* PSUM 计算：公式 INTCT × PSUM × 24 = OSCIN / f_VF
+ * f_VF：VFA 同步帧频率（如 60 Hz 场同步） */
+uint8_t MS41949_CalcPsum(uint16_t intct, uint32_t f_vf_hz)
+{
+    if (intct == 0 || f_vf_hz == 0) return 0;
+    return (uint8_t)(MS41949_OSCIN_HZ / (f_vf_hz * (uint32_t)intct * 24u));
+}
+```
+
+> **说明**：`ENDISA`、`CCWCWA`、`PSUM` 在 0x24 中的具体位位置以你所用手册版本为准；上例按常见 MS41949 数据手册 **V1.8** 整理，量产前请对照 PDF 微调位掩码。
+
+---
+
+## 八、镜头 A 通道运动示例
+
+### 8.1 VF 同步
+
+MS41949 在 **VFA 上升沿**（或 MODESEL_FZ 配置的极性）锁存 **PSUM / INTCT**，开始本帧内的步进。
+
+- **镜头板**：VFA 接图像传感器 **VD（场同步）**
+- **单测无传感器**：可用 TIM 输出 60 Hz 方波到 VFA
+
+```c title="VF 模拟（60Hz 方波到 PB0，可选）"
+/* 用 TIM3 在 PB0 输出约 60 Hz 方波，模拟镜头 VFA 场同步信号
+ * MS41949 在 VFA 上升沿锁存 INTCT/PSUM，开始本帧步进 */
+void VF_Timer_Init(void)
+{
+    TIM_TimeBaseInitTypeDef tim;
+    GPIO_InitTypeDef gpio;
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+
+    /* PB0 复用推挽输出，接 MS41949 VFA 引脚 */
+    gpio.GPIO_Pin   = GPIO_Pin_0;
+    gpio.GPIO_Mode  = GPIO_Mode_AF_PP;
+    gpio.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &gpio);
+
+    /* 定时器频率：72MHz / 7200 = 10 kHz
+     * 周期 ARR=166 → 10kHz / 167 ≈ 60 Hz 方波（即 f_VF=60Hz） */
+    tim.TIM_Period        = 167 - 1;
+    tim.TIM_Prescaler     = 7200 - 1;
+    tim.TIM_ClockDivision = TIM_CKD_DIV1;
+    tim.TIM_CounterMode   = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM3, &tim);
+
+    /* 若 PB0 需重映射为 TIM3_CH3，另配 GPIO_PinRemapConfig(TIM3_PARTIAL_REMAP, ENABLE) */
+}
+```
+
+### 8.2 对焦走步
+
+```c
+/* 目标步进频率 f_step=400 Hz，VFA 同步频率 f_VF=60 Hz
+ * 先算 INTCT（速度），再算 PSUM（每 VF 帧走多少微步） */
+
+/* INTCT × 768 = 27MHz / 400 → intct ≈ 88 */
+uint16_t intct = MS41949_CalcIntct(400);
+
+/* INTCT × PSUM × 24 = 27MHz / 60 → psum ≈ 21（与 intct 配合） */
+uint8_t  psum  = MS41949_CalcPsum(intct, 60);
+
+MS41949_ChannelA_SetDirection(MS41949_DIR_FORWARD);
+MS41949_ChannelA_Move(psum, intct);
+/* SPI 写 INTCT + PSUM 后，等下一个 VFA 上升沿芯片才开始本帧步进 */
+```
+
+停止：写 **PSUM = 0** 或 **ENDISA = 0**。
+
+---
+
+## 九、main 调用示例
+
+```c title="main.c"
+#include "stm32f10x.h"
+#include "MS41949.h"
+
+/* 简单忙等延时（量产建议换 SysTick 或 RTOS 定时） */
+static void Delay_ms(volatile uint32_t ms)
+{
+    while (ms--) { }
+}
+
+int main(void)
+{
+    SystemInit();
+
+    MS41949_SPI_Init();          /* SPI + CS/RSTB GPIO，CS 初始为低（空闲） */
+    MS41949_ChannelA_Init();     /* 复位芯片，写 DT/PPW/MICRO/ENDISA 等激励寄存器 */
+    MS41949_ChannelA_Enable(ENABLE);
+    MS41949_ChannelA_SetDirection(MS41949_DIR_FORWARD);
+
+    /* 循环：每个 VF 周期（约 60Hz）写一次 INTCT + PSUM 触发对焦马达走步
+     * 实际镜头板 VFA 接传感器 VD；此处用 Delay_ms(16) 近似一帧间隔 */
+    for (;;)
+    {
+        /* f_step=300 pps：INTCT × 768 = OSCIN / 300 */
+        uint16_t intct = MS41949_CalcIntct(300);
+
+        /* f_VF=60 Hz：INTCT × PSUM × 24 = OSCIN / 60 */
+        uint8_t  psum  = MS41949_CalcPsum(intct, 60);
+
+        /* 24 位 SPI 写 0x25(INTCT) + 0x24(PSUM)，下一 VFA 沿生效 */
+        MS41949_ChannelA_Move(psum, intct);
+        Delay_ms(16);   /* 约 16.7 ms @60Hz，实际以 VFA 硬件同步为准 */
+    }
+}
+```
+
+---
+
+## 十、注意事项
+
+1. **27 MHz 晶振**：OSCIN 必须可靠，否则 SPI 写入与速度计算均不准。  
+2. **CS 极性**：MS41949 为 **CS 高有效**，与常见 SPI Flash **相反**，勿直接复用默认低有效 CS 习惯。  
+3. **SPI LSB 先行**：24 位帧 **位 0 先发**，需 `SPI_FirstBit_LSB` 或软件按位发送。  
+4. **寄存器建立时间**：激励前必须写完 DT1、DT2、PPW、PWM 等；运动参数在 **VF 周期内** 写完。  
+5. **转动中禁止 ENDIS=0**：手册要求电机转时不要突然 Disable，否则位置异常。  
+6. **电源**：MVCCx、DVDD、AVDD 按手册去耦；**背部散热焊盘** 必须良好焊接。  
+7. **E 路 DC 马达**：另有寄存器区控制，本文聚焦 A 通道步进；DC 部分见手册「直流电机 E 驱动电路」章节。  
+8. **与 A4988 不可互换**：接口、电压、软件栈完全不同。
+
+---
+
+## 五款驱动对比
+
+| 驱动 | 接口 | 路数 | 细分 | 典型场景 |
+|------|------|------|------|----------|
+| BDR6622T | IN1～IN4 | 1 | 软件整/半步 | 低压小步进 |
+| A4988 | STEP/DIR | 1 | 1/16 | 3D 打印 |
+| DRV8825 | STEP/DIR | 1 | 1/32 | 高精度打印 |
+| TMC2208 | STEP/DIR | 1 | 1/16（独立） | 静音打印 |
+| **MS41949** | **SPI** | **4+DC** | **256** | **镜头马达** |
+
+---
+
+## 总结
+
+MS41949 适合 **多路 5 V 小步进 + 镜头同步（VF）** 场景。MCU 用 **标准库 SPI** 写寄存器配置电流、细分、**INTCT（速度）** 和 **PSUM（步数）**，**不是** TIM 发 STEP 脉冲。入门建议：先 **SPI 读写 + RSTB + 单通道 A 空载转**，再接 VF 与真实马达。

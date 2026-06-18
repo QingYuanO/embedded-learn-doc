@@ -1,0 +1,407 @@
+---
+title: A4988 步进电机驱动
+description: Allegro A4988 STEP/DIR 步进驱动模块，STM32F10x 标准库 GPIO + 定时器 STEP 脉冲输出示例
+---
+
+> 面向嵌入式入门，以 **STM32F10x 标准外设库（StdPeriph Library）** 为例。  
+> A4988 采用 **STEP + DIR** 接口：MCU 发脉冲控制步数/转速，芯片内部自动换相与细分。
+
+---
+
+## 目录
+
+1. [芯片简介](#一芯片简介)
+2. [硬件连接](#二硬件连接)
+3. [控制原理](#三控制原理)
+4. [细分与电流](#四细分与电流)
+5. [标准库驱动代码](#五标准库驱动代码)
+6. [main 示例](#六main-示例)
+7. [注意事项](#七注意事项)
+
+---
+
+## 一、芯片简介
+
+**A4988** 是 Allegro 出品的 **带转换器的微步进驱动器**，常见于 3D 打印机 A4988 模块。
+
+| 项目 | 说明 |
+|------|------|
+| 接口 | **STEP**、**DIR**、**ENABLE**、MS1～MS3 |
+| 逻辑电平 | 3.3 V / 5 V 兼容 |
+| 电机电源 VM | 8 V～35 V（模块通常 12 V） |
+| 最大电流 | 约 2 A/相（需散热片） |
+| 细分 | 全步、1/2、1/4、1/8、**1/16** |
+| 保护 | 过温、过流、欠压 |
+
+---
+
+## 二、硬件连接
+
+### 2.1 模块引脚
+
+| 引脚 | 方向 | 功能 |
+|------|------|------|
+| STEP | 输入 | 上升沿走 **1 微步**（或 1 全步，取决于 MS 配置） |
+| DIR | 输入 | 方向：高/低对应正/反（可接线调换） |
+| ENABLE | 输入 | **低电平有效**，低 = 使能输出 |
+| MS1～MS3 | 输入 | 细分选择 |
+| VMOT | 电源 | 电机电源 8～35 V |
+| GND | 地 | 与 MCU 共地 |
+| 1A/1B/2A/2B | 输出 | 接步进电机两相四线 |
+| VREF | 模拟 | 通过电位器调节最大电流 |
+
+### 2.2 与 STM32 连接（示例）
+
+| A4988 | STM32 | 说明 |
+|-------|-------|------|
+| STEP | PA0 | 可用 GPIO 或 TIM 输出窄脉冲 |
+| DIR | PA1 | GPIO 推挽 |
+| ENABLE | PA2 | GPIO，低有效 |
+| MS1 | PA3 | GPIO，细分配置 |
+| MS2 | PA4 | GPIO |
+| MS3 | PA5 | GPIO |
+| GND | GND | 共地 |
+
+```
+STM32          A4988 模块
+─────          ──────────
+PA0 ── STEP
+PA1 ── DIR
+PA2 ── ENABLE
+PA3 ── MS1
+PA4 ── MS2
+PA5 ── MS3
+GND ── GND
+       VMOT ── 12V（独立供电 + 大电容）
+       1A/1B/2A/2B ── 步进电机
+```
+
+---
+
+## 三、控制原理
+
+```
+DIR  ── 先定方向（高/低）
+STEP ── 每个上升沿 → 走 1 微步
+```
+
+| 操作 | 方法 |
+|------|------|
+| 正转 | DIR = 1，STEP 发脉冲 |
+| 反转 | DIR = 0，STEP 发脉冲 |
+| 调速 | 提高 STEP 脉冲频率 |
+| 走 N 步 | 发 N 个 STEP 脉冲 |
+
+**脉冲频率与转速**（1.8° 电机，16 细分示例）：
+
+```
+每圈步数 = 200 × 16 = 3200 步/圈
+转速(RPM) = (STEP频率 × 60) / 3200
+```
+
+例：STEP = 1600 Hz → 1600×60/3200 = **30 RPM**
+
+---
+
+## 四、细分与电流
+
+### 4.1 细分真值表（MS1～MS3）
+
+| MS1 | MS2 | MS3 | 细分 |
+|-----|-----|-----|------|
+| L | L | L | 全步 |
+| H | L | L | 1/2 |
+| L | H | L | 1/4 |
+| H | H | L | 1/8 |
+| H | H | H | 1/16 |
+
+模块上 MS 引脚通常经下拉电阻默认低电平；悬空时按 L 处理。
+
+### 4.2 电流调节（VREF）
+
+最大电流近似：
+
+```
+I_max ≈ VREF / (8 × R_sense)
+```
+
+常见模块 R_sense = 0.1 Ω 时：`I_max ≈ VREF × 1.25`（A）。  
+调节模块电位器改变 VREF，**先从小电流试起**，避免电机过热。
+
+---
+
+## 五、标准库驱动代码
+
+### 5.1 A4988.h
+
+```c title="A4988.h"
+#ifndef __A4988_H
+#define __A4988_H
+
+#include "stm32f10x.h"
+
+/* ---------- 引脚定义（可按硬件修改） ---------- */
+#define A4988_GPIO        GPIOA
+#define A4988_RCC         RCC_APB2Periph_GPIOA
+
+#define A4988_STEP_PIN    GPIO_Pin_0   /* PA0 → STEP，上升沿走 1 微步 */
+#define A4988_DIR_PIN     GPIO_Pin_1   /* PA1 → DIR，方向在 STEP 前稳定 */
+#define A4988_EN_PIN      GPIO_Pin_2   /* PA2 → ENABLE，低电平有效 */
+#define A4988_MS1_PIN     GPIO_Pin_3   /* PA3 → MS1，细分选择位 0 */
+#define A4988_MS2_PIN     GPIO_Pin_4   /* PA4 → MS2，细分选择位 1 */
+#define A4988_MS3_PIN     GPIO_Pin_5   /* PA5 → MS3，细分选择位 2 */
+
+#define A4988_ALL_PINS    (A4988_STEP_PIN | A4988_DIR_PIN | A4988_EN_PIN | \
+                           A4988_MS1_PIN | A4988_MS2_PIN | A4988_MS3_PIN)
+
+/* 细分档位：与 MS1～MS3 真值表对应 */
+typedef enum
+{
+    A4988_MICROSTEP_FULL = 0,
+    A4988_MICROSTEP_2    = 2,
+    A4988_MICROSTEP_4    = 4,
+    A4988_MICROSTEP_8    = 8,
+    A4988_MICROSTEP_16   = 16
+} A4988_MicroStep;
+
+/* 旋转方向：具体正/反取决于模块 DIR 接线，可在 SetDirection 里对调 */
+typedef enum
+{
+    A4988_DIR_CW  = 0,
+    A4988_DIR_CCW = 1
+} A4988_Direction;
+
+void A4988_Init(void);
+void A4988_Enable(FunctionalState state);
+void A4988_SetMicroStep(A4988_MicroStep microstep);
+void A4988_SetDirection(A4988_Direction dir);
+void A4988_StepPulse(void);                 /* 产生 1 个 STEP 上升沿 */
+
+/* TIM2 定 STEP 脉冲频率：中断里调用 A4988_StepPulse() */
+void A4988_StepTimer_Init(uint16_t prescaler, uint16_t period);
+void A4988_StepTimer_Start(void);
+void A4988_StepTimer_Stop(void);
+void A4988_StepTimer_SetFreqHz(uint32_t step_hz);  /* 运行时改步频 */
+
+#endif
+```
+
+### 5.2 A4988.c
+
+```c title="A4988.c"
+#include "A4988.h"
+
+/* 写 MS1～MS3 电平，配置细分档位（改细分后建议重新 Enable） */
+static void A4988_WriteMS(uint8_t ms1, uint8_t ms2, uint8_t ms3)
+{
+    if (ms1) GPIO_SetBits(A4988_GPIO, A4988_MS1_PIN);
+    else     GPIO_ResetBits(A4988_GPIO, A4988_MS1_PIN);
+    if (ms2) GPIO_SetBits(A4988_GPIO, A4988_MS2_PIN);
+    else     GPIO_ResetBits(A4988_GPIO, A4988_MS2_PIN);
+    if (ms3) GPIO_SetBits(A4988_GPIO, A4988_MS3_PIN);
+    else     GPIO_ResetBits(A4988_GPIO, A4988_MS3_PIN);
+}
+
+void A4988_Init(void)
+{
+    GPIO_InitTypeDef gpio;
+
+    RCC_APB2PeriphClockCmd(A4988_RCC, ENABLE);
+
+    gpio.GPIO_Pin   = A4988_ALL_PINS;
+    gpio.GPIO_Mode  = GPIO_Mode_Out_PP;       /* 推挽输出驱动模块逻辑输入 */
+    gpio.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(A4988_GPIO, &gpio);
+
+    GPIO_ResetBits(A4988_GPIO, A4988_STEP_PIN);  /* STEP 空闲为低 */
+    GPIO_ResetBits(A4988_GPIO, A4988_DIR_PIN);
+
+    A4988_SetMicroStep(A4988_MICROSTEP_16);      /* 默认 1/16 细分 */
+    A4988_Enable(ENABLE);                        /* ENABLE 拉低使能输出 */
+}
+
+void A4988_Enable(FunctionalState state)
+{
+    /* ENABLE 低有效：低 = 驱动器工作，高 = 输出关断 */
+    if (state == ENABLE)
+        GPIO_ResetBits(A4988_GPIO, A4988_EN_PIN);
+    else
+        GPIO_SetBits(A4988_GPIO, A4988_EN_PIN);
+}
+
+void A4988_SetMicroStep(A4988_MicroStep microstep)
+{
+    switch (microstep)
+    {
+        case A4988_MICROSTEP_FULL: A4988_WriteMS(0, 0, 0); break;  /* L L L */
+        case A4988_MICROSTEP_2:    A4988_WriteMS(1, 0, 0); break;  /* H L L */
+        case A4988_MICROSTEP_4:    A4988_WriteMS(0, 1, 0); break;  /* L H L */
+        case A4988_MICROSTEP_8:    A4988_WriteMS(1, 1, 0); break;  /* H H L */
+        case A4988_MICROSTEP_16:
+        default:                   A4988_WriteMS(1, 1, 1); break;  /* H H H */
+    }
+}
+
+void A4988_SetDirection(A4988_Direction dir)
+{
+    /* 先定 DIR，再发 STEP；与模块丝印方向不一致时可在此对调 */
+    if (dir == A4988_DIR_CW)
+        GPIO_ResetBits(A4988_GPIO, A4988_DIR_PIN);
+    else
+        GPIO_SetBits(A4988_GPIO, A4988_DIR_PIN);
+}
+
+void A4988_StepPulse(void)
+{
+    GPIO_SetBits(A4988_GPIO, A4988_STEP_PIN);    /* 上升沿触发 1 微步 */
+    GPIO_ResetBits(A4988_GPIO, A4988_STEP_PIN);  /* 脉宽由两次写 GPIO 间隔决定 */
+}
+
+void A4988_StepTimer_Init(uint16_t prescaler, uint16_t period)
+{
+    TIM_TimeBaseInitTypeDef tim;
+    NVIC_InitTypeDef nvic;
+
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+
+    TIM_TimeBaseStructInit(&tim);
+    tim.TIM_Prescaler     = prescaler;              /* 降频得到计数 tick */
+    tim.TIM_Period        = period;                 /* ARR：计满产生 Update 中断 */
+    tim.TIM_ClockDivision = TIM_CKD_DIV1;
+    tim.TIM_CounterMode   = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM2, &tim);
+
+    TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);      /* 溢出中断 → 发 STEP 脉冲 */
+
+    nvic.NVIC_IRQChannel                   = TIM2_IRQn;
+    nvic.NVIC_IRQChannelPreemptionPriority = 2;
+    nvic.NVIC_IRQChannelSubPriority        = 0;
+    nvic.NVIC_IRQChannelCmd                = ENABLE;
+    NVIC_Init(&nvic);
+}
+
+void A4988_StepTimer_Start(void)
+{
+    TIM_SetCounter(TIM2, 0);
+    TIM_Cmd(TIM2, ENABLE);              /* 启动后按 ARR 周期进中断发脉冲 */
+}
+
+void A4988_StepTimer_Stop(void)
+{
+    TIM_Cmd(TIM2, DISABLE);
+}
+
+void A4988_StepTimer_SetFreqHz(uint32_t step_hz)
+{
+    uint32_t arr;
+
+    if (step_hz == 0)
+    {
+        A4988_StepTimer_Stop();
+        return;
+    }
+
+    /* 固定 PSC=7199 → 72MHz/7200=10kHz 时基；步频 = 10kHz/(ARR+1) */
+    arr = 10000 / step_hz;
+    if (arr == 0) arr = 1;
+    arr -= 1;                           /* 寄存器写入值为 ARR-1 */
+
+    TIM_Cmd(TIM2, DISABLE);
+    TIM_PrescalerConfig(TIM2, 7200 - 1, TIM_PSCReloadMode_Immediate);
+    TIM_SetAutoreload(TIM2, (uint16_t)arr);
+    TIM_SetCounter(TIM2, 0);
+    TIM_Cmd(TIM2, ENABLE);
+}
+```
+
+### 5.3 中断：每个周期发一个 STEP 脉冲
+
+```c title="stm32f10x_it.c（片段）"
+#include "stm32f10x_tim.h"
+#include "A4988.h"
+
+/* TIM2 溢出中断：每个周期发 1 个 STEP 上升沿 */
+void TIM2_IRQHandler(void)
+{
+    if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET)
+    {
+        TIM_ClearITPendingBit(TIM2, TIM_IT_Update);  /* 必须先清标志 */
+        A4988_StepPulse();                         /* 芯片内部自动换相 */
+    }
+}
+```
+
+### 5.4 可选：TIM 硬件输出窄脉冲（占空比约 2%）
+
+将 STEP 接 **TIM3_CH1（PA6）** 等复用引脚，用 PWM 产生固定脉宽：
+
+```c
+/* STEP 接 TIM3_CH1（PA6）等复用引脚，用 PWM 硬件产生固定脉宽 */
+/* PSC=72-1 → 1MHz 计数；ARR 决定步频；CCR=2 → 脉宽约 2us */
+TIM_TimeBaseInitStructure.TIM_Period    = 1000 - 1;  /* 1MHz/1000 = 1kHz 步频 */
+TIM_TimeBaseInitStructure.TIM_Prescaler = 72 - 1;
+TIM_OCInitStructure.TIM_Pulse           = 2;         /* 高电平 2 tick = 2us */
+TIM_OCInitStructure.TIM_OCMode          = TIM_OCMode_PWM1;
+```
+
+---
+
+## 六、main 示例
+
+```c title="main.c"
+#include "stm32f10x.h"
+#include "A4988.h"
+
+/* 简易忙等延时（实际工程建议用 SysTick 或 TIM） */
+static void Delay_ms(volatile uint32_t ms)
+{
+    while (ms--) { }
+}
+
+int main(void)
+{
+    SystemInit();                               /* 配置系统时钟（通常 72MHz） */
+
+    A4988_Init();
+    A4988_SetMicroStep(A4988_MICROSTEP_16);   /* 1/16 细分 → 3200 微步/圈 @1.8° */
+    A4988_SetDirection(A4988_DIR_CW);         /* 先定方向再发 STEP */
+
+    /* 800 步/秒，持续 5 秒（16 细分下约 15 RPM @ 1.8° 电机） */
+    A4988_StepTimer_SetFreqHz(800);
+    Delay_ms(5000);
+
+    A4988_StepTimer_Stop();
+
+    A4988_SetDirection(A4988_DIR_CCW);
+    A4988_StepTimer_SetFreqHz(400);           /* 降速反转 */
+    Delay_ms(5000);
+
+    A4988_StepTimer_Stop();
+    A4988_Enable(DISABLE);                    /* 关输出，减发热 */
+
+    while (1) { }
+}
+```
+
+---
+
+## 七、注意事项
+
+1. **散热**：连续大电流必须加散热片，否则进入过温保护。  
+2. **电源**：VMOT 与 MCU 分开供电，模块上 **100 µF 电解** 不可省。  
+3. **STEP 脉宽**：最小约 **1 µs**，中断里 Set/Reset 通常足够。  
+4. **起步频率**：空载可从 200～500 Hz 试起，带负载需加减速。  
+5. **ENABLE**：不转时拉 DISABLE 可减发热、锁轴（取决于电机）。  
+6. **与 DRV8825**：A4988 最高 1/16 细分，高转速时噪声可能更大。
+
+---
+
+## 总结
+
+| 要点 | A4988 |
+|------|-------|
+| 接口 | STEP + DIR + ENABLE |
+| MCU 工作 | 定方向、发脉冲 |
+| 换相 | 芯片内部完成 |
+| 细分 | MS1～MS3，最高 1/16 |
+| 标准库 | GPIO + TIM2 定步频 |
