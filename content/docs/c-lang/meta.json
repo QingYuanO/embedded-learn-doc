@@ -1,0 +1,11 @@
+{
+  "title": "C 语言基础",
+  "icon": "BookOpen",
+  "pages": [
+    "units",
+    "data-types",
+    "operators",
+    "memory-layout"
+  ],
+  "root": true
+}

@@ -1,0 +1,344 @@
+---
+title: C 语言内存布局
+description: Flash、RAM、栈、堆、段与对齐，STM32 存储映射及 struct 填充
+---
+
+> 面向嵌入式入门。STM32F103C8 只有 **64 KB Flash + 20 KB RAM**，程序放哪、变量占多少、栈会不会溢出，都取决于**内存布局**。  
+> 本文说明 C 程序在 MCU 上的存储分布，以及 **对齐、struct 填充、链接脚本** 等实战概念。
+
+---
+
+## 目录
+
+1. [STM32 存储概览](#一stm32-存储概览)
+2. [程序在 Flash 里有什么](#二程序在-flash-里有什么)
+3. [RAM 里有什么](#三ram-里有什么)
+4. [栈 Stack](#四栈-stack)
+5. [堆 Heap](#五堆-heap)
+6. [全局变量与局部变量](#六全局变量与局部变量)
+7. [const 与 Flash 只读数据](#七const-与-flash-只读数据)
+8. [对齐 Alignment](#八对齐-alignment)
+9. [结构体与 padding](#九结构体与-padding)
+10. [链接脚本与段](#十链接脚本与段)
+11. [内存使用优化](#十一内存使用优化)
+12. [常见踩坑](#十二常见踩坑)
+
+---
+
+## 一、STM32 存储概览
+
+以 **STM32F103C8** 为例：
+
+| 区域 | 大小 | 地址范围（典型） | 用途 |
+|------|------|------------------|------|
+| **Flash** | 64 KB | 0x0800_0000 起 | 程序代码、常量 |
+| **SRAM** | 20 KB | 0x2000_0000 起 | 变量、栈、堆 |
+| **外设** | — | 0x4000_0000 起 | 寄存器映射 |
+| **Cortex-M 私有** | — | 0xE000_0000 起 | NVIC、SysTick 等 |
+
+```
+0x0800_0000  ┌─────────────┐
+             │   Flash     │  .text（代码）.rodata（常量）
+0x0801_0000  └─────────────┘  （64KB 示意）
+
+0x2000_0000  ┌─────────────┐
+             │  .data      │  已初始化全局/静态（从 Flash 拷贝来）
+             │  .bss       │  未初始化全局/静态（上电清零）
+             │  heap ↑     │  堆（malloc，少用）
+             │  ...        │
+             │  stack ↓    │  栈（函数调用、局部变量）
+0x2000_5000  └─────────────┘  （20KB 示意）
+```
+
+CPU 上电后从 **Flash 0x0800_0004** 取复位向量（`Reset_Handler`），初始化 `.data`/`.bss`，再跳 `main()`。
+
+---
+
+## 二、程序在 Flash 里有什么
+
+| 段 / 内容 | 说明 |
+|-----------|------|
+| **.text** | 函数机器码、`main`、中断服务函数 |
+| **.rodata** | `const` 常量、字符串字面量 `"hello"` |
+| **向量表** | 栈顶初值 + 复位/中断入口地址 |
+| **.init_array** 等 | C 运行时初始化（编译器生成） |
+
+```c
+const uint8_t step_table[] = { 1, 0, 1, 0 };  /* → .rodata，占 Flash 不占 RAM */
+char *msg = "Ready";                           /* 字符串在 .rodata，指针变量在 RAM */
+```
+
+**Flash 写一次、掉电不丢**；程序太大超过 64 KB 链接报错 `region overflow`。
+
+---
+
+## 三、RAM 里有什么
+
+| 区域 | 内容 |
+|------|------|
+| **.data** | 有初始值的全局/静态变量，启动时从 Flash 复制 |
+| **.bss** | 无初始值或零初始化的全局/静态，启动时清零 |
+| **栈** | 局部变量、函数返回地址、保存的寄存器 |
+| **堆** | `malloc`/`free` 动态分配（裸机项目常不用） |
+
+```c
+int g_count = 10;        /* .data：初值 10，Flash 存一份镜像 */
+int g_zero;              /* .bss：上电为 0 */
+static uint8_t s_buf[128]; /* .bss 或 .data */
+
+void foo(void)
+{
+    uint8_t local[32];   /* 栈上，函数返回后失效 */
+}
+```
+
+---
+
+## 四、栈 Stack
+
+### 4.1 作用
+
+- 函数调用：保存返回地址、参数、局部变量
+- 中断嵌套：每层中断消耗额外栈空间
+- **`auto` 局部变量**默认在栈上
+
+### 4.2 大小
+
+链接脚本里定义，例如：
+
+```
+_stack_size = 0x400;   /* 1 KB 栈（具体以工程 .ld 为准） */
+```
+
+**栈溢出**症状：HardFault、变量被莫名改写、随机崩溃。深度递归、大数组放局部、`printf` 都会吃栈。
+
+### 4.3 实践建议
+
+```c
+/* 不推荐：大缓冲放栈 */
+void bad(void)
+{
+    uint8_t buf[2048];   /* 20KB RAM 的 MCU 很危险 */
+}
+
+/* 推荐：静态或全局 */
+static uint8_t s_rx_buf[2048];
+```
+
+RTOS 下每个任务有**独立栈**，创建任务时指定 `stack_size`。
+
+---
+
+## 五、堆 Heap
+
+- **`malloc` / `free` / `calloc` / `realloc`** 从堆分配
+- 裸机 + 标准库项目**可用但常避免**：碎片化、失败难处理、非确定性延迟
+- 替代：静态池、固定大小缓冲、FreeRTOS `pvPortMalloc`
+
+若链接脚本未留堆空间，`malloc` 可能始终失败或链接为 0 大小。
+
+---
+
+## 六、全局变量与局部变量
+
+| 种类 | 存储位置 | 生命周期 | 默认初值 |
+|------|----------|----------|----------|
+| 全局 / 静态 | .data 或 .bss | 程序全程 | 0 或显式初值 |
+| 局部 `auto` | 栈 | 函数执行期间 | **不确定**（未赋值勿读） |
+| 局部 `static` | .data/.bss | 程序全程 | 0 或显式初值 |
+| `const` 局部 | 可能在栈或 .rodata | 块内 | 常量 |
+
+```c
+void init(void)
+{
+    static uint8_t once = 0;
+    if (once) return;
+    once = 1;
+    /* 只执行一次的初始化 */
+}
+```
+
+---
+
+## 七、const 与 Flash 只读数据
+
+```c
+const uint32_t crc_table[256] = { /* ... */ };
+```
+
+- 占 **Flash（.rodata）**，不占 RAM
+- 运行时写入 `const` 变量 → 编译错误或写 Flash 需特殊流程（一般禁止）
+
+字符串：
+
+```c
+printf("%s\n", "OK");   /* "OK" 在 Flash */
+```
+
+---
+
+## 八、对齐 Alignment
+
+ARM Cortex-M3 要求：
+
+| 访问宽度 | 地址对齐 |
+|----------|----------|
+| 8 bit | 任意 |
+| 16 bit | 2 字节对齐 |
+| 32 bit | **4 字节对齐** |
+
+未对齐 32 位访问 → **HardFault**（或 BusFault）。
+
+```c
+/* CMSIS 寄存器基址均为 4 对齐 */
+#define GPIOA_BASE  0x40010800u
+```
+
+编译器会自动对齐变量；**手动指针强转**时需小心：
+
+```c
+uint8_t buf[4];
+uint32_t *p = (uint32_t *)buf;   /* 若 buf 地址非 4 对齐，解引用可能 fault */
+```
+
+`#pragma pack(1)` 可取消 struct 填充，但可能导致未对齐访问，协议打包时在 MCU 本地用、别直接 cast 成 `uint32_t*` 读。
+
+---
+
+## 九、结构体与 padding
+
+编译器为满足对齐，在成员之间插入**填充字节**。
+
+```c
+typedef struct
+{
+    uint8_t  a;    /* offset 0, 占 1 */
+    /* 3 字节 padding */
+    uint32_t b;    /* offset 4, 占 4 */
+    uint16_t c;    /* offset 8, 占 2 */
+    /* 2 字节 padding */
+} Example;         /* 总大小 12，不是 1+4+2=7 */
+```
+
+`sizeof(Example)` 在 32 位 ARM 上通常为 **12**。
+
+### 9.1 紧凑布局（协议帧）
+
+```c
+#pragma pack(push, 1)
+typedef struct
+{
+    uint8_t  cmd;
+    uint32_t addr;
+    uint16_t len;
+} __attribute__((packed)) Frame;   /* GCC：packed 属性 */
+#pragma pack(pop)
+```
+
+紧凑后 `sizeof(Frame)` 可能为 7，但 `addr` 字段地址非 4 对齐，**不要**直接 `(uint32_t*)&frame->addr` 在 M3 上访问；用 `memcpy` 更安全。
+
+### 9.2 位域
+
+```c
+typedef struct
+{
+    uint32_t en   : 1;
+    uint32_t dir  : 1;
+    uint32_t resv : 30;
+} Ctrl;
+```
+
+布局实现定义，跨编译器移植慎用。
+
+---
+
+## 十、链接脚本与段
+
+Keil / GCC 工程用 **`.ld` / `.sct`** 描述段放置：
+
+| 段名 | 典型位置 |
+|------|----------|
+| `.isr_vector` | Flash 起始 |
+| `.text` | Flash |
+| `.rodata` | Flash |
+| `.data` | RAM（加载地址在 Flash） |
+| `.bss` | RAM |
+| `._user_heap_stack` | RAM 末尾 |
+
+启动文件 `startup_stm32f10x_md.s` 中 `Reset_Handler` 负责 **拷贝 .data、清零 .bss**。
+
+查看占用：
+
+```bash
+arm-none-eabi-size firmware.elf
+# text  data  bss     dec
+# 代码  初值  零初始化  总计
+```
+
+- **text + rodata** → Flash
+- **data + bss** → RAM（data 含初值镜像也在 Flash）
+
+---
+
+## 十一、内存使用优化
+
+| 手段 | 效果 |
+|------|------|
+| 大数组、`const` 表 | 放 Flash，加 `const` |
+| 少用 `float` | 减 .text 体积（无 FPU 时软件浮点库大） |
+| 减 `printf` | 格式化库很大，用 RTT/串口简易输出 |
+| `-Os` 优化大小 | 略降速度 |
+| 合并重复字符串 | 减 .rodata |
+| 避免大栈局部变量 | 防栈溢出 |
+| 位域/压缩协议 | 减 RAM，注意对齐 |
+
+F103C8 若 **RAM 显示 20 KB 但链接 map 只有 19.x KB 可用**，部分被栈、堆、向量预留占用。
+
+---
+
+## 十二、常见踩坑
+
+### 12.1 返回局部数组指针
+
+```c
+uint8_t *bad(void)
+{
+    uint8_t buf[16];
+    return buf;   /* 错：栈失效后指针悬空 */
+}
+```
+
+### 12.2 全局未初始化当 0 用
+
+全局 / static **会零初始化**；局部变量**不会**，使用前必须赋值。
+
+### 12.3 sizeof 指针
+
+```c
+uint8_t *p;
+sizeof(p);   /* 4：指针大小，不是指向对象大小 */
+```
+
+### 12.4 两个 .c 重复定义
+
+```c
+/* a.c 和 b.c 都写 int g_x; 无 static → 链接重复定义 */
+/* a.c: int g_x;  b.c: extern int g_x;  正确 */
+```
+
+### 12.5 中断里 malloc
+
+中断服务函数应**短、无阻塞、不分配堆**，否则死锁或碎片。
+
+---
+
+## 总结
+
+| 要点 | 说明 |
+|------|------|
+| Flash | 代码 + const + 字符串 |
+| RAM | .data + .bss + 栈 + 堆 |
+| 栈 | 局部变量与调用链，易溢出 |
+| 堆 | 裸机慎用 malloc |
+| 对齐 | M3 上 32 位访问需 4 字节对齐 |
+| struct | 有 padding，协议用 pack 或 memcpy |

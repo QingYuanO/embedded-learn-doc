@@ -15,8 +15,7 @@
     "rtc",
     "pwr",
     "wdg",
-    "flash",
-    "sh1106"
+    "flash"
   ],
   "defaultOpen": true,
   "root": true

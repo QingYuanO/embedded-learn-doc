@@ -1,6 +1,7 @@
 {
   "pages": [
     "jxkj-stm32",
+    "c-lang",
     "std",
     "hal",
     "peripheral"

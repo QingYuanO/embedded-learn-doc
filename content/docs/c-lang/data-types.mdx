@@ -1,0 +1,352 @@
+---
+title: C 语言数据类型
+description: 整型、浮点、字符、布尔与 stdint 定宽类型，嵌入式选型与 STM32 典型用法
+---
+
+> 面向嵌入式入门。MCU 没有「多大 int 都行」的奢侈，**类型选错 = 溢出、对齐错误、浪费 RAM**。  
+> 本文以 **ARM Cortex-M3（STM32F103）32 位** 环境为主，说明各类型的**大小、范围、适用场景**。
+
+---
+
+## 目录
+
+1. [为什么类型很重要](#一为什么类型很重要)
+2. [基本整型](#二基本整型)
+3. [定宽类型 stdint.h](#三定宽类型-stdinth)
+4. [字符与布尔](#四字符与布尔)
+5. [浮点类型](#五浮点类型)
+6. [修饰符](#六修饰符)
+7. [typedef 与枚举](#七typedef-与枚举)
+8. [结构体与位域](#八结构体与位域)
+9. [类型转换](#九类型转换)
+10. [嵌入式选型建议](#十嵌入式选型建议)
+11. [常见踩坑](#十一常见踩坑)
+
+---
+
+## 一、为什么类型很重要
+
+| 问题 | 类型选错的后果 |
+|------|----------------|
+| 定时器计数值用 `uint16_t` | ARR 超过 65535 溢出 |
+| 串口缓冲区索引用 `int` | 负数判断逻辑混乱 |
+| ADC 累加用 `uint16_t` | 多次采样求和溢出 |
+| 寄存器地址用 `uint16_t` | 32 位地址截断 HardFault |
+
+嵌入式开发原则：**按数据的物理含义和取值范围选类型**，而不是「能编译过就行」。
+
+---
+
+## 二、基本整型
+
+C 标准只规定 **int 至少 16 位**，各平台具体大小由编译器决定。GCC for ARM 典型如下：
+
+| 类型 | 大小（字节） | 范围（典型） | 嵌入式用途 |
+|------|-------------|-------------|------------|
+| `char` | 1 | -128～127 或 0～255 | 字符、小缓冲区 |
+| `short` | 2 | -32768～32767 | 较少单独用 |
+| `int` | 4 | ±约 21 亿 | 循环计数、一般运算 |
+| `long` | 4 | 同 int（32 位 ARM） | 与 int 等价 |
+| `long long` | 8 | ±约 9×10¹⁸ | 大计数、时间戳 |
+
+无符号版本加 **`unsigned`** 前缀（或 `u` 后缀字面量）：
+
+| 类型 | 范围（典型） | 用途 |
+|------|-------------|------|
+| `unsigned char` | 0～255 | 字节流、小数值 |
+| `unsigned short` | 0～65535 | 16 位寄存器值 |
+| `unsigned int` | 0～约 42 亿 | 大计数、位掩码 |
+| `unsigned long long` | 0～约 1.8×10¹⁹ | 64 位计时 |
+
+### 2.1 sizeof 验证
+
+```c
+#include <stdio.h>
+
+/* 在 STM32 上通常输出：1, 2, 4, 4, 8 */
+printf("%u %u %u %u %u\n",
+       (unsigned)sizeof(char),
+       (unsigned)sizeof(short),
+       (unsigned)sizeof(int),
+       (unsigned)sizeof(long),
+       (unsigned)sizeof(long long));
+```
+
+---
+
+## 三、定宽类型 stdint.h
+
+ST 标准库、CMSIS 和大多数驱动代码**优先使用** `<stdint.h>` 定宽类型，跨平台含义明确：
+
+| 类型 | 大小 | 范围 | 典型用途 |
+|------|------|------|----------|
+| `int8_t` / `uint8_t` | 1 | ±128 / 0～255 | 字节、SPI 缓冲 |
+| `int16_t` / `uint16_t` | 2 | ±32768 / 0～65535 | ADC 结果、TIM ARR |
+| `int32_t` / `uint32_t` | 4 | ±21 亿 / 0～42 亿 | 地址、时钟频率、计数 |
+| `int64_t` / `uint64_t` | 8 | 很大 | 高精度计时 |
+
+```c
+#include <stdint.h>
+
+uint32_t sysclk_hz = 72000000u;   /* 系统时钟 */
+uint16_t adc_raw;                 /* 12 位 ADC：0～4095，uint16 足够 */
+uint8_t  rx_buf[64];              /* 串口接收缓冲 */
+```
+
+### 3.1 与寄存器宽度对应
+
+| 硬件 | 推荐类型 |
+|------|----------|
+| 8 位寄存器 | `uint8_t` |
+| 16 位寄存器（TIM CCR/ARR） | `uint16_t` |
+| 32 位寄存器（GPIO、RCC） | `uint32_t` |
+
+CMSIS 寄存器定义即采用 `uint32_t` 等类型，与硬件位宽一致。
+
+---
+
+## 四、字符与布尔
+
+### 4.1 char
+
+```c
+char c = 'A';           /* 字符常量，值为 65 */
+char s[] = "hello";     /* 字符串，末尾有 '\0' */
+```
+
+- **`char`** 在 ARM GCC 上通常为 **有符号**（`-128～127`）
+- 处理无符号字节时用 **`uint8_t`** 或 **`unsigned char`**，避免符号扩展 bug
+
+### 4.2 bool（C99）
+
+```c
+#include <stdbool.h>
+
+bool flag = true;   /* 实际占 1 字节 */
+```
+
+HAL / 标准库中常见 `FlagStatus`、`FunctionalState` 等枚举，语义比裸 `int` 更清晰：
+
+```c
+typedef enum { RESET = 0, SET = !RESET } FlagStatus;
+GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+```
+
+---
+
+## 五、浮点类型
+
+| 类型 | 大小 | 精度 | STM32F103 |
+|------|------|------|-----------|
+| `float` | 4 | 约 7 位有效数字 | **有** FPU 无，软件浮点 |
+| `double` | 8 | 约 15 位 | 同上，更慢 |
+
+```c
+float voltage = (float)adc_raw * 3.3f / 4096.0f;
+```
+
+**建议**：
+
+- 实时控制、中断里**尽量少用 float**，改用定点整数（如 ×1000 存 mV）
+- 必须浮点时，字面量加 **`f` 后缀**（`3.3f`），避免 double 隐式转换
+- 带 FPU 的 MCU（Cortex-M4F/M7）可更自由使用 float
+
+---
+
+## 六、修饰符
+
+### 6.1 const — 只读
+
+```c
+const uint32_t baud = 115200u;   /* 运行时不可改 */
+const uint8_t lut[] = { 0, 1, 2, 3 };  /* 可放 Flash，省 RAM */
+```
+
+换相表、查找表加 `const` → 链接器放入 **Flash（.rodata）**，不占用 scarce RAM。
+
+### 6.2 volatile — 易变
+
+```c
+volatile uint32_t tick_ms;   /* 中断里改、主循环里读 */
+
+while (volatile_flag == 0) { }  /* 防止编译器优化掉空循环 */
+```
+
+**必须 volatile 的场景**：
+
+- 中断与主程序共享的变量
+- 硬件寄存器指针（CMSIS 已处理）
+- 多线程/RTOS 共享且未加锁的简单标志（更推荐原子或关中断）
+
+### 6.3 static — 文件内/static 局部
+
+```c
+static uint8_t s_step_index;   /* 模块私有，不暴露给外部 */
+
+void foo(void)
+{
+    static uint16_t call_count;  /* 保留上次值，只初始化一次 */
+    call_count++;
+}
+```
+
+- **文件级 static**：限制符号链接范围，驱动模块内部状态常用
+- **函数内 static**：状态机、单次初始化标志
+
+### 6.4 extern — 外部声明
+
+```c
+/* main.c */
+extern volatile uint32_t g_tick;  /* 在别的 .c 定义 */
+```
+
+---
+
+## 七、typedef 与枚举
+
+### 7.1 typedef
+
+```c
+typedef uint32_t tick_t;
+typedef void (*isr_fn_t)(void);   /* 函数指针类型 */
+```
+
+ST 库大量 typedef：`GPIO_InitTypeDef`、`TIM_TimeBaseInitTypeDef` 等，便于传参和 IDE 补全。
+
+### 7.2 enum
+
+```c
+typedef enum
+{
+    MOTOR_STOP = 0,
+    MOTOR_RUN  = 1,
+    MOTOR_FAULT
+} MotorState;
+```
+
+- 默认从 0 递增，可显式赋值
+- 编译器通常按 **int（4 字节）** 存储，省 RAM 可指定底层类型（C11）：
+
+```c
+typedef enum : uint8_t { A, B, C } SmallEnum;
+```
+
+（部分编译器扩展；稳妥做法是用 `#define` 或宏常量。）
+
+---
+
+## 八、结构体与位域
+
+### 8.1 结构体
+
+```c
+typedef struct
+{
+    uint16_t prescaler;
+    uint16_t period;
+    uint8_t  enabled;
+} TimConfig;
+```
+
+用于打包配置、协议帧、传感器数据。**内存对齐与 padding** 见 [内存布局](./memory-layout) 一文。
+
+### 8.2 位域（寄存器建模）
+
+```c
+typedef struct
+{
+    uint32_t pin0  : 1;
+    uint32_t pin1  : 1;
+    uint32_t mode  : 2;
+    uint32_t resv  : 28;
+} GpioBits;
+```
+
+可模拟硬件寄存器位域；实际 CMSIS 多用 **宏 + 位操作** 而非位域（可移植性更好）。
+
+---
+
+## 九、类型转换
+
+### 9.1 隐式转换
+
+```c
+uint16_t a = 1000;
+uint32_t b = a * 72000u;   /* a 先提升为 uint32，安全 */
+
+uint32_t c = 72000000u;
+uint16_t d = c / 7200u;    /* 结果 10000，赋给 uint16 溢出！ */
+```
+
+**规则**：运算前 **`较小类型`** 会提升为 **`较大类型`**；赋值时向左侧类型截断。
+
+### 9.2 显式强制转换
+
+```c
+float v = (float)adc_raw * 3.3f / 4096.0f;
+GPIO_SetBits(GPIOA, (uint16_t)GPIO_Pin_0);
+```
+
+寄存器操作、指针转换必须显式，并确认不会截断有效位。
+
+---
+
+## 十、嵌入式选型建议
+
+| 场景 | 推荐类型 |
+|------|----------|
+| GPIO 引脚掩码 | `uint16_t`（Pin_0～Pin_15） |
+| 系统时钟、频率 | `uint32_t` + `u` 后缀 |
+| ADC 单次采样 | `uint16_t` |
+| ADC 多次累加 | `uint32_t` |
+| 串口 RX 缓冲 | `uint8_t buf[N]` |
+| 毫秒 tick | `uint32_t`（约 49 天溢出） |
+| 微秒时间戳 | `uint32_t` 或 `uint64_t` |
+| 小状态机状态 | `enum` 或 `uint8_t` |
+| 只读大表 | `const uint8_t[]` |
+| 硬件寄存器 | CMSIS `uint32_t` 指针 |
+
+---
+
+## 十一、常见踩坑
+
+### 11.1 char 当 0～255 用
+
+```c
+char b = 200;   /* 若 char 有符号，b 可能是 -56 */
+if (b > 128) { }  /* 可能永远不成立 */
+```
+
+→ 无符号字节用 **`uint8_t`**。
+
+### 11.2 有符号溢出未定义
+
+```c
+int32_t x = 2147483647;
+x + 1;   /* 有符号溢出：C 标准未定义行为 */
+```
+
+→ 计数、时间用 **`uint32_t`**，溢出按模运算处理。
+
+### 11.3 bool 与 0/1 混用
+
+```c
+if (flag == 1) { }   /* 能工作但不 idiomatic */
+if (flag) { }        /* 推荐 */
+```
+
+### 11.4 混用 int 与定宽类型
+
+团队规范：**驱动层统一 stdint**，避免 `unsigned int` 与 `uint32_t` 混写导致 review 困难。
+
+---
+
+## 总结
+
+| 要点 | 说明 |
+|------|------|
+| 定宽类型 | 优先 `stdint.h`，与硬件位宽对齐 |
+| const | 只读表放 Flash，省 RAM |
+| volatile | 中断共享变量、防止优化 |
+| float | F103 上慎用，优先定点整数 |
+| 选型 | 按取值范围选类型，防溢出与截断 |
