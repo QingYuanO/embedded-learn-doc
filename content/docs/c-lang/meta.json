@@ -5,7 +5,10 @@
     "units",
     "data-types",
     "operators",
-    "memory-layout"
+    "memory-layout",
+    "pointers",
+    "preprocessor",
+    "bit-band-registers"
   ],
   "root": true
 }

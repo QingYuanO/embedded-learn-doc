@@ -1,0 +1,291 @@
+---
+title: 位带与寄存器映射
+description: Cortex-M3 位带别名、GPIO 寄存器结构、CMSIS 映射与 BSRR/BRR 原子操作
+---
+
+> 面向嵌入式入门。STM32 编程本质是**读写外设寄存器**。  
+> 本文说明 **Cortex-M3 位带**、**寄存器地址映射**、**CMSIS 结构体方式**，以及 GPIO **置位/复位**等实战写法。
+
+---
+
+## 目录
+
+1. [寄存器是什么](#一寄存器是什么)
+2. [STM32 存储器映射](#二stm32-存储器映射)
+3. [用指针访问寄存器](#三用指针访问寄存器)
+4. [CMSIS 结构体映射](#四cmsis-结构体映射)
+5. [位带 Bit-Band](#五位带-bit-band)
+6. [GPIO 寄存器详解](#六gpio-寄存器详解)
+7. [读-改-写与原子操作](#七读-改-写与原子操作)
+8. [标准库如何封装](#八标准库如何封装)
+9. [常见踩坑](#九常见踩坑)
+
+---
+
+## 一、寄存器是什么
+
+外设（GPIO、TIM、SPI…）内部有一组 **32 位（或 16 位）寄存器**，每个**地址**对应一个**功能**：
+
+| 操作 | 含义 |
+|------|------|
+| 读寄存器 | 查询状态、标志位 |
+| 写寄存器 | 配置模式、启动转换、清标志 |
+
+CPU 把外设地址空间当作普通内存访问（需 `volatile`），例如写 `GPIOA->ODR` 即改变 PA 口输出电平。
+
+---
+
+## 二、STM32 存储器映射
+
+Cortex-M3 + STM32F103 典型布局：
+
+| 地址范围 | 区域 | 说明 |
+|----------|------|------|
+| 0x0800_0000 | Flash | 程序、常量 |
+| 0x2000_0000 | SRAM | 变量、栈 |
+| 0x4000_0000 | APB1/AHB 外设 | TIM2、USART2、SPI2… |
+| 0x4001_0000 | APB2 外设 | GPIO、USART1、SPI1、TIM1… |
+| 0xE000_0000 | Cortex-M 私有 | NVIC、SysTick、MPU |
+
+**GPIOA 基址**（APB2）：
+
+```
+0x4001_0800  →  GPIOA 寄存器块起始
+```
+
+参考手册给出每个外设的 **基址 + 偏移**：
+
+```
+GPIOA_CRL   = GPIOA_BASE + 0x00
+GPIOA_CRH   = GPIOA_BASE + 0x04
+GPIOA_IDR   = GPIOA_BASE + 0x08
+GPIOA_ODR   = GPIOA_BASE + 0x0C
+GPIOA_BSRR  = GPIOA_BASE + 0x10
+...
+```
+
+---
+
+## 三、用指针访问寄存器
+
+### 3.1 裸地址写法
+
+```c
+#define GPIOA_ODR  (*((volatile uint32_t *)(0x4001080Cu)))
+
+GPIOA_ODR |= (1u << 5);    /* PA5 输出高 */
+GPIOA_ODR &= ~(1u << 5);   /* PA5 输出低 */
+```
+
+- **`volatile`**：防止编译器缓存寄存器读值  
+- **强转 `uint32_t *`**：按 32 位访问  
+- 地址来自参考手册，**0x4001080C** 即 GPIOA_ODR  
+
+### 3.2 基址 + 偏移
+
+```c
+#define GPIOA_BASE  0x40010800u
+#define REG32(addr) (*((volatile uint32_t *)(addr)))
+
+REG32(GPIOA_BASE + 0x0Cu) |= (1u << 5);
+```
+
+---
+
+## 四、CMSIS 结构体映射
+
+ST 用 **结构体** 把连续寄存器打包，指针指向基址：
+
+```c
+typedef struct
+{
+    volatile uint32_t CRL;    /* 0x00 */
+    volatile uint32_t CRH;    /* 0x04 */
+    volatile uint32_t IDR;    /* 0x08 */
+    volatile uint32_t ODR;    /* 0x0C */
+    volatile uint32_t BSRR;   /* 0x10 */
+    volatile uint32_t BRR;    /* 0x14 */
+    volatile uint32_t LCKR;   /* 0x18 */
+} GPIO_TypeDef;
+
+#define GPIOA  ((GPIO_TypeDef *)GPIOA_BASE)
+
+GPIOA->ODR |= GPIO_Pin_5;
+GPIOA->BSRR = GPIO_Pin_5;   /* 仅置位 PA5，不影响其他引脚 */
+```
+
+**优点**：字段名与手册一致、偏移由编译器计算、IDE 可补全。
+
+`GPIO_TypeDef` 中 **`volatile`** 已加在每个成员上，无需再包一层。
+
+---
+
+## 五、位带 Bit-Band
+
+Cortex-M3 支持**位带**：把**某一个 bit** 的读写映射到一个 **32 位字** 的读写，实现**单 bit 原子访问**（无需读-改-写）。
+
+### 5.1 两个位带区
+
+| 位带区 | 原始地址范围 | 别名区地址范围 |
+|--------|--------------|----------------|
+| **SRAM** | 0x2000_0000 ～ 0x200F_FFFF | 0x2200_0000 ～ 0x23FF_FFFF |
+| **外设** | 0x4000_0000 ～ 0x400F_FFFF | 0x4200_0000 ～ 0x43FF_FFFF |
+
+### 5.2 别名地址公式
+
+```
+bit_word_addr = bit_band_base + (byte_offset × 32) + (bit_number × 4)
+```
+
+- **外设位带**：`bit_band_base = 0x42000000`  
+- **byte_offset**：目标字节相对位带区起始的字节偏移  
+- **bit_number**：0～7  
+
+### 5.3 示例：直接写 PA5 对应 ODR bit5
+
+```c
+/* GPIOA_ODR 地址 0x4001080C，bit5 */
+#define GPIOA_ODR_BIT5_ADDR  (0x42000000u + (0x080C + 0x40000000u - 0x40000000u) * 32u + 5u * 4u)
+/* 简化：byte_offset = 0x080C（GPIOA 块内 ODR 偏移） */
+
+/* 常用封装 */
+#define BITBAND_PERIPH(addr, bitnum) \
+    ((0x42000000u + (((uint32_t)(addr) - 0x40000000u) << 5) + ((bitnum) << 2)))
+
+volatile uint32_t *pa5_out = (volatile uint32_t *)BITBAND_PERIPH(&GPIOA->ODR, 5);
+
+*pa5_out = 1;   /* PA5 置 1 */
+*pa5_out = 0;   /* PA5 清 0 */
+```
+
+### 5.4 实际工程里用得多吗？
+
+| 方式 | 使用频率 |
+|------|----------|
+| **BSRR/BRR 寄存器** | ★★★★★ ST 官方推荐 |
+| **CMSIS 位操作宏** | ★★★★★ |
+| **位带** | ★★☆☆☆ 了解即可，部分老例程可见 |
+
+STM32 GPIO 提供 **BSRR**（位 set/reset），效果类似位带，**不必强记位带公式**。
+
+---
+
+## 六、GPIO 寄存器详解
+
+以 **GPIOA** 为例（输出场景）：
+
+| 寄存器 | 读写 | 作用 |
+|--------|------|------|
+| **CRL / CRH** | 读/写 | 配置 pin 模式（输入/输出/复用/模拟）、速度 |
+| **IDR** | 读 | 读引脚电平 |
+| **ODR** | 读/写 | 输出数据 |
+| **BSRR** | 只写 | 低 16 位置 1，高 16 位清 1 |
+| **BRR** | 只写 | 清位 |
+| **LCKR** | 读/写 | 配置锁定 |
+
+### 6.1 BSRR 一次写两位域
+
+```
+BSRR 写 1 到 bit n      → ODR bit n 置 1
+BSRR 写 1 到 bit (n+16) → ODR bit n 清 0
+```
+
+```c
+GPIOA->BSRR = (1u << 5);        /* PA5 = 1 */
+GPIOA->BSRR = (1u << (5 + 16)); /* PA5 = 0 */
+```
+
+**只写寄存器**，不需要先读 ODR，**避免读-改-写竞争**（中断里改同一端口时也安全）。
+
+---
+
+## 七、读-改-写与原子操作
+
+### 7.1 读-改-写（非 GPIO ODR 推荐方式）
+
+```c
+/* 修改 CRL 中 PA0 的配置位，需保留其他引脚配置 */
+uint32_t tmp = GPIOA->CRL;
+tmp &= ~(0xFu << 0);      /* 清 PA0 配置位 */
+tmp |=  (0x3u << 0);      /* 推挽输出 50MHz 示例 */
+GPIOA->CRL = tmp;
+```
+
+若中断里也改 `CRL`，可能互相覆盖 → 关中断或改用硬件支持的原子方式。
+
+### 7.2 原子单 bit（GPIO 输出）
+
+优先顺序：
+
+1. **BSRR / BRR**（STM32 GPIO）  
+2. **位带**（Cortex-M3 通用）  
+3. **读-改-写 ODR**（有竞争风险，简单裸机可接受）
+
+---
+
+## 八、标准库如何封装
+
+```c
+void GPIO_SetBits(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
+void GPIO_ResetBits(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin);
+void GPIO_WriteBit(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin, BitAction BitVal);
+```
+
+底层实现（概念上）：
+
+```c
+void GPIO_SetBits(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
+{
+    GPIOx->BSRR = GPIO_Pin;
+}
+
+void GPIO_ResetBits(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
+{
+    GPIOx->BRR = GPIO_Pin;   /* 或 BSRR 高 16 位 */
+}
+```
+
+TIM、RCC 等同理：`RCC_APB2PeriphClockCmd` 内部读写 `RCC->APB2ENR` 等寄存器。
+
+---
+
+## 九、常见踩坑
+
+### 9.1 忘记开时钟
+
+```c
+/* 操作 GPIOA 前必须使能 IOPA 时钟 */
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+```
+
+否则写寄存器**无效果**或 HardFault（取决于实现）。
+
+### 9.2 未 volatile 的寄存器指针
+
+```c
+uint32_t *reg = (uint32_t *)0x4001080C;  /* 缺 volatile，可能被优化 */
+```
+
+### 9.3 对齐
+
+外设寄存器 32 位访问需 **4 字节对齐**；`GPIO_TypeDef` 布局已满足。
+
+### 9.4 清标志位方式错误
+
+部分状态寄存器 **写 1 清 0** 或 **读再写**，须看手册；不能照搬 ODR 的读-改-写。
+
+### 9.5 位带公式算错
+
+位带仅 **Cortex-M3** 有；**Cortex-M0/M0+ 无位带**。STM32F0 不能用法 5.3。
+
+---
+
+## 总结
+
+| 要点 | 说明 |
+|------|------|
+| 寄存器 | 外设控制窗口，地址见参考手册 |
+| CMSIS | 结构体 + 基址宏，如 `GPIOA->BSRR` |
+| BSRR | GPIO 单 pin 置位/复位，免读-改-写 |
+| 位带 | M3 单 bit 原子访问，了解公式即可 |
+| volatile | 寄存器访问必须 volatile |

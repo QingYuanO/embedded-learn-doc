@@ -1,0 +1,329 @@
+---
+title: C 语言指针
+description: 指针概念、地址与解引用、数组与函数指针，嵌入式寄存器访问与常见陷阱
+---
+
+> 面向嵌入式入门。在 MCU 上，**外设寄存器就是地址**，CMSIS 和标准库底层全是**指针**。  
+> 本文从基础概念讲到 **寄存器映射、函数指针、const/volatile 指针**，并列出嵌入式常见陷阱。
+
+---
+
+## 目录
+
+1. [指针是什么](#一指针是什么)
+2. [声明与取地址](#二声明与取地址)
+3. [解引用与修改](#三解引用与修改)
+4. [指针与数组](#四指针与数组)
+5. [指针运算](#五指针运算)
+6. [指针与 const / volatile](#六指针与-const--volatile)
+7. [结构体指针](#七结构体指针)
+8. [函数指针](#八函数指针)
+9. [嵌入式：寄存器访问](#九嵌入式寄存器访问)
+10. [常见踩坑](#十常见踩坑)
+
+---
+
+## 一、指针是什么
+
+**指针**是保存**内存地址**的变量。
+
+```c
+uint32_t value = 42;      /* 普通变量，在 RAM 某地址存 42 */
+uint32_t *p;              /* 指针：存的是「某个 uint32_t 的地址」 */
+```
+
+| 概念 | 说明 |
+|------|------|
+| **地址** | 内存编号，如 `0x20000004` |
+| **指针变量** | 存地址的变量，`p` 本身也占 RAM（32 位 MCU 上通常 4 字节） |
+| **解引用 `*p`** | 通过地址访问该处的值 |
+| **取地址 `&x`** | 得到变量 `x` 的地址 |
+
+```
+RAM 示意：
+地址 0x20000000  │ value = 42 │
+地址 0x20000004  │ p = 0x20000000 │  ← p 里存的是 value 的地址
+```
+
+---
+
+## 二、声明与取地址
+
+```c
+uint8_t  *p8;    /* 指向 uint8_t  的指针 */
+uint16_t *p16;   /* 指向 uint16_t 的指针 */
+uint32_t *p32;   /* 指向 uint32_t 的指针 */
+
+uint32_t x = 100;
+p32 = &x;        /* p32 指向 x */
+```
+
+**`&`** = 取地址；**`*` 在声明里**表示「这是指针类型」：
+
+```c
+uint32_t *p;   /* p 是指针 */
+uint32_t v;    /* v 是普通变量 */
+```
+
+---
+
+## 三、解引用与修改
+
+```c
+uint32_t x = 10;
+uint32_t *p = &x;
+
+*p = 20;       /* 通过 p 修改 x，现在 x == 20 */
+uint32_t y = *p;  /* 读 x 的值，y == 20 */
+```
+
+**空指针**不能解引用：
+
+```c
+uint32_t *p = NULL;   /* 或 0 */
+/* *p = 1;  →  HardFault / 段错误 */
+```
+
+使用前检查：
+
+```c
+if (p != NULL)
+{
+    *p = 1;
+}
+```
+
+---
+
+## 四、指针与数组
+
+数组名在多数表达式中**退化为指向首元素的指针**：
+
+```c
+uint8_t buf[4] = { 1, 2, 3, 4 };
+
+buf[0]  等价于  *(buf + 0)
+buf[i]  等价于  *(buf + i)
+```
+
+| 表达式 | 含义 |
+|--------|------|
+| `buf` | 首元素地址，`uint8_t *` |
+| `&buf[0]` | 同上 |
+| `sizeof(buf)` | 整个数组字节数：4 |
+| `sizeof(buf[0])` | 单元素：1 |
+
+**数组 ≠ 指针**：`buf` 是数组，`p = buf` 让 `p` 指向首元素，但 `sizeof(buf)` 是 4，`sizeof(p)` 是 4（指针自身大小）。
+
+---
+
+## 五、指针运算
+
+指针加减以**所指类型大小**为步长：
+
+```c
+uint32_t arr[3] = { 10, 20, 30 };
+uint32_t *p = arr;
+
+p++;           /* 地址 +4（uint32_t 占 4 字节） */
+*p;            /* 20 */
+```
+
+| 运算 | 结果 |
+|------|------|
+| `p + n` | 向后 n 个元素 |
+| `p - q` | 两指针间元素个数（同数组内） |
+| `p++` | 指向下一个元素 |
+
+**禁止**：对非同一数组、非合法内存范围的指针做减法或比较，行为未定义。
+
+---
+
+## 六、指针与 const / volatile
+
+### 6.1 const 指针
+
+```c
+const uint32_t *p;        /* 指向常量：不能通过 p 改值 */
+uint32_t * const p;       /* 指针本身是常量：不能改 p 指向谁 */
+const uint32_t * const p; /* 两者都不能改 */
+```
+
+```c
+const uint32_t c = 100;
+const uint32_t *p = &c;
+/* *p = 200;  编译错误 */
+```
+
+### 6.2 volatile 指针
+
+```c
+volatile uint32_t *reg;   /* 指向的值可能意外改变（硬件寄存器） */
+uint32_t * volatile pv;   /* 指针本身 volatile，极少用 */
+volatile uint32_t * const reg = (volatile uint32_t *)0x4001080C;
+```
+
+寄存器访问几乎总是 **`volatile uint32_t *`**，防止编译器缓存读到的值。
+
+---
+
+## 七、结构体指针
+
+```c
+typedef struct
+{
+    uint16_t prescaler;
+    uint16_t period;
+} TimConfig;
+
+TimConfig cfg;
+TimConfig *pcfg = &cfg;
+
+pcfg->prescaler = 7200;       /* 等价于 (*pcfg).prescaler */
+(*pcfg).period = 1000;
+```
+
+ST 库传参常见「指针 + Init 结构体」：
+
+```c
+GPIO_InitTypeDef gpio;
+GPIO_Init(GPIOA, &gpio);   /* 传地址，函数内填结构体或直接读字段 */
+```
+
+---
+
+## 八、函数指针
+
+指向函数的指针，用于回调、跳转表、驱动接口：
+
+```c
+typedef void (*Callback_t)(void);
+
+void on_tick(void) { }
+
+Callback_t cb = on_tick;
+cb();                    /* 调用 on_tick */
+```
+
+中断向量表本质上是**函数指针数组**：复位、NMI、HardFault、IRQ 入口地址。
+
+```c
+/* 概念示意：向量表第一项是栈顶，其后是指针 */
+void (*const vectors[])(void) = {
+    (void (*)(void))0x20005000,
+    Reset_Handler,
+    NMI_Handler,
+    /* ... */
+};
+```
+
+---
+
+## 九、嵌入式：寄存器访问
+
+### 9.1 手动映射
+
+```c
+#define GPIOA_ODR_ADDR  0x4001080Cu
+#define GPIOA_ODR       (*((volatile uint32_t *)GPIOA_ODR_ADDR))
+
+GPIOA_ODR |= (1u << 5);   /* PA5 置 1 */
+```
+
+步骤：
+
+1. 地址来自数据手册 / 参考手册  
+2. 强转为 `volatile uint32_t *`  
+3. 解引用后读写  
+
+### 9.2 CMSIS 结构体映射
+
+```c
+/* CMSIS 已定义 */
+GPIOA->ODR |= GPIO_Pin_5;
+GPIOA->BSRR = GPIO_Pin_5;   /* 置位寄存器，写 1 置位，写 0 无影响 */
+```
+
+`GPIOA` 是指向 `GPIO_TypeDef` 的宏，底层：
+
+```c
+#define GPIOA  ((GPIO_TypeDef *)GPIOA_BASE)
+```
+
+### 9.3 指针 vs 数组传参
+
+驱动里缓冲区常传指针，避免大结构体拷贝：
+
+```c
+void SPI_Send(const uint8_t *tx, uint16_t len);
+
+uint8_t buf[8] = { 0x01, 0x02, /* ... */ };
+SPI_Send(buf, 8);    /* buf 退化为 uint8_t * */
+```
+
+---
+
+## 十、常见踩坑
+
+### 10.1 未初始化指针
+
+```c
+uint32_t *p;
+*p = 1;   /* p 是随机地址 → HardFault */
+```
+
+→ 使用前赋值 `NULL` 或有效地址。
+
+### 10.2 返回局部变量地址
+
+```c
+uint8_t *bad(void)
+{
+    uint8_t buf[16];
+    return buf;   /* 函数返回后栈失效，指针悬空 */
+}
+```
+
+### 10.3 类型不匹配的指针
+
+```c
+uint8_t buf[4];
+uint32_t *p = (uint32_t *)buf;   /* 强转 */
+*p = 0x12345678;                 /* 若 buf 非 4 字节对齐 → M3 HardFault */
+```
+
+→ 协议打包用 `memcpy`，别乱 cast。
+
+### 10.4 混淆 `*` 在声明与表达式中
+
+```c
+uint32_t *p;   /* 声明：p 是指针 */
+*p = 10;       /* 表达式：解引用 */
+```
+
+### 10.5 sizeof 指针当 sizeof 数组
+
+```c
+void foo(uint8_t *p)
+{
+    sizeof(p);   /* 4：指针大小，不是缓冲区长度 */
+}
+```
+
+→ 传长度参数 `len`，或传数组时用宏 `sizeof(buf)/sizeof(buf[0])` 在调用处算。
+
+### 10.6 双重释放 / 野指针
+
+`malloc` 得到的指针 `free` 后应置 `NULL`；裸机少用堆。
+
+---
+
+## 总结
+
+| 要点 | 说明 |
+|------|------|
+| 指针 | 存地址，`&` 取址，`*` 解引用 |
+| 数组 | `buf[i]` 即 `*(buf+i)` |
+| volatile | 寄存器指针必须 volatile |
+| 结构体 | `->` 用于指针访问成员 |
+| 嵌入式 | CMSIS 用结构体指针映射外设 |

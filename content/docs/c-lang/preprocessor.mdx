@@ -1,0 +1,367 @@
+---
+title: 预处理器与宏
+description: "include、define、条件编译与函数式宏，嵌入式配置与寄存器位操作写法"
+---
+
+> 面向嵌入式入门。Keil / GCC 工程里随处可见 **`#define`**、**`#ifdef`** 和 **`stm32f10x_conf.h`**，它们由**预处理器**在编译前处理。  
+> 本文说明常用指令、宏的写法与陷阱，以及 STM32 工程中的典型用法。
+
+---
+
+## 目录
+
+1. [预处理器做什么](#一预处理器做什么)
+2. [文件包含 #include](#二文件包含-include)
+3. [宏定义 #define](#三宏定义-define)
+4. [函数式宏](#四函数式宏)
+5. [条件编译](#五条件编译)
+6. [预定义宏与 #pragma](#六预定义宏与-pragma)
+7. [STM32 工程中的实例](#七stm32-工程中的实例)
+8. [宏 vs inline 函数 vs const](#八宏-vs-inline-函数-vs-const)
+9. [常见踩坑](#九常见踩坑)
+
+---
+
+## 一、预处理器做什么
+
+编译分阶段：
+
+```
+源文件 (.c)
+    ↓  预处理器（处理 # 指令）
+展开后的翻译单元
+    ↓  编译器
+汇编 → 目标文件 → 链接 → 固件 (.elf / .hex)
+```
+
+预处理器**不做类型检查**，只做**文本替换**和**条件包含**。
+
+---
+
+## 二、文件包含 #include
+
+```c
+#include <stdint.h>      /* 系统/库头文件：在编译器 include 路径找 */
+#include "BDR6622T.h"    /* 用户头文件：先当前目录，再 include 路径 */
+```
+
+**头文件守卫**（防止重复包含）：
+
+```c
+#ifndef __MY_DRIVER_H
+#define __MY_DRIVER_H
+
+/* 声明、宏、类型 */
+
+#endif
+```
+
+或编译器扩展：
+
+```c
+#pragma once
+```
+
+STM32 工程典型包含链：
+
+```c
+#include "stm32f10x.h"       /* CMSIS + 寄存器定义 */
+#include "stm32f10x_gpio.h"  /* 标准库 GPIO API */
+#include "stm32f10x_conf.h"  /* 选择启用哪些外设模块 */
+```
+
+---
+
+## 三、宏定义 #define
+
+### 3.1 常量宏
+
+```c
+#define SYSCLK_HZ       72000000u
+#define UART_BAUD       115200u
+#define LED_PIN         GPIO_Pin_5
+```
+
+编译前替换为字面量，不占 RAM（类似 `const`，但无类型）。
+
+### 3.2 表达式宏
+
+```c
+#define ARR_FROM_FREQ(f)   ((10000u / (f)) - 1u)
+```
+
+每次使用处**文本展开**，注意副作用（见 [函数式宏](#四函数式宏)）。
+
+### 3.3 多行宏
+
+```c
+#define GPIOA_ODR  (*((volatile uint32_t *)0x4001080Cu))
+
+#define SET_BIT(REG, BIT)  ((REG) |= (1u << (BIT)))
+```
+
+用 `\` 续行：
+
+```c
+#define MAX(a, b)  ((a) > (b) ? (a) : (b))
+```
+
+---
+
+## 四、函数式宏
+
+形似函数，实际是**文本替换**：
+
+```c
+#define MIN(a, b)  (((a) < (b)) ? (a) : (b))
+
+uint32_t x = MIN(adc + 1, 4095);   /* 展开为 (((adc + 1) < (4095)) ? ... */
+```
+
+### 4.1 参数必须加括号
+
+```c
+/* 错误示范 */
+#define SQUARE(x)  (x * x)
+SQUARE(1 + 2);   /* 展开：1 + 2 * 1 + 2 = 5，不是 9 */
+
+/* 正确 */
+#define SQUARE(x)  ((x) * (x))
+```
+
+### 4.2 避免副作用
+
+```c
+#define MAX(a, b)  (((a) > (b)) ? (a) : (b))
+
+uint16_t i = 0;
+MAX(i++, 10);   /* i 可能被递增两次！ */
+```
+
+→ 参数不要写 `++`、`函数调用` 等有副作用的表达式；或改用 `static inline` 函数。
+
+### 4.3 位操作宏（嵌入式常用）
+
+```c
+#define BIT(n)       (1u << (n))
+#define SET_BIT(R, B)    ((R) |= BIT(B))
+#define CLEAR_BIT(R, B)  ((R) &= ~BIT(B))
+#define READ_BIT(R, B)   (((R) >> (B)) & 1u)
+#define MODIFY_REG(R, M, V)  ((R) = (((R) & ~(M)) | ((V) & (M))))
+```
+
+ST CMSIS 提供 `SET_BIT`、`CLEAR_BIT`、`READ_BIT`、`MODIFY_REG` 等，与上述思路相同。
+
+---
+
+## 五、条件编译
+
+### 5.1 #if / #ifdef / #ifndef
+
+```c
+#define USE_UART1
+
+#ifdef USE_UART1
+void UART1_Init(void);
+#endif
+
+#if defined(STM32F10X_MD)
+  /* 中容量器件 */
+#elif defined(STM32F10X_HD)
+  /* 高容量器件 */
+#else
+  #error "Please select target device"
+#endif
+```
+
+### 5.2 调试开关
+
+```c
+#define DEBUG  1
+
+#if DEBUG
+  #define DBG_PRINT(fmt, ...)  printf(fmt, ##__VA_ARGS__)
+#else
+  #define DBG_PRINT(fmt, ...)  ((void)0)
+#endif
+```
+
+Release 编译时 `DEBUG=0`，调试打印被完全去掉，不占 Flash。
+
+### 5.3 标准库模块选择
+
+`stm32f10x_conf.h` 中：
+
+```c
+#define _GPIO
+#define _RCC
+#define _TIM
+/* #define _CAN */   /* 注释掉则不编译 CAN 驱动，减 Flash */
+```
+
+### 5.4 #error / #warning
+
+```c
+#if SYSCLK_HZ == 0
+  #error "SYSCLK_HZ must not be zero"
+#endif
+```
+
+---
+
+## 六、预定义宏与 #pragma
+
+### 6.1 编译器预定义
+
+| 宏 | 含义 |
+|----|------|
+| `__FILE__` | 当前源文件名 |
+| `__LINE__` | 当前行号 |
+| `__DATE__` / `__TIME__` | 编译日期时间 |
+| `__STDC__` | 标准 C 实现 |
+
+```c
+#define ASSERT(cond)  \
+    do { if (!(cond)) { while (1) { } } } while (0)
+```
+
+### 6.2 #pragma
+
+编译器相关，常见：
+
+```c
+#pragma pack(1)           /* 结构体 1 字节对齐 */
+#pragma pack(push, 1)
+#pragma pack(pop)
+
+__attribute__((packed))   /* GCC：紧凑结构体 */
+__attribute__((section(".mysection")))  /* 指定段 */
+```
+
+Keil 与 GCC 语法略有差异，以工程 toolchain 为准。
+
+---
+
+## 七、STM32 工程中的实例
+
+### 7.1 外设基址与寄存器偏移
+
+```c
+#define PERIPH_BASE      0x40000000u
+#define APB2PERIPH_BASE  (PERIPH_BASE + 0x10000u)
+#define GPIOA_BASE       (APB2PERIPH_BASE + 0x0800u)
+#define GPIOA            ((GPIO_TypeDef *)GPIOA_BASE)
+```
+
+### 7.2 引脚宏
+
+```c
+#define GPIO_Pin_0    ((uint16_t)0x0001)
+#define GPIO_Pin_5    ((uint16_t)0x0020)
+```
+
+### 7.3 断言与参数检查
+
+标准库 `assert_param` 在 `USE_FULL_ASSERT` 开启时检查参数，否则为空宏。
+
+### 7.4 工程配置传递
+
+Makefile / CMake 中：
+
+```bash
+-DSTM32F10X_MD -DUSE_STDPERIPH_DRIVER
+```
+
+等价于在代码最前写：
+
+```c
+#define STM32F10X_MD
+#define USE_STDPERIPH_DRIVER
+```
+
+---
+
+## 八、宏 vs inline 函数 vs const
+
+| 方式 | 优点 | 缺点 |
+|------|------|------|
+| **#define 宏** | 无类型限制、可 `#ifdef` 去掉 | 无类型检查、难调试、副作用 |
+| **static inline 函数** | 有类型检查、可调试 | 每个编译单元可能有一份副本 |
+| **const 变量** | 有类型、占 Flash | 不能 `#ifdef` 整块逻辑 |
+
+推荐：
+
+- 引脚、地址、配置 → **宏** 或 **enum**
+- 小函数、MIN/MAX → **`static inline`**
+- 查表数据 → **`const` 数组**
+
+```c
+static inline uint16_t clamp_u16(uint16_t v, uint16_t lo, uint16_t hi)
+{
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}
+```
+
+---
+
+## 九、常见踩坑
+
+### 9.1 宏末尾分号
+
+```c
+#define INIT()  foo(); bar()
+
+if (cond)
+    INIT();    /* 展开后 if 只绑 foo(); bar() 不在 if 内 */
+else
+    baz();
+
+/* 用 do { ... } while (0) 包裹 */
+#define INIT()  do { foo(); bar(); } while (0)
+```
+
+### 9.2 #define 与 typedef 混淆
+
+```c
+#define uint32  unsigned int   /* 老风格，别用 */
+typedef unsigned int uint32_t; /* 正确：类型 */
+```
+
+### 9.3 重复宏定义
+
+同一宏两次 `#define` 不同值 → 警告或错误；应集中放在头文件。
+
+### 9.4 字符串化 `#` 与连接 `##`
+
+```c
+#define STR(x)   #x          /* STR(hello) → "hello" */
+#define CONCAT(a, b)  a##b   /* CONCAT(u, 8) → u8 */
+```
+
+高级技巧，协议代码里偶见。
+
+### 9.5 头文件里定义变量
+
+```c
+/* bad.h */
+int g_count = 0;   /* 每个 include 的 .c 都会有一份 → 链接重复定义 */
+
+/* good.h */
+extern int g_count;   /* 声明 */
+/* good.c */
+int g_count = 0;      /* 定义 */
+```
+
+---
+
+## 总结
+
+| 要点 | 说明 |
+|------|------|
+| 预处理 | 编译前文本处理，不做类型检查 |
+| #include | 头文件 + 守卫防重复 |
+| #define | 常量、位操作、条件裁剪 |
+| 函数式宏 | 参数加括号，防副作用 |
+| 条件编译 | 选芯片型号、调试开关、裁剪外设 |
