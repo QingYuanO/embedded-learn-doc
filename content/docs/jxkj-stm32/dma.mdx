@@ -1,125 +1,202 @@
 ---
 title: DMA
-description: DMA(Direct Memory Access)直接存储器访问
+description: STM32F10x DMA 直接存储器访问原理、通道映射与标准库 M2M 转运、ADC 扫描采集示例
 ---
 
 <iframe class="w-full aspect-video" src="//player.bilibili.com/player.html?isOutside=true&aid=206940155&bvid=BV1th411z7sn&cid=717727151&p=23" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe>
 
-## DMA简介
+> 对应江协科技 STM32 入门教程 DMA 章节。DMA 可在**不占用 CPU 逐字节搬运**的情况下完成外设与存储器之间的数据传输，常与 **ADC 扫描模式** 配合实现多通道连续采样。
 
-- DMA（Direct Memory Access）直接存储器存取
-- DMA可以提供外设和存储器或者存储器和存储器之间的高速数据传输，无须CPU干预，节省了CPU的资源
-- 12个独立可配置的通道： DMA1（7个通道）， DMA2（5个通道）
-- 每个通道都支持软件触发和特定的硬件触发
+---
+
+## DMA 简介
+
+- **DMA**（Direct Memory Access，直接存储器访问）由专用控制器完成数据搬运，**无需 CPU 参与每次读写**。
+- 适用场景：大批量数据、重复性传输（ADC 结果数组、串口 TX/RX 缓冲、SPI 收发、内存块拷贝）。
+- STM32F103 共有 **12 个独立通道**：**DMA1（7 通道）** + **DMA2（5 通道）**（具体外设映射因容量而异）。
+- 每个通道支持 **软件触发** 或 **特定硬件触发**（如 ADC EOC、USART TXE）。
+
+| 项目 | 说明 |
+|------|------|
+| 总线 | DMA 挂在 **AHB**，可访问 SRAM 与外设 |
+| 与 CPU 关系 | 与 CPU **并行**工作，总线冲突时仲裁 |
+| 传输单位 | 以「**数据宽度 × 次数**」计，非固定字节 |
+| 完成标志 | **TC**（Transfer Complete）中断或标志位 |
+
+---
 
 ## 存储器映像
 
 | 类型 | 起始地址      | 存储器             | 用途                                 |
 |------|--------------|--------------------|--------------------------------------|
-| ROM  | 0x0800 0000  | 程序存储器Flash    | 存储C语言编译后的程序代码            |
-|      | 0x1FFF F000  | 系统存储器         | 存储BootLoader，用于串口下载         |
+| ROM  | 0x0800 0000  | 程序存储器 Flash    | 存储 C 语言编译后的程序代码            |
+|      | 0x1FFF F000  | 系统存储器         | 存储 BootLoader，用于串口下载         |
 |      | 0x1FFF F800  | 选项字节           | 存储一些独立于程序代码的配置参数     |
-| RAM  | 0x2000 0000  | 运行内存SRAM       | 存储运行过程中的临时变量             |
+| RAM  | 0x2000 0000  | 运行内存 SRAM       | 存储运行过程中的临时变量             |
 |      | 0x4000 0000  | 外设寄存器         | 存储各个外设的配置参数               |
 |      | 0xE000 0000  | 内核外设寄存器     | 存储内核各个外设的配置参数           |
 
+DMA 可在 **SRAM ↔ 外设寄存器** 或 **SRAM ↔ SRAM（M2M）** 之间搬运；**不能**直接对 Flash 写入（Flash 编程走专用接口）。
 
-## DMA框图
+---
+
+## DMA 框图
 
 <Image src="/dma/dma1.png" alt="DMA框图"  />
 
-## DMA基本结构
+DMA 作为 **AHB 主设备**，在**外设数据寄存器**与 **SRAM 缓冲区** 之间建立通路；CPU 只负责配置通道，搬运过程由 DMA 硬件自动完成。
+
+---
+
+## DMA 基本结构
 
 <Image src="/dma/dma2.png" alt="DMA基本结构"  />
 
-### DMA基本结构详解
+### DMA 基本结构详解
 
-这张图展示了DMA控制器的核心工作原理，分为数据传输路径和控制触发路径两大部分：
+这张图展示了 DMA 控制器的核心工作原理，分为**数据传输路径**和**控制触发路径**两大部分：
 
 #### 1. 数据传输路径（上半部分）
 
-**外设配置块（左侧绿色边框）**
-- **起始地址**：配置外设数据源的起始地址
-- **数据宽度**：设置每次传输的数据位宽（8位、16位、32位）
-- **地址是否自增**：控制传输后地址是否自动递增
+**外设配置块（左侧）**
 
-**外设寄存器块（橙色）**
-- 代表实际的外设接口，如ADC、UART、SPI等
+- **起始地址**：外设数据寄存器地址（如 `&ADC1->DR`、`USART1->DR`）
+- **数据宽度**：8 / 16 / 32 位
+- **地址是否自增**：外设寄存器通常 **不增**（固定 DR）
 
-**主数据总线（粗橙色双向箭头）**
-- 连接外设寄存器和存储器的双向数据传输通道
+**存储器配置块（右侧）**
 
-**存储器块（Flash/SRAM）**
-- **Flash**：程序存储器，存储代码
-- **SRAM**：运行内存，存储变量
-- 支持内部存储器之间的数据传输
+- **起始地址**：数组或缓冲区首地址
+- **数据宽度**：需与源/目的匹配规则一致
+- **地址是否自增**：数组缓冲通常 **自增**
 
-**存储器配置块（右侧绿色边框）**
-- 与外设配置块类似，配置目标存储器的参数
+**方向控制**
 
-**方向控制块（浅绿色边框）**
-- 控制数据传输方向：外设→存储器 或 存储器→外设
+- **外设 → 存储器**：ADC、USART RX 等
+- **存储器 → 外设**：USART TX、SPI TX 等
+- **M2M**：存储器 → 存储器（双端均设为存储器地址）
 
 #### 2. 控制与触发路径（下半部分）
 
-**传输计数器（浅绿色边框）**
-- 记录已传输的数据单元数量
-- 当计数到零时，传输完成
+**传输计数器 CNDTR**
 
-**自动重装器（浅绿色边框）**
-- 自动重新加载传输计数器
-- 支持连续或循环传输模式
+- 记录剩余传输次数，每传一个数据宽度单位减 1
+- 减到 0 产生 **TC** 完成标志
 
-**多路复用器（黄色梯形）**
-- 选择触发源：硬件触发（0）或软件触发（1）
+**自动重装**
 
-**硬件触发（绿色边框）**
-- 由外设事件自动触发，如ADC转换完成
+- **Normal 模式**：传完停止，需重新写 CNDTR 再启
+- **Circular 模式**：传完自动重装 CNDTR，循环搬运（配合 ADC 连续扫描）
 
-**软件触发（绿色边框）**
-- 由CPU软件命令触发传输
+**触发源**
 
-**M2M模式控制（浅绿色边框）**
-- Memory-to-Memory模式，控制多路复用器选择
+- **硬件触发**：ADC 转换完成、USART 发送寄存器空等
+- **软件触发**：M2M 或手动启动
 
-**开关控制（橙色）**
-- 整个DMA系统的总开关
+---
 
-## DMA请求
-定义哪些外设可以从那个通道触发 DMA 传输
+## DMA 请求
+
+定义哪些外设可以从哪个通道触发 DMA 传输。
+
 <Image src="/dma/dma3.png" alt="DMA请求"  />
 
+**STM32F103 常用映射（节选）**
 
+| 外设 | DMA1 通道 |
+|------|-----------|
+| ADC1 | Channel 1 |
+| SPI1_RX | Channel 2 |
+| SPI1_TX | Channel 3 |
+| USART1_TX | Channel 4 |
+| USART1_RX | Channel 5 |
+| I2C1_TX | Channel 6 |
+| I2C1_RX | Channel 7 |
+
+配置前必须查参考手册 **DMA 请求映射表**，**通道与外设一一对应**，不可随意占用。
+
+---
 
 ## 数据宽度与对齐
 
 <Image src="/dma/dma4.png" alt="数据宽度与对齐"  />
 
-总结：把低位数数据传输到高位数据，高位数自动补 0；把高位数数据传输到低位数数据，多出的位数舍弃
+| 规则 | 说明 |
+|------|------|
+| 低 → 高 | 低位数据迁入高位，**高位自动补 0** |
+| 高 → 低 | 高位数据迁入低位，**多出的高位舍弃** |
+| 最佳实践 | **源、目的、外设寄存器宽度一致**（如 ADC DR 用 **HalfWord**） |
 
-## 数据转运+DMA
+ADC 数据寄存器为 16 位有效（12 位 ADC），DMA 应设 **`DMA_PeripheralDataSize_HalfWord`** 与 **`DMA_MemoryDataSize_HalfWord`**。
+
+---
+
+## 数据转运 + DMA（M2M 示意）
 
 <Image src="/dma/dma5.png" alt="数据转运+DMA"  />
-- 传输方向：外设到存储器
-- 地址是否自增：是
-- 传输计数器：7
-- 自动重装：否
-- 触发源：软件触发
 
+江协「数组转运」示例配置要点：
 
-## ADC扫描模式+DMA
+| 参数 | 值 |
+|------|-----|
+| 传输方向 | 存储器 → 存储器（M2M Enable） |
+| 源/目的 | 两个数组首地址 |
+| 地址自增 | 源、目的均 **Enable** |
+| 计数器 | 数组元素个数 |
+| 模式 | **Normal**（传完即停） |
+| 触发 | **软件触发**（使能通道即开始） |
+
+---
+
+## ADC 扫描模式 + DMA
 
 <Image src="/dma/dma6.png" alt="ADC扫描模式+DMA"  />
 
+多通道 ADC 经典组合：
 
+```
+ADC：连续转换 + 扫描模式 + 软件触发一次
+DMA：外设(ADC1->DR) → 存储器(AD_Value[]) + 循环模式
+```
 
-## 例子
+每完成一个通道转换，硬件触发 DMA 搬一个半字到数组；扫完 4 通道后 CNDTR 减 4，循环模式下自动重装，**数组始终为最新一轮采样**。
 
-### DMA数据转运
+详见 [ADC](./adc) 中「扫描 + DMA」说明。
+
+---
+
+## 标准库 DMA 初始化流程
+
+```
+1. RCC_AHBPeriphClockCmd(DMA1)           /* 开 DMA 时钟 */
+2. 填写 DMA_InitTypeDef（地址、宽度、方向、计数、模式、M2M、优先级）
+3. DMA_Init(DMA1_Channelx, &init)
+4. DMA_Cmd(ENABLE) 或先 DISABLE 等触发
+5. 外设侧：如 ADC_DMACmd(ADC1, ENABLE)
+6. 等待 DMA_FLAG_TCx / 中断
+```
+
+**重复启动 Normal 模式传输**（江协 MyDMA_Transfer 做法）：
+
+```c
+DMA_Cmd(DMA1_Channel1, DISABLE);
+DMA_SetCurrDataCounter(DMA1_Channel1, Size);  /* 重装计数器 */
+DMA_Cmd(DMA1_Channel1, ENABLE);
+```
+
+---
+
+## 代码示例
+
+### DMA 数据转运（M2M）
+
+两个 **SRAM 数组** 之间拷贝，演示 DMA 基本配置。
 
 ```c title="MyDMA.h"
 #ifndef __MYDMA_H
 #define __MYDMA_H
+
+#include "stm32f10x.h"
 
 void MyDMA_Init(uint32_t AddrA, uint32_t AddrB, uint16_t Size);
 void MyDMA_Transfer(void);
@@ -128,235 +205,238 @@ void MyDMA_Transfer(void);
 ```
 
 ```c title="MyDMA.c"
-#include "stm32f10x.h"                  // Device header
+#include "MyDMA.h"
 
-uint16_t MyDMA_Size;					//定义全局变量，用于记住Init函数的Size，供Transfer函数使用
+static uint16_t MyDMA_Size;
 
 /**
-  * 函    数：DMA初始化
-  * 参    数：AddrA 原数组的首地址
-  * 参    数：AddrB 目的数组的首地址
-  * 参    数：Size 转运的数据大小（转运次数）
-  * 返 回 值：无
-  */
+ * @brief  DMA1 通道 1，存储器到存储器，字节宽度
+ * @param  AddrA  源数组首地址
+ * @param  AddrB  目的数组首地址
+ * @param  Size   传输次数（字节数）
+ */
 void MyDMA_Init(uint32_t AddrA, uint32_t AddrB, uint16_t Size)
 {
-	MyDMA_Size = Size;					//将Size写入到全局变量，记住参数Size
-	
-	/*开启时钟*/
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);						//开启DMA的时钟
-	
-	/*DMA初始化*/
-	DMA_InitTypeDef DMA_InitStructure;										//定义结构体变量
-	DMA_InitStructure.DMA_PeripheralBaseAddr = AddrA;						//外设基地址，给定形参AddrA
-	DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Byte;	//外设数据宽度，选择字节
-	DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Enable;			//外设地址自增，选择使能
-	DMA_InitStructure.DMA_MemoryBaseAddr = AddrB;							//存储器基地址，给定形参AddrB
-	DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_Byte;			//存储器数据宽度，选择字节
-	DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;					//存储器地址自增，选择使能
-	DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;						//数据传输方向，选择由外设到存储器
-	DMA_InitStructure.DMA_BufferSize = Size;								//转运的数据大小（转运次数）
-	DMA_InitStructure.DMA_Mode = DMA_Mode_Normal;							//模式，选择正常模式
-	DMA_InitStructure.DMA_M2M = DMA_M2M_Enable;								//存储器到存储器，选择使能
-	DMA_InitStructure.DMA_Priority = DMA_Priority_Medium;					//优先级，选择中等
-	DMA_Init(DMA1_Channel1, &DMA_InitStructure);							//将结构体变量交给DMA_Init，配置DMA1的通道1
-	
-	/*DMA使能*/
-	DMA_Cmd(DMA1_Channel1, DISABLE);	//这里先不给使能，初始化后不会立刻工作，等后续调用Transfer后，再开始
+	MyDMA_Size = Size;
+
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+
+	DMA_InitTypeDef DMA_InitStructure;
+	DMA_InitStructure.DMA_PeripheralBaseAddr = AddrA;
+	DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Byte;
+	DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Enable;
+	DMA_InitStructure.DMA_MemoryBaseAddr = AddrB;
+	DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_Byte;
+	DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
+	DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;   /* M2M 时外设端作源 */
+	DMA_InitStructure.DMA_BufferSize = Size;
+	DMA_InitStructure.DMA_Mode = DMA_Mode_Normal;
+	DMA_InitStructure.DMA_M2M = DMA_M2M_Enable;          /* 存储器到存储器 */
+	DMA_InitStructure.DMA_Priority = DMA_Priority_Medium;
+	DMA_Init(DMA1_Channel1, &DMA_InitStructure);
+
+	DMA_Cmd(DMA1_Channel1, DISABLE);   /* 初始化后不立即工作 */
 }
 
-/**
-  * 函    数：启动DMA数据转运
-  * 参    数：无
-  * 返 回 值：无
-  */
 void MyDMA_Transfer(void)
 {
-	DMA_Cmd(DMA1_Channel1, DISABLE);					//DMA失能，在写入传输计数器之前，需要DMA暂停工作
-	DMA_SetCurrDataCounter(DMA1_Channel1, MyDMA_Size);	//写入传输计数器，指定将要转运的次数
-	DMA_Cmd(DMA1_Channel1, ENABLE);						//DMA使能，开始工作
-	
-	while (DMA_GetFlagStatus(DMA1_FLAG_TC1) == RESET);	//等待DMA工作完成
-	DMA_ClearFlag(DMA1_FLAG_TC1);						//清除工作完成标志位
+	DMA_Cmd(DMA1_Channel1, DISABLE);
+	DMA_SetCurrDataCounter(DMA1_Channel1, MyDMA_Size);
+	DMA_Cmd(DMA1_Channel1, ENABLE);
+
+	while (DMA_GetFlagStatus(DMA1_FLAG_TC1) == RESET);
+	DMA_ClearFlag(DMA1_FLAG_TC1);
 }
 ```
 
 ```c title="main.c"
-#include "stm32f10x.h"                  // Device header
+#include "stm32f10x.h"
 #include "Delay.h"
 #include "OLED.h"
 #include "MyDMA.h"
 
-uint8_t DataA[] = {0x01, 0x02, 0x03, 0x04};				//定义测试数组DataA，为数据源
-uint8_t DataB[] = {0, 0, 0, 0};							//定义测试数组DataB，为数据目的地
+uint8_t DataA[] = {0x01, 0x02, 0x03, 0x04};
+uint8_t DataB[] = {0, 0, 0, 0};
 
 int main(void)
 {
-	/*模块初始化*/
-	OLED_Init();				//OLED初始化
-	
-	MyDMA_Init((uint32_t)DataA, (uint32_t)DataB, 4);	//DMA初始化，把源数组和目的数组的地址传入
-	
-	/*显示静态字符串*/
+	OLED_Init();
+	MyDMA_Init((uint32_t)DataA, (uint32_t)DataB, 4);
+
 	OLED_ShowString(1, 1, "DataA");
 	OLED_ShowString(3, 1, "DataB");
-	
-	/*显示数组的首地址*/
 	OLED_ShowHexNum(1, 8, (uint32_t)DataA, 8);
 	OLED_ShowHexNum(3, 8, (uint32_t)DataB, 8);
-		
+
 	while (1)
 	{
-		DataA[0] ++;		//变换测试数据
-		DataA[1] ++;
-		DataA[2] ++;
-		DataA[3] ++;
-		
-		OLED_ShowHexNum(2, 1, DataA[0], 2);		//显示数组DataA
-		OLED_ShowHexNum(2, 4, DataA[1], 2);
-		OLED_ShowHexNum(2, 7, DataA[2], 2);
-		OLED_ShowHexNum(2, 10, DataA[3], 2);
-		OLED_ShowHexNum(4, 1, DataB[0], 2);		//显示数组DataB
-		OLED_ShowHexNum(4, 4, DataB[1], 2);
-		OLED_ShowHexNum(4, 7, DataB[2], 2);
-		OLED_ShowHexNum(4, 10, DataB[3], 2);
-		
-		Delay_ms(1000);		//延时1s，观察转运前的现象
-		
-		MyDMA_Transfer();	//使用DMA转运数组，从DataA转运到DataB
-		
-		OLED_ShowHexNum(2, 1, DataA[0], 2);		//显示数组DataA
-		OLED_ShowHexNum(2, 4, DataA[1], 2);
-		OLED_ShowHexNum(2, 7, DataA[2], 2);
-		OLED_ShowHexNum(2, 10, DataA[3], 2);
-		OLED_ShowHexNum(4, 1, DataB[0], 2);		//显示数组DataB
-		OLED_ShowHexNum(4, 4, DataB[1], 2);
-		OLED_ShowHexNum(4, 7, DataB[2], 2);
-		OLED_ShowHexNum(4, 10, DataB[3], 2);
+		DataA[0]++;
+		DataA[1]++;
+		DataA[2]++;
+		DataA[3]++;
 
-		Delay_ms(1000);		//延时1s，观察转运后的现象
+		/* 显示转运前 DataA / DataB */
+
+		Delay_ms(1000);
+		MyDMA_Transfer();   /* DMA 将 DataA 拷贝到 DataB */
+
+		/* 显示转运后：DataB 应与 DataA 相同 */
+
+		Delay_ms(1000);
 	}
 }
-
 ```
 
-### DMA+AD多通道
+---
+
+### DMA + ADC 多通道
+
+硬件：**PA0～PA3** 四路模拟输入；**ADC1 连续 + 扫描**，**DMA1 通道 1 循环**搬运到 `AD_Value[4]`。
 
 ```c title="AD.h"
 #ifndef __AD_H
 #define __AD_H
+
+#include "stm32f10x.h"
 
 extern uint16_t AD_Value[4];
 
 void AD_Init(void);
 
 #endif
-
 ```
 
 ```c title="AD.c"
-#include "stm32f10x.h"                  // Device header
+#include "AD.h"
 
-uint16_t AD_Value[4];					//定义用于存放AD转换结果的全局数组
+uint16_t AD_Value[4];
 
-/**
-  * 函    数：AD初始化
-  * 参    数：无
-  * 返 回 值：无
-  */
 void AD_Init(void)
 {
-	/*开启时钟*/
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);	//开启ADC1的时钟
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);	//开启GPIOA的时钟
-	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);		//开启DMA1的时钟
-	
-	/*设置ADC时钟*/
-	RCC_ADCCLKConfig(RCC_PCLK2_Div6);						//选择时钟6分频，ADCCLK = 72MHz / 6 = 12MHz
-	
-	/*GPIO初始化*/
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+
+	RCC_ADCCLKConfig(RCC_PCLK2_Div6);
+
 	GPIO_InitTypeDef GPIO_InitStructure;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1 | GPIO_Pin_2 | GPIO_Pin_3;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-	GPIO_Init(GPIOA, &GPIO_InitStructure);					//将PA0、PA1、PA2和PA3引脚初始化为模拟输入
-	
-	/*规则组通道配置*/
-	ADC_RegularChannelConfig(ADC1, ADC_Channel_0, 1, ADC_SampleTime_55Cycles5);	//规则组序列1的位置，配置为通道0
-	ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 2, ADC_SampleTime_55Cycles5);	//规则组序列2的位置，配置为通道1
-	ADC_RegularChannelConfig(ADC1, ADC_Channel_2, 3, ADC_SampleTime_55Cycles5);	//规则组序列3的位置，配置为通道2
-	ADC_RegularChannelConfig(ADC1, ADC_Channel_3, 4, ADC_SampleTime_55Cycles5);	//规则组序列4的位置，配置为通道3
-	
-	/*ADC初始化*/
-	ADC_InitTypeDef ADC_InitStructure;											//定义结构体变量
-	ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;							//模式，选择独立模式，即单独使用ADC1
-	ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;						//数据对齐，选择右对齐
-	ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;			//外部触发，使用软件触发，不需要外部触发
-	ADC_InitStructure.ADC_ContinuousConvMode = ENABLE;							//连续转换，使能，每转换一次规则组序列后立刻开始下一次转换
-	ADC_InitStructure.ADC_ScanConvMode = ENABLE;								//扫描模式，使能，扫描规则组的序列，扫描数量由ADC_NbrOfChannel确定
-	ADC_InitStructure.ADC_NbrOfChannel = 4;										//通道数，为4，扫描规则组的前4个通道
-	ADC_Init(ADC1, &ADC_InitStructure);											//将结构体变量交给ADC_Init，配置ADC1
-	
-	/*DMA初始化*/
-	DMA_InitTypeDef DMA_InitStructure;											//定义结构体变量
-	DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)&ADC1->DR;				//外设基地址，给定形参AddrA
-	DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord;	//外设数据宽度，选择半字，对应16为的ADC数据寄存器
-	DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;			//外设地址自增，选择失能，始终以ADC数据寄存器为源
-	DMA_InitStructure.DMA_MemoryBaseAddr = (uint32_t)AD_Value;					//存储器基地址，给定存放AD转换结果的全局数组AD_Value
-	DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;			//存储器数据宽度，选择半字，与源数据宽度对应
-	DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;						//存储器地址自增，选择使能，每次转运后，数组移到下一个位置
-	DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;							//数据传输方向，选择由外设到存储器，ADC数据寄存器转到数组
-	DMA_InitStructure.DMA_BufferSize = 4;										//转运的数据大小（转运次数），与ADC通道数一致
-	DMA_InitStructure.DMA_Mode = DMA_Mode_Circular;								//模式，选择循环模式，与ADC的连续转换一致
-	DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;								//存储器到存储器，选择失能，数据由ADC外设触发转运到存储器
-	DMA_InitStructure.DMA_Priority = DMA_Priority_Medium;						//优先级，选择中等
-	DMA_Init(DMA1_Channel1, &DMA_InitStructure);								//将结构体变量交给DMA_Init，配置DMA1的通道1
-	
-	/*DMA和ADC使能*/
-	DMA_Cmd(DMA1_Channel1, ENABLE);							//DMA1的通道1使能
-	ADC_DMACmd(ADC1, ENABLE);								//ADC1触发DMA1的信号使能
-	ADC_Cmd(ADC1, ENABLE);									//ADC1使能
-	
-	/*ADC校准*/
-	ADC_ResetCalibration(ADC1);								//固定流程，内部有电路会自动执行校准
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+	/* 规则组序列 1～4：通道 0～3 */
+	ADC_RegularChannelConfig(ADC1, ADC_Channel_0, 1, ADC_SampleTime_55Cycles5);
+	ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 2, ADC_SampleTime_55Cycles5);
+	ADC_RegularChannelConfig(ADC1, ADC_Channel_2, 3, ADC_SampleTime_55Cycles5);
+	ADC_RegularChannelConfig(ADC1, ADC_Channel_3, 4, ADC_SampleTime_55Cycles5);
+
+	ADC_InitTypeDef ADC_InitStructure;
+	ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;
+	ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;
+	ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;
+	ADC_InitStructure.ADC_ContinuousConvMode = ENABLE;   /* 连续转换 */
+	ADC_InitStructure.ADC_ScanConvMode = ENABLE;         /* 扫描 4 通道 */
+	ADC_InitStructure.ADC_NbrOfChannel = 4;
+	ADC_Init(ADC1, &ADC_InitStructure);
+
+	DMA_InitTypeDef DMA_InitStructure;
+	DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)&ADC1->DR;
+	DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord;
+	DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;   /* DR 地址固定 */
+	DMA_InitStructure.DMA_MemoryBaseAddr = (uint32_t)AD_Value;
+	DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;
+	DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
+	DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;
+	DMA_InitStructure.DMA_BufferSize = 4;
+	DMA_InitStructure.DMA_Mode = DMA_Mode_Circular;      /* 循环，配合连续 ADC */
+	DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
+	DMA_InitStructure.DMA_Priority = DMA_Priority_Medium;
+	DMA_Init(DMA1_Channel1, &DMA_InitStructure);
+
+	DMA_Cmd(DMA1_Channel1, ENABLE);
+	ADC_DMACmd(ADC1, ENABLE);
+	ADC_Cmd(ADC1, ENABLE);
+
+	ADC_ResetCalibration(ADC1);
 	while (ADC_GetResetCalibrationStatus(ADC1) == SET);
 	ADC_StartCalibration(ADC1);
 	while (ADC_GetCalibrationStatus(ADC1) == SET);
-	
-	/*ADC触发*/
-	ADC_SoftwareStartConvCmd(ADC1, ENABLE);	//软件触发ADC开始工作，由于ADC处于连续转换模式，故触发一次后ADC就可以一直连续不断地工作
-}
 
+	ADC_SoftwareStartConvCmd(ADC1, ENABLE);   /* 触发一次，之后连续+扫描自动运行 */
+}
 ```
 
 ```c title="main.c"
-#include "stm32f10x.h"                  // Device header
+#include "stm32f10x.h"
 #include "Delay.h"
 #include "OLED.h"
 #include "AD.h"
 
 int main(void)
 {
-	/*模块初始化*/
-	OLED_Init();				//OLED初始化
-	AD_Init();					//AD初始化
-	
-	/*显示静态字符串*/
+	OLED_Init();
+	AD_Init();
+
 	OLED_ShowString(1, 1, "AD0:");
 	OLED_ShowString(2, 1, "AD1:");
 	OLED_ShowString(3, 1, "AD2:");
 	OLED_ShowString(4, 1, "AD3:");
-	
+
 	while (1)
 	{
-		OLED_ShowNum(1, 5, AD_Value[0], 4);		//显示转换结果第0个数据
-		OLED_ShowNum(2, 5, AD_Value[1], 4);		//显示转换结果第1个数据
-		OLED_ShowNum(3, 5, AD_Value[2], 4);		//显示转换结果第2个数据
-		OLED_ShowNum(4, 5, AD_Value[3], 4);		//显示转换结果第3个数据
-		
-		Delay_ms(100);							//延时100ms，手动增加一些转换的间隔时间
+		/* AD_Value[] 由 DMA 后台自动更新，CPU 直接读 */
+		OLED_ShowNum(1, 5, AD_Value[0], 4);
+		OLED_ShowNum(2, 5, AD_Value[1], 4);
+		OLED_ShowNum(3, 5, AD_Value[2], 4);
+		OLED_ShowNum(4, 5, AD_Value[3], 4);
+
+		Delay_ms(100);
 	}
 }
+```
 
+**数据流：**
 
 ```
+PA0～PA3 → ADC 扫描 → DR → DMA → AD_Value[0..3] → main 显示
+         ↑________________连续循环________________|
+```
+
+---
+
+## M2M 与 ADC+DMA 配置对比
+
+| 项目 | M2M 数组转运 | ADC + DMA |
+|------|-------------|-----------|
+| M2M | **Enable** | **Disable** |
+| 外设地址 | 源数组（当作 Peripheral） | `&ADC1->DR` |
+| 外设地址自增 | Enable | **Disable** |
+| 模式 | Normal | **Circular** |
+| ADC 模式 | — | 连续 + 扫描 |
+| CPU 工作 | 调用 `Transfer()` 等待 TC | **仅读数组**，无需等 EOC |
+
+---
+
+## 注意事项
+
+1. **先开 DMA 时钟**（AHB），再 `DMA_Init`。
+2. **通道与外设映射**必须查手册，ADC1 默认用 DMA1 Channel1。
+3. **Normal 模式**重复传输前：`DISABLE` → `SetCurrDataCounter` → `ENABLE`。
+4. **Circular 模式**下 CNDTR 循环，读数组时注意与 ADC 扫描节拍一致；必要时用 **DMA 半满/满中断** 双缓冲。
+5. **数据宽度**与 ADC DR（半字）一致，避免对齐错误。
+6. M2M 时 `DMA_DIR_PeripheralSRC` 表示「外设端」作源，实际两端都在 SRAM。
+7. DMA 传输期间 **CPU 仍可运行**，但访问同一 SRAM 区域需注意缓存一致性（M3 无 DCache，一般无此问题）。
+8. 高实时性场景可改用 **DMA TC 中断** 替代 `while` 轮询 TC 标志。
+
+---
+
+## 总结
+
+| 要点 | 说明 |
+|------|------|
+| 作用 | 外设 ↔ 存储器批量搬运，减轻 CPU |
+| 通道 | DMA1/DMA2 共 12 通道，与外设固定映射 |
+| M2M | 数组拷贝，Normal + 软件触发 |
+| ADC | 连续扫描 + Circular DMA → `AD_Value[]` 自动刷新 |
+| 完成 | `DMA_FLAG_TCx` 或中断 |
