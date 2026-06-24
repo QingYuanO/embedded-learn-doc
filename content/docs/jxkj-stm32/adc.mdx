@@ -1,42 +1,97 @@
 ---
 title: ADC
-description: ADC(Analog-to-Digital Converter)模数转换器
+description: STM32F10x ADC 模数转换器原理、配置与标准库单通道/多通道采集示例
 ---
 
 <iframe class="w-full aspect-video" src="//player.bilibili.com/player.html?isOutside=true&aid=206940155&bvid=BV1th411z7sn&cid=567259029&p=21" scrolling="no" border="0" frameborder="no" framespacing="0" allowfullscreen="true"></iframe>
 
-## ADC简介
+> 对应江协科技 STM32 入门教程 ADC 章节。本文在视频要点基础上补充**规则组/注入组、转换模式、时钟与采样时间、电压换算**及**代码流程说明**，便于查阅与二次开发。
 
-- ADC（Analog-Digital Converter）模拟-数字转换器
-- ADC可以将引脚上连续变化的模拟电压转换为内存中存储的数字变量，建立模拟电路到数字电路的桥梁
-- 12位逐次逼近型ADC，1us转换时间
-- 输入电压范围：0-3.3V，转换结果范围：0-4095
-- 18个输入通道，可测量16个外部和2个内部信号源
-- 规则组和注入组两个转换单元
-- 模拟看门狗自动监测输入电压范围
+---
 
-## 逐次逼近型ADC
+## 目录
+
+1. [ADC 简介](#adc-简介)
+2. [逐次逼近型 ADC](#逐次逼近型-adc)
+3. [ADC 框图与基本结构](#adc-框图)
+4. [输入通道与引脚](#输入通道)
+5. [规则组与注入组](#规则组与注入组)
+6. [转换模式](#转换模式)
+7. [触发控制](#触发控制)
+8. [数据对齐](#数据对齐)
+9. [ADC 时钟](#adc-时钟)
+10. [转换时间](#转换时间)
+11. [校准](#校准)
+12. [硬件连接](#硬件连接)
+13. [数字量与电压换算](#数字量与电压换算)
+14. [标准库初始化流程](#标准库初始化流程)
+15. [代码示例](#代码示例)
+16. [多通道采集方式对比](#多通道采集方式对比)
+17. [进阶话题](#进阶话题)
+18. [注意事项](#注意事项)
+
+---
+
+## ADC 简介
+
+- **ADC**（Analog-to-Digital Converter，模数转换器）将引脚上连续变化的**模拟电压**转换为内存中的**数字量**，是模拟电路与数字电路之间的桥梁。
+- STM32F103 内置 **12 位逐次逼近型 ADC**，最高理论分辨率 **4096 档**（0～4095）。
+- 参考电压 **VREF+** 通常接 **3.3 V**（与 VDDA 一致），输入电压 **0～3.3 V** 对应数字量 **0～4095**。
+- **18 个输入通道**：16 路外部引脚 + **内部温度传感器** + **内部参考电压 VREFINT**（具体可用通道因芯片型号而异）。
+- 提供 **规则组（Regular）** 与 **注入组（Injected）** 两套转换序列；入门示例主要用规则组。
+- **模拟看门狗**：可监测电压是否超出设定高低阈值，超限产生中断（过压/欠压保护）。
+
+| 项目 | STM32F103 典型参数 |
+|------|-------------------|
+| 分辨率 | 12 位 |
+| 转换结果 | 0～4095 |
+| 输入电压 | 0～VREF+（通常 3.3 V） |
+| ADC 时钟 | 最高 14 MHz（需分频配置） |
+| 最短转换时间 | 约 1 μs（14 MHz、1.5 周期采样时） |
+| 芯片实例 | F103C8 等资源：ADC1、ADC2（无 ADC3） |
+
+**与 GPIO 的关系**：ADC 采集引脚必须配置为 **模拟输入（AIN）**，此时数字输入/输出缓冲器断开，引脚电压直接进入 ADC 采样保持电路。详见 [GPIO](./gpio) 中「模拟输入」模式。
+
+---
+
+## 逐次逼近型 ADC
 
 <Image src="/adc/adc1.png" alt="逐次逼近型ADC"  />
-> **什么是逐次逼近型ADC？**  
-> 逐次逼近型ADC（SAR ADC, Successive Approximation Register ADC）是一种常见的模数转换器结构。其核心思想是通过逐步逼近的方式，将模拟输入电压与内部参考电压进行比较，每次确定一位数字输出，最终得到完整的数字量。  
-> 
-> **工作原理简述：**  
-> 1. 采样保持电路锁定输入电压。  
-> 2. SAR寄存器从最高位开始，依次尝试每一位（先假设为1），通过比较器判断DAC输出与输入电压的大小。  
-> 3. 若DAC输出小于输入电压，则该位保留为1，否则清零。  
-> 4. 依次完成所有位的判断，最终得到数字输出。  
 
+> **什么是逐次逼近型 ADC？**  
+> 逐次逼近型 ADC（SAR ADC，Successive Approximation Register ADC）是 MCU 内置 ADC 的常见结构。核心思想是：用内部 DAC 逐步产生比较电压，与输入电压比较，**从高位到低位逐位确定**数字输出。
+>
+> **工作原理简述：**
+> 1. **采样保持（S/H）** 电路锁定当前引脚电压。
+> 2. SAR 从最高位开始，依次假设该位为 1，DAC 输出对应电压。
+> 3. 比较器判断 DAC 输出与输入电压大小：输入更大则保留该位为 1，否则清 0。
+> 4. 12 位 ADC 重复 12 轮，得到 0～4095 的数字量。
 
-## ADC框图
+---
+
+## ADC 框图
 
 <Image src="/adc/adc2.png" alt="ADC框图"  />
 
-## ADC基本结构
+框图体现数据流：**多路模拟开关 → 采样保持 → 比较器 + SAR + DAC → 数字结果寄存器**。  
+规则组/注入组各自有序列寄存器，决定「先采哪几个通道」；触发单元决定「何时开始一轮转换」。
+
+---
+
+## ADC 基本结构
 
 <Image src="/adc/adc3.png" alt="ADC基本结构"  />
 
+理解要点：
+
+- **序列（Sequence）**：规则组最多 16 个通道排队转换；注入组最多 4 个，且可打断规则组。
+- **数据寄存器 DR**：转换完成后结果写入 `ADC1->DR`（规则组）或 `JDRx`（注入组）。
+- **EOC 标志**：End Of Conversion，转换结束置位，软件或 DMA 据此读数。
+
+---
+
 ## 输入通道
+
 | 通道    | ADC1         | ADC2         | ADC3         |
 |---------|--------------|--------------|--------------|
 | 通道0   | PA0          | PA0          | PA0          |
@@ -58,51 +113,252 @@ description: ADC(Analog-to-Digital Converter)模数转换器
 | 通道16  | 温度传感器   |              |              |
 | 通道17  | 内部参考电压 |              |              |
 
+**说明：**
+
+- **STM32F103C8** 仅有 **ADC1、ADC2**，无 ADC3；引脚以表中 ADC1 列为准。
+- **同一时刻** 多路外部通道通过内部多路开关**轮流**接入 SAR，不是并行采样。
+- 通道 16、17 为片内信号，读温度或校准参考电压时使用，无需配置外部 GPIO 为模拟输入（需使能对应内部通道）。
+- 使用 ADC 的引脚**不能**同时作数字 GPIO 输出，否则影响采样精度。
+
+---
+
+## 规则组与注入组
+
+| 对比项 | 规则组（Regular） | 注入组（Injected） |
+|--------|-------------------|-------------------|
+| 通道数 | 最多 16 个 | 最多 4 个 |
+| 数据寄存器 | 1 个 DR | 4 个 JDR1～JDR4 |
+| 优先级 | 低 | **高**，可打断规则组 |
+| 典型用途 | 电位器、多传感器轮询 | 电机电流瞬时采样、过流保护 |
+| 入门示例 | ✅ 本文重点 | 进阶再学 |
+
+江协教程与下文代码均使用 **规则组 + 软件触发**。
+
+---
+
 ## 转换模式
 
+转换行为由两个独立开关组合决定：
+
+| 连续转换 | 扫描模式 | 行为 |
+|----------|----------|------|
+| 关闭 | 关闭 | **单次、单通道**：软件触发一次，转换一个通道后停止 |
+| 开启 | 关闭 | **连续、单通道**：自动反复转换同一通道 |
+| 关闭 | 开启 | **单次、多通道**：触发一次，按序列扫完所有通道后停止 |
+| 开启 | 开启 | **连续、多通道**：自动循环扫描序列 |
+
 ### 单次转换，非扫描模式
+
 <Image src="/adc/adc4.png" alt="单次转换，非扫描模式"  />
 
+最基础模式：**每次**调用软件触发，只转换规则组**序列 1** 上的那一个通道。下文「AD 单通道」即此模式。
+
 ### 连续转换，非扫描模式
+
 <Image src="/adc/adc5.png" alt="连续转换，非扫描模式"  />
 
+使能 `ADC_ContinuousConvMode` 后，一次触发即可**不停**转换同一通道，适合示波器式高速采样或配合 DMA 搬运。
+
 ### 单次转换，扫描模式
+
 <Image src="/adc/adc6.png" alt="单次转换，扫描模式"  />
 
+使能 `ADC_ScanConvMode` 并设置 `ADC_NbrOfChannel` 为 N，一次触发按序列 1→2→…→N 依次转换，结果需配合 **DMA** 或逐次读 DR（配合 EOC）。
+
 ### 连续转换，扫描模式
+
 <Image src="/adc/adc7.png" alt="连续转换，扫描模式"  />
 
+多通道循环采集的常用组合，配合 DMA 将 DR 自动写入数组，CPU 几乎不参与每次读数。
+
+---
 
 ## 触发控制
+
 <Image src="/adc/adc8.png" alt="触发控制"  />
+
+| 触发方式 | 配置 | 场景 |
+|----------|------|------|
+| **软件触发** | `ADC_ExternalTrigConv_None` + `ADC_SoftwareStartConvCmd` | 入门、按键后测一次 |
+| **硬件触发** | TIM、EXTI 等事件 | 固定采样率、与 PWM 同步 |
+
+软件触发流程：
+
+```
+ADC_SoftwareStartConvCmd(ADC1, ENABLE)
+    → 等待 ADC_FLAG_EOC
+    → ADC_GetConversionValue(ADC1)
+```
+
+---
 
 ## 数据对齐
 
-<Image src="/adc/adc9.png" alt="转换时间"  />
+<Image src="/adc/adc9.png" alt="数据对齐"  />
+
+12 位结果可 **左对齐** 或 **右对齐** 存放在 16 位数据寄存器中：
+
+| 对齐 | 说明 |
+|------|------|
+| **右对齐**（常用） | 低 12 位有效，值为 0～4095，直接 `return ADC_GetConversionValue()` |
+| 左对齐 | 高 12 位有效，读数需右移，多用于特殊对齐需求 |
+
+示例代码使用 **`ADC_DataAlign_Right`**。
+
+---
+
+## ADC 时钟
+
+ADC 挂在 **APB2** 上，时钟来自 **PCLK2**，且必须经过分频，**ADCCLK 不得超过 14 MHz**。
+
+```c
+RCC_ADCCLKConfig(RCC_PCLK2_Div6);   /* PCLK2=72MHz → ADCCLK=12MHz */
+```
+
+| 分频 | PCLK2=72MHz 时 ADCCLK |
+|------|----------------------|
+| Div2 | 36 MHz ❌ 超限 |
+| Div4 | 18 MHz ❌ 超限 |
+| **Div6** | **12 MHz** ✅ 常用 |
+| Div8 | 9 MHz ✅ |
+
+江协示例：`72 MHz / 6 = 12 MHz`，留一定裕量且转换速度较快。
+
+---
 
 ## 转换时间
-- AD转换的步骤：采样，保持，量化，编码
 
-- STM32 ADC的总转换时间为：$$T_{\text{CONV}} = t_{\text{采样时间}} + 12.5\,\text{ADC周期}$$
+ADC 一次完整转换包括：**采样时间 + 量化编码时间**。
 
-- 例如：当ADCCLK=14MHz，采样时间为1.5个ADC周期
-  - $$T_{\text{CONV}} = t_{\text{采样}} + 12.5\,\text{ADC周期} = 1.5 + 12.5 = 14\,\text{ADC周期} = 1\,\mu\text{s}$$
+- 采样、保持、量化、编码中，**可配置的是采样时间**；12.5 个 ADC 周期为固定量化编码阶段（12 位分辨率）。
+
+公式：
+
+$$T_{\text{CONV}} = t_{\text{采样时间}} + 12.5\,\text{ADC周期}$$
+
+### 例 1：手册常用（ADCCLK = 14 MHz，采样 1.5 周期）
+
+$$T_{\text{CONV}} = (1.5 + 12.5) / 14\,\text{MHz} = 1\,\mu\text{s}$$
+
+### 例 2：江协代码（ADCCLK = 12 MHz，采样 55.5 周期）
+
+使用 `ADC_SampleTime_55Cycles5`：
+
+$$T_{\text{CONV}} = (55.5 + 12.5) / 12\,\text{MHz} \approx 5.67\,\mu\text{s}$$
+
+采样时间越长，对**高阻抗信号源**（如传感器分压）越有利，但转换速率下降。信号源阻抗大或需要更稳定读数时，可加大采样时间；高速采集则选较短采样时间并注意前端驱动。
+
+### 常用采样时间常量
+
+| 宏 | 采样周期数 |
+|----|-----------|
+| `ADC_SampleTime_1Cycles5` | 1.5 |
+| `ADC_SampleTime_7Cycles5` | 7.5 |
+| `ADC_SampleTime_13Cycles5` | 13.5 |
+| `ADC_SampleTime_28Cycles5` | 28.5 |
+| `ADC_SampleTime_41Cycles5` | 41.5 |
+| `ADC_SampleTime_55Cycles5` | 55.5 |
+| `ADC_SampleTime_71Cycles5` | 71.5 |
+| `ADC_SampleTime_239Cycles5` | 239.5 |
+
+---
 
 ## 校准
-- ADC有一个内置自校准模式。校准可大幅减小因内部电容器组的变化而造成的准精度误差。校准期间，在每个电容器上都会计算出一个误差修正码(数字值)，这个码用于消除在随后的转换中每个电容器上产生的误差
 
-- 建议在每次上电后执行一次校准
+- STM32 ADC 内置 **自校准**，补偿内部电容阵列误差，**提高精度**。
+- **建议每次上电后执行一次**（使能 ADC 之后、正式采样之前）。
+- 启动校准前，ADC 应处于关电状态至少 **2 个 ADC 时钟周期**（标准库流程已处理）。
 
-- 启动校准前， ADC必须处于关电状态超过至少两个ADC时钟周
+固定流程（江协代码同款）：
 
+```c
+ADC_ResetCalibration(ADC1);
+while (ADC_GetResetCalibrationStatus(ADC1) == SET);
+ADC_StartCalibration(ADC1);
+while (ADC_GetCalibrationStatus(ADC1) == SET);
+```
 
-## 例子
+校准期间勿启动转换；校准完成后再进行正常采样。
 
-### AD单通道
+---
+
+## 硬件连接
+
+典型单通道测电压（电位器分压）：
+
+```
+3.3V ──┬── 电位器上端
+       │
+       ├── 滑动端 ── PA0 (ADC1_IN0)
+       │
+GND ───┴── 电位器下端
+
+建议：PA0 近端对 GND 加 100nF 滤波电容（可选，减小抖动）
+```
+
+| 要点 | 说明 |
+|------|------|
+| 电压范围 | 0～3.3 V，**禁止负压、超 3.3 V** |
+| VDDA / VSSA | 与 VDD 共地，模拟电源建议加 LC/RC 滤波 |
+| 引脚模式 | **GPIO_Mode_AIN**，非浮空输入 |
+| 驱动能力 | ADC 输入阻抗高，但采样瞬间会充电，高阻信号源需加长采样时间 |
+
+---
+
+## 数字量与电压换算
+
+右对齐、12 位、VREF+ = 3.3 V 时：
+
+```
+电压(V) = ADC值 / 4095 × VREF+
+```
+
+代码中常用（与 4096 分母差异极小，教程多用 4095）：
+
+```c
+Voltage = (float)ADValue / 4095.0f * 3.3f;
+```
+
+| ADC 值 | 近似电压 |
+|--------|----------|
+| 0 | 0 V |
+| 2048 | 约 1.65 V |
+| 4095 | 约 3.3 V |
+
+**1 LSB** 约等于 `3.3 / 4096 ≈ 0.806 mV`。
+
+若需更高精度，可用内部 **VREFINT（通道 17）** 实测 VDDA 再代入公式，而非死写 3.3 V。
+
+---
+
+## 标准库初始化流程
+
+单次、非扫描、软件触发、单通道的推荐顺序：
+
+```
+1. RCC_APB2PeriphClockCmd(ADC1 + GPIOA)   /* 开时钟 */
+2. RCC_ADCCLKConfig(Div6)                 /* ADCCLK ≤ 14MHz */
+3. GPIO 模拟输入 AIN                       /* 采集引脚 */
+4. ADC_RegularChannelConfig(通道, 序列1, 采样时间)
+5. ADC_Init(独立模式, 右对齐, 单次, 非扫描, 软件触发)
+6. ADC_Cmd(ENABLE)
+7. 校准 ResetCalibration → StartCalibration
+8. 采样：SoftwareStartConv → 等 EOC → GetConversionValue
+```
+
+---
+
+## 代码示例
+
+### AD 单通道
+
+硬件：**PA0** 接模拟电压（0～3.3 V）。
 
 ```c title="AD.h"
 #ifndef __AD_H
 #define __AD_H
+
+#include "stm32f10x.h"
 
 void AD_Init(void);
 uint16_t AD_GetValue(void);
@@ -111,98 +367,98 @@ uint16_t AD_GetValue(void);
 ```
 
 ```c title="AD.c"
-#include "stm32f10x.h"                  // Device header
+#include "AD.h"
 
 /**
-  * 函    数：AD初始化
-  * 参    数：无
-  * 返 回 值：无
-  */
+ * @brief  ADC1 单通道初始化（PA0 / ADC_Channel_0）
+ */
 void AD_Init(void)
 {
-	/*开启时钟*/
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);	//开启ADC1的时钟
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);	//开启GPIOA的时钟
-	
-	/*设置ADC时钟*/
-	RCC_ADCCLKConfig(RCC_PCLK2_Div6);						//选择时钟6分频，ADCCLK = 72MHz / 6 = 12MHz
-	
-	/*GPIO初始化*/
+	/* 1. 开启 ADC1、GPIOA 时钟 */
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+
+	/* 2. ADC 时钟：72MHz/6 = 12MHz（不超过 14MHz） */
+	RCC_ADCCLKConfig(RCC_PCLK2_Div6);
+
+	/* 3. PA0 模拟输入 */
 	GPIO_InitTypeDef GPIO_InitStructure;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-	GPIO_Init(GPIOA, &GPIO_InitStructure);					//将PA0引脚初始化为模拟输入
-	
-	/*规则组通道配置*/
-	ADC_RegularChannelConfig(ADC1, ADC_Channel_0, 1, ADC_SampleTime_55Cycles5);		//规则组序列1的位置，配置为通道0
-	
-	/*ADC初始化*/
-	ADC_InitTypeDef ADC_InitStructure;						//定义结构体变量
-	ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;		//模式，选择独立模式，即单独使用ADC1
-	ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;	//数据对齐，选择右对齐
-	ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;	//外部触发，使用软件触发，不需要外部触发
-	ADC_InitStructure.ADC_ContinuousConvMode = DISABLE;		//连续转换，失能，每转换一次规则组序列后停止
-	ADC_InitStructure.ADC_ScanConvMode = DISABLE;			//扫描模式，失能，只转换规则组的序列1这一个位置
-	ADC_InitStructure.ADC_NbrOfChannel = 1;					//通道数，为1，仅在扫描模式下，才需要指定大于1的数，在非扫描模式下，只能是1
-	ADC_Init(ADC1, &ADC_InitStructure);						//将结构体变量交给ADC_Init，配置ADC1
-	
-	/*ADC使能*/
-	ADC_Cmd(ADC1, ENABLE);									//使能ADC1，ADC开始运行
-	
-	/*ADC校准*/
-	ADC_ResetCalibration(ADC1);								//固定流程，内部有电路会自动执行校准
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+	/* 4. 规则组序列 1 绑定通道 0，采样 55.5 周期 */
+	ADC_RegularChannelConfig(ADC1, ADC_Channel_0, 1, ADC_SampleTime_55Cycles5);
+
+	/* 5. ADC 模式：独立、右对齐、软件触发、单次、非扫描 */
+	ADC_InitTypeDef ADC_InitStructure;
+	ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;
+	ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;
+	ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;
+	ADC_InitStructure.ADC_ContinuousConvMode = DISABLE;
+	ADC_InitStructure.ADC_ScanConvMode = DISABLE;
+	ADC_InitStructure.ADC_NbrOfChannel = 1;
+	ADC_Init(ADC1, &ADC_InitStructure);
+
+	/* 6. 使能 ADC */
+	ADC_Cmd(ADC1, ENABLE);
+
+	/* 7. 上电校准（固定流程） */
+	ADC_ResetCalibration(ADC1);
 	while (ADC_GetResetCalibrationStatus(ADC1) == SET);
 	ADC_StartCalibration(ADC1);
 	while (ADC_GetCalibrationStatus(ADC1) == SET);
 }
 
 /**
-  * 函    数：获取AD转换的值
-  * 参    数：无
-  * 返 回 值：AD转换的值，范围：0~4095
-  */
+ * @brief  软件触发一次转换，返回 0～4095
+ */
 uint16_t AD_GetValue(void)
 {
-	ADC_SoftwareStartConvCmd(ADC1, ENABLE);					//软件触发AD转换一次
-	while (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET);	//等待EOC标志位，即等待AD转换结束
-	return ADC_GetConversionValue(ADC1);					//读数据寄存器，得到AD转换的结果
+	ADC_SoftwareStartConvCmd(ADC1, ENABLE);
+	while (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET);
+	return ADC_GetConversionValue(ADC1);
 }
 ```
 
 ```c title="main.c"
-#include "stm32f10x.h"                  // Device header
+#include "stm32f10x.h"
 #include "Delay.h"
 #include "AD.h"
 
-uint16_t ADValue;			//定义AD值变量
-float Voltage;				//定义电压变量
+uint16_t ADValue;
+float Voltage;
 
 int main(void)
 {
-	/*模块初始化*/
-	AD_Init();				//AD初始化
-	
-	
+	AD_Init();
+
 	while (1)
 	{
-		ADValue = AD_GetValue();					//获取AD转换的值
-		Voltage = (float)ADValue / 4095 * 3.3;		//将AD值线性变换到0~3.3的范围，表示电压
-		
-    //输出AD值和电压值
+		ADValue = AD_GetValue();
+		Voltage = (float)ADValue / 4095.0f * 3.3f;
 
-		
-		Delay_ms(100);			//延时100ms，手动增加一些转换的间隔时间
+		/* 通过 OLED / 串口输出 ADValue、Voltage */
+
+		Delay_ms(100);
 	}
 }
-
 ```
 
-### AD多通道
+---
+
+### AD 多通道（轮流转换）
+
+硬件：**PA0～PA3** 分别接四路模拟信号。
+
+思路：**不开启扫描模式**，每次转换前用 `ADC_RegularChannelConfig` **改规则组序列 1 的通道**，再软件触发。实现简单，适合通道少、速率要求不高的场景。
 
 ```c title="AD.h"
 #ifndef __AD_H
 #define __AD_H
+
+#include "stm32f10x.h"
 
 void AD_Init(void);
 uint16_t AD_GetValue(uint8_t ADC_Channel);
@@ -211,88 +467,130 @@ uint16_t AD_GetValue(uint8_t ADC_Channel);
 ```
 
 ```c title="AD.c"
-#include "stm32f10x.h"                  // Device header
+#include "AD.h"
 
-/**
-  * 函    数：AD初始化
-  * 参    数：无
-  * 返 回 值：无
-  */
 void AD_Init(void)
 {
-	/*开启时钟*/
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);	//开启ADC1的时钟
-	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);	//开启GPIOA的时钟
-	
-	/*设置ADC时钟*/
-	RCC_ADCCLKConfig(RCC_PCLK2_Div6);						//选择时钟6分频，ADCCLK = 72MHz / 6 = 12MHz
-	
-	/*GPIO初始化*/
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+
+	RCC_ADCCLKConfig(RCC_PCLK2_Div6);
+
 	GPIO_InitTypeDef GPIO_InitStructure;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
 	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0 | GPIO_Pin_1 | GPIO_Pin_2 | GPIO_Pin_3;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-	GPIO_Init(GPIOA, &GPIO_InitStructure);					//将PA0、PA1、PA2和PA3引脚初始化为模拟输入
-	
-	/*不在此处配置规则组序列，而是在每次AD转换前配置，这样可以灵活更改AD转换的通道*/
-	
-	/*ADC初始化*/
-	ADC_InitTypeDef ADC_InitStructure;						//定义结构体变量
-	ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;		//模式，选择独立模式，即单独使用ADC1
-	ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;	//数据对齐，选择右对齐
-	ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;	//外部触发，使用软件触发，不需要外部触发
-	ADC_InitStructure.ADC_ContinuousConvMode = DISABLE;		//连续转换，失能，每转换一次规则组序列后停止
-	ADC_InitStructure.ADC_ScanConvMode = DISABLE;			//扫描模式，失能，只转换规则组的序列1这一个位置
-	ADC_InitStructure.ADC_NbrOfChannel = 1;					//通道数，为1，仅在扫描模式下，才需要指定大于1的数，在非扫描模式下，只能是1
-	ADC_Init(ADC1, &ADC_InitStructure);						//将结构体变量交给ADC_Init，配置ADC1
-	
-	/*ADC使能*/
-	ADC_Cmd(ADC1, ENABLE);									//使能ADC1，ADC开始运行
-	
-	/*ADC校准*/
-	ADC_ResetCalibration(ADC1);								//固定流程，内部有电路会自动执行校准
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+	/* 通道在 AD_GetValue 里按次配置，此处不写 RegularChannelConfig */
+
+	ADC_InitTypeDef ADC_InitStructure;
+	ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;
+	ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;
+	ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;
+	ADC_InitStructure.ADC_ContinuousConvMode = DISABLE;
+	ADC_InitStructure.ADC_ScanConvMode = DISABLE;
+	ADC_InitStructure.ADC_NbrOfChannel = 1;
+	ADC_Init(ADC1, &ADC_InitStructure);
+
+	ADC_Cmd(ADC1, ENABLE);
+
+	ADC_ResetCalibration(ADC1);
 	while (ADC_GetResetCalibrationStatus(ADC1) == SET);
 	ADC_StartCalibration(ADC1);
 	while (ADC_GetCalibrationStatus(ADC1) == SET);
 }
 
 /**
-  * 函    数：获取AD转换的值
-  * 参    数：ADC_Channel 指定AD转换的通道，范围：ADC_Channel_x，其中x可以是0/1/2/3
-  * 返 回 值：AD转换的值，范围：0~4095
-  */
+ * @param ADC_Channel  ADC_Channel_0～3 对应 PA0～PA3
+ */
 uint16_t AD_GetValue(uint8_t ADC_Channel)
 {
-	ADC_RegularChannelConfig(ADC1, ADC_Channel, 1, ADC_SampleTime_55Cycles5);	//在每次转换前，根据函数形参灵活更改规则组的通道1
-	ADC_SoftwareStartConvCmd(ADC1, ENABLE);					//软件触发AD转换一次
-	while (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET);	//等待EOC标志位，即等待AD转换结束
-	return ADC_GetConversionValue(ADC1);					//读数据寄存器，得到AD转换的结果
+	ADC_RegularChannelConfig(ADC1, ADC_Channel, 1, ADC_SampleTime_55Cycles5);
+	ADC_SoftwareStartConvCmd(ADC1, ENABLE);
+	while (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET);
+	return ADC_GetConversionValue(ADC1);
 }
 ```
 
 ```c title="main.c"
-#include "stm32f10x.h"                  // Device header
+#include "stm32f10x.h"
 #include "Delay.h"
 #include "AD.h"
 
-uint16_t AD0, AD1, AD2, AD3;	//定义AD值变量
+uint16_t AD0, AD1, AD2, AD3;
 
 int main(void)
 {
-	/*模块初始化*/
-	AD_Init();					//AD初始化
-	
+	AD_Init();
+
 	while (1)
 	{
-		AD0 = AD_GetValue(ADC_Channel_0);		//单次启动ADC，转换通道0
-		AD1 = AD_GetValue(ADC_Channel_1);		//单次启动ADC，转换通道1
-		AD2 = AD_GetValue(ADC_Channel_2);		//单次启动ADC，转换通道2
-		AD3 = AD_GetValue(ADC_Channel_3);		//单次启动ADC，转换通道3
-		
-		// 输出AD值和电压值
-		
-		Delay_ms(100);			//延时100ms，手动增加一些转换的间隔时间
+		AD0 = AD_GetValue(ADC_Channel_0);
+		AD1 = AD_GetValue(ADC_Channel_1);
+		AD2 = AD_GetValue(ADC_Channel_2);
+		AD3 = AD_GetValue(ADC_Channel_3);
+
+		/* 换算电压或送显示 */
+
+		Delay_ms(100);
 	}
 }
-
 ```
+
+---
+
+## 多通道采集方式对比
+
+| 方式 | 扫描模式 | DMA | 优点 | 缺点 |
+|------|----------|-----|------|------|
+| **轮流单次**（上文多通道） | 关 | 否 | 代码简单、易理解 | 通道多时速率慢 |
+| **单次扫描 + 轮询** | 开 | 否 | 一次触发采完 N 路 | 需循环读 EOC/DR |
+| **连续扫描 + DMA** | 开 | 是 | CPU 占用低、速率高 | 配置复杂，见 [DMA](./dma) |
+
+---
+
+## 进阶话题
+
+### 连续转换 + DMA
+
+使能连续 + 扫描，TIM 或软件触发后，DMA 将 `ADC1->DR` 自动写入 `uint16_t buf[N]`，适合音频、波形采集。需配置 DMA 外设到存储器、半字宽度、循环模式。
+
+### 内部温度传感器（通道 16）
+
+需使能温度传感器与内部通道，采样时间宜长（如 239.5 周期），并按参考手册公式将 ADC 值换算为摄氏度（与 VDDA、校准参数有关）。
+
+### 模拟看门狗
+
+设置高低阈值；电压超出范围时产生 **AWD 中断**，可用于电池欠压报警。
+
+### 双 ADC 同步
+
+ADC1 + ADC2 同步模式用于提高采样率或交替采样，属进阶内容。
+
+---
+
+## 注意事项
+
+1. **ADCCLK 不得超过 14 MHz**，否则结果不可靠。
+2. **采集引脚必须为模拟输入**，不能与数字输出混用同一脚。
+3. **上电后做校准**，正式采样前完成。
+4. **VDDA 与 VDD 共地**，模拟电源质量影响精度。
+5. **输入电压 0～VREF+**，超范围可能损坏芯片或读数饱和。
+6. **轮询 EOC** 会阻塞 CPU；高速或多通道优先考虑 **DMA**。
+7. 读数抖动时：加长采样时间、硬件滤波电容、软件**多次平均**。
+8. 使用 **4095 还是 4096** 作分母：全量程时 4095 对应 VREF+，与 ST 应用笔记一致；差异约 1 LSB 内。
+
+---
+
+## 总结
+
+| 要点 | 说明 |
+|------|------|
+| 分辨率 | 12 位 → 0～4095 |
+| 引脚 | 模拟输入 AIN，查表对应 ADC_Channel_x |
+| 时钟 | PCLK2 分频，ADCCLK ≤ 14 MHz |
+| 模式 | 入门：单次 + 非扫描 + 软件触发 |
+| 流程 | 初始化 → 校准 → 触发 → 等 EOC → 读 DR |
+| 电压 | `V = ADC / 4095 × 3.3` |
+| 多通道 | 轮流改通道（简单）或扫描 + DMA（高效） |
