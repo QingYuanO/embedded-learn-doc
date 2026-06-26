@@ -1,0 +1,231 @@
+---
+title: AFIO 与端口复用
+description: RCC_APB2Periph_AFIO 含义、端口复用与引脚重映射、EXTI 引脚选择
+---
+
+> 整理自学习过程中的常见疑问，面向 **STM32F10x + 标准库** 入门。  
+> 涉及 **AFIO 时钟、端口复用、引脚重映射** 与 **EXTI 引脚选择**。
+
+
+## 问题一：`RCC_APB2Periph_AFIO` 是什么意思？
+
+### 简短回答
+
+这是标准库里 **给 AFIO 外设打开 APB2 时钟** 的宏。调用：
+
+```c
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+```
+
+后，AFIO 模块的寄存器才能被正常读写。
+
+---
+
+### 拆开理解
+
+| 部分 | 含义 |
+|------|------|
+| **RCC** | Reset and Clock Control，复位与时钟控制 |
+| **APB2** | 高速外设总线（GPIO、AFIO、USART1、SPI1、TIM1 等） |
+| **Periph_AFIO** | 要开时钟的外设是 **AFIO** |
+| **整体** | 打开 AFIO 模块的工作时钟 |
+
+标准库定义：
+
+```c
+#define RCC_APB2Periph_AFIO  ((uint32_t)0x00000001)  /* AFIO 时钟 */
+```
+
+AFIO 在 APB2 上通常是 **bit0**，所以常和 GPIO 时钟一起开：
+
+```c
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_AFIO, ENABLE);
+```
+
+---
+
+### 为什么要开这个时钟？
+
+STM32 规则：**外设寄存器在被访问前，必须先开对应时钟**。  
+不开 AFIO 时钟就调用 `GPIO_PinRemapConfig()`、`GPIO_EXTILineConfig()`，配置可能 **无效** 或行为异常。
+
+---
+
+### AFIO 模块干什么？
+
+**AFIO**（Alternate Function I/O，复用 I/O）是「引脚路由管理员」，主要负责：
+
+| 功能 | 说明 | 典型 API |
+|------|------|----------|
+| **引脚重映射** | 把 USART/TIM/SPI 等改到 **另一组物理引脚** | `GPIO_PinRemapConfig()` |
+| **EXTI 引脚选择** | 决定 EXTI0～EXTI15 连 **哪个端口的哪根 pin** | `GPIO_EXTILineConfig()` |
+
+AFIO **不是** USART/SPI 本身，而是管理 **引脚与 EXTI 线的连接关系**。
+
+---
+
+## 问题二：端口复用是什么意思？
+
+### 简短回答
+
+**端口复用** 指：引脚不再当普通 GPIO 由程序直接读写，而是 **接到片上外设**（USART、SPI、TIM、I2C 等），由外设控制引脚电平。
+
+---
+
+### 一根引脚，多种用途
+
+```
+        ┌─────────────┐
+PA9 ────┤  输入缓冲   ├──→ 读 GPIO（普通输入）
+        │             │
+        │  输出驱动   ├──→ 写 GPIO（普通输出）
+        │             │
+        │  复用开关   ├──→ USART1_TX / TIM1_CH2 / ...
+        └─────────────┘
+```
+
+GPIO 八种模式里，与复用相关的两种：
+
+| 模式 | 谁控制引脚 |
+|------|------------|
+| **复用推挽输出** `GPIO_Mode_AF_PP` | 外设（如 TIM、SPI） |
+| **复用开漏输出** `GPIO_Mode_AF_OD` | 外设（如 I2C） |
+
+普通输出 `GPIO_Mode_Out_PP` 由 **你的代码** `GPIO_SetBits` 控制；复用输出由 **外设硬件** 控制。
+
+---
+
+### 「复用」和「重映射」的区别
+
+| 概念 | 含义 | 例子 |
+|------|------|------|
+| **复用（Alternate Function）** | 引脚 **交给外设用**，不再当普通 IO | PA9 配 `AF_PP`，当 USART1_TX |
+| **重映射（Remap）** | 外设信号 **从默认 pin 改到备用 pin** | USART1 默认 PA9/PA10，可改到 PB6/PB7 |
+
+典型配置顺序：
+
+```
+开外设时钟 → （可选）AFIO 重映射 → GPIO 配成复用模式 → 外设 Init
+```
+
+---
+
+## 问题三：引脚重映射怎么用？
+
+### 示例：USART1 改到 PB6/PB7
+
+F103 上 USART1 **默认** 在 PA9（TX）、PA10（RX）。若 PA9 已被占用，可重映射：
+
+```c
+/* 1. 开时钟：GPIO + AFIO + USART1 */
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB | RCC_APB2Periph_AFIO, ENABLE);
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
+
+/* 2. AFIO：把 USART1 映射到 PB6/PB7 */
+GPIO_PinRemapConfig(GPIO_Remap_USART1, ENABLE);
+
+/* 3. GPIO：复用推挽，由 USART 控制 */
+GPIO_InitTypeDef init;
+init.GPIO_Pin   = GPIO_Pin_6 | GPIO_Pin_7;
+init.GPIO_Mode  = GPIO_Mode_AF_PP;
+init.GPIO_Speed = GPIO_Speed_50MHz;
+GPIO_Init(GPIOB, &init);
+
+/* 4. USART_Init(...) */
+```
+
+**不开 `RCC_APB2Periph_AFIO`**，第 2 步写不进 AFIO 寄存器，引脚仍走默认映射。
+
+TIM 也类似：TIM3 通道默认在 PA6/PA7/PA8，部分重映射可改到 PB4/PB5/PB0 等，详见 [TIM 引脚重映射](../jxkj-stm32/tim/timer-guide)。
+
+---
+
+### `GPIO_PinRemapConfig` 说明
+
+```c
+void GPIO_PinRemapConfig(uint32_t GPIO_Remap, FunctionalState NewState);
+```
+
+- **ENABLE**：启用备用引脚映射  
+- **DISABLE**：恢复默认引脚  
+- 部分重映射 **互斥**，需查参考手册 *Alternate function remapping* 表  
+
+---
+
+## 问题四：EXTI 为什么也要 AFIO？
+
+外部中断线 EXTI0～EXTI15 与 **端口 + 引脚号** 的对应由 AFIO 选择。
+
+例如 EXTI0 可以是 PA0、PB0、PC0… **同一时刻只能选一个**：
+
+```c
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB | RCC_APB2Periph_AFIO, ENABLE);
+
+GPIO_InitTypeDef GPIO_InitStructure;
+GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_IPU;
+GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_0;
+GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource0);  /* EXTI0 ← PB0 */
+
+EXTI_Init(...);
+NVIC_Init(...);
+```
+
+这就是为什么配置 [外部中断](../jxkj-stm32/exti) 时必须开 AFIO 时钟。
+
+---
+
+## 问题五：什么时候必须开 AFIO 时钟？
+
+| 场景 | 是否需要 AFIO 时钟 |
+|------|-------------------|
+| 普通 LED、按键（纯 GPIO 输入/输出） | **不需要** |
+| `GPIO_PinRemapConfig()` 引脚重映射 | **必须** |
+| `GPIO_EXTILineConfig()` 外部中断 | **必须** |
+| SWJ 调试口重映射（释放 PA15/PB3/PB4） | **必须** |
+| USART/SPI 用默认引脚、只配复用模式 | F103 上 EXTI 无关时可不开；**建议习惯上与 GPIO 一起开** |
+
+---
+
+## 整体关系（简化框图）
+
+```
+                    RCC_APB2PeriphClockCmd
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+           GPIOA           AFIO            USART1
+         (引脚模式)    (重映射/EXTI选择)   (发收数据)
+              │               │
+              └───────┬───────┘
+                      ▼
+              物理引脚 PA9 / PB6 ...
+```
+
+- **GPIO**：配置输入/输出/复用模式  
+- **AFIO**：决定「外设连哪组 pin、EXTI 连哪个口」  
+- **USART/TIM/SPI**：外设本身的工作配置  
+
+---
+
+## 常见错误
+
+| 现象 | 常见原因 |
+|------|----------|
+| 重映射后 USART 仍无波形 | 未开 AFIO 时钟，或 GPIO 仍是 `Out_PP` 而非 `AF_PP` |
+| 外部中断不触发 | 未 `GPIO_EXTILineConfig`，或 AFIO 时钟未开 |
+| TIM PWM 引脚无输出 | 未配 `GPIO_Mode_AF_PP`，或未开 TIM 时钟 |
+| 重映射与默认映射混用 | 重映射后仍按 **旧引脚** 接线或初始化 |
+
+---
+
+## 小结
+
+| 名词 | 一句话 |
+|------|--------|
+| **`RCC_APB2Periph_AFIO`** | 给 **AFIO 模块开 APB2 时钟**，重映射 / EXTI 引脚选择前必开 |
+| **端口复用** | 引脚接 **片上外设**，GPIO 模式选 `AF_PP` / `AF_OD` |
+| **AFIO 重映射** | 外设信号从 **默认 pin 改到备用 pin**，用 `GPIO_PinRemapConfig()` |
+| **EXTI 引脚选择** | 指定 EXTI 线连哪个端口的哪个 pin，用 `GPIO_EXTILineConfig()` |

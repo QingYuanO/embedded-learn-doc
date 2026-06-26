@@ -15,7 +15,10 @@
     "rtc",
     "pwr",
     "wdg",
-    "flash"
+    "flash",
+    "afio-remap",
+    "gpio-af",
+    "faq-pointer-memory"
   ],
   "defaultOpen": true,
   "root": true

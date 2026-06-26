@@ -1,0 +1,243 @@
+---
+title: GPIO 复用功能对照表
+description: STM32F103 各引脚默认复用、AFIO 重映射关系与封装差异说明
+---
+
+> 面向 **STM32F103** + 标准库。F103 **没有** F4 那种 AF0～AF15 寄存器选通，而是 **默认引脚固定 + AFIO 重映射** 切换备用引脚。  
+> 以 **LQFP48（F103C8T6）** 为主；标注 **64pin+** 表示更大封装才有该脚。
+
+
+## 一、怎么用这张表
+
+1. **查默认**：先找外设默认引脚（如 USART1 → PA9/PA10）。  
+2. **要改脚**：开 `RCC_APB2Periph_AFIO` → `GPIO_PinRemapConfig()` → GPIO 配 **复用模式** `AF_PP` / `AF_OD`。  
+3. **同一引脚** 同一时刻只能给一个外设用（如 PA0 不能同时 TIM2_CH1 和 TIM5_CH1）。  
+4. **TIM 重映射** 详见 [TIM 引脚重映射](../jxkj-stm32/tim/timer-guide)。
+
+| 符号 | 含义 |
+|------|------|
+| **默认** | 不调用 Remap 时的映射 |
+| **Remap** | 调用 `GPIO_PinRemapConfig(xxx, ENABLE)` 后的映射 |
+| **—** | 该封装无此引脚，或该功能不可用 |
+
+
+## 二、AFIO 重映射总表（标准库宏）
+
+| 标准库宏 | 影响外设 | 默认引脚 | 重映射后引脚 |
+|----------|----------|----------|--------------|
+| `GPIO_Remap_SPI1` | SPI1 | PA4 NSS, PA5 SCK, PA6 MISO, PA7 MOSI | PB3 SCK, PB4 MISO, PB5 MOSI（NSS 仍常用软件 CS） |
+| `GPIO_Remap_I2C1` | I2C1 | PB6 SCL, PB7 SDA | PB8 SCL, PB9 SDA |
+| `GPIO_Remap_USART1` | USART1 | PA9 TX, PA10 RX | PB6 TX, PB7 RX |
+| `GPIO_Remap_USART2` | USART2 | PA2 TX, PA3 RX | PD5 TX, PD6 RX（**64pin+**） |
+| `GPIO_PartialRemap_USART3` | USART3 | PB10 TX, PB11 RX, PB12 CK, PB13 CTS, PB14 RTS | PC10 TX, PC11 RX, PC12 CK, PD11 CTS, PD12 RTS（部分脚 **64pin+**） |
+| `GPIO_FullRemap_USART3` | USART3 | 同上默认 | PD8 TX, PD9 RX, PD10 CK, PD11 CTS, PD12 RTS（**64pin+**） |
+| `GPIO_PartialRemap_TIM1` | TIM1 | 见 TIM 表 | CH1N→PA7, CH2N→PB0, CH3N→PB1, BKIN→PA6 |
+| `GPIO_PartialRemap1_TIM2` | TIM2 | PA0～PA3 | CH1→PA15, CH2→PB3, CH3/4 不变 |
+| `GPIO_PartialRemap2_TIM2` | TIM2 | PA0～PA3 | CH3→PB10, CH4→PB11 |
+| `GPIO_FullRemap_TIM2` | TIM2 | PA0～PA3 | CH1→PA15, CH2→PB3, CH3→PB10, CH4→PB11 |
+| `GPIO_PartialRemap_TIM3` | TIM3 | PA6/7, PB0/1 | CH1→PB4, CH2→PB5, CH3/4 仍为 PB0/1 |
+| `GPIO_FullRemap_TIM3` | TIM3 | PA6/7, PB0/1 | CH1～4 → PC6～PC9（**64pin+**） |
+| `GPIO_Remap_TIM4` | TIM4 | PB6～PB9 | PD12～PD15（**64pin+**） |
+| `GPIO_Remap_CAN1` | CAN | PA11 RX, PA12 TX | PB8 RX, PB9 TX |
+| `GPIO_Remap_PD01` | OSC | PD0/PD1 作 GPIO | 释放 PD0/PD1 为普通 IO（**64pin+**，失去外部晶振脚） |
+| `GPIO_Remap_SWJ_NoJTRST` | 调试 | PB4 为 NJTRST | 释放 PB4 作 GPIO（保留 SWD） |
+| `GPIO_Remap_SWJ_JTAGDisable` | 调试 | PA15/PB3/PB4 为 JTAG | 释放三脚作 GPIO（保留 SWD：PA13/14） |
+| `GPIO_Remap_SWJ_Disable` | 调试 | 关闭 JTAG+SWD | 释放 PA13/14/15、PB3/4（**无法再调试**） |
+| `GPIO_Remap_SPI3` | SPI3 | — | 与 SPI1 Remap 共用 PB3/4/5（**高密度**） |
+| `GPIO_Remap_TIM5CH4_LSI` | TIM5 | — | CH4 与 LSI 内部相连（特殊用途） |
+
+> **互斥**：同一组 Remap 宏不能乱叠；TIM2 三种 Remap 三选一。以参考手册 *Alternate function remapping* 为准。
+
+
+## 三、按端口：默认复用功能
+
+### 3.1 GPIOA
+
+| 引脚 | 主要复用功能 | 备注 |
+|------|--------------|------|
+| **PA0** | WKUP, **ADC1_IN0**, **TIM2_CH1**, TIM5_CH1, USART2_CTS | TIM2/TIM5 冲突，二选一 |
+| **PA1** | **ADC1_IN1**, **TIM2_CH2**, TIM5_CH2, USART2_RTS | |
+| **PA2** | **ADC1_IN2**, **TIM2_CH3**, TIM5_CH3, **USART2_TX** | USART2 默认 TX |
+| **PA3** | **ADC1_IN3**, **TIM2_CH4**, TIM5_CH4, **USART2_RX** | USART2 默认 RX |
+| **PA4** | **ADC1_IN4**, **SPI1_NSS**, USART2_CK, DAC_OUT1 | SPI1 默认 NSS |
+| **PA5** | **ADC1_IN5**, **SPI1_SCK** | |
+| **PA6** | **ADC1_IN6**, **SPI1_MISO**, **TIM3_CH1**, TIM8_BKIN | TIM8 仅高密度 |
+| **PA7** | **ADC1_IN7**, **SPI1_MOSI**, **TIM3_CH2**, TIM1_CH1N, TIM8_CH1N | |
+| **PA8** | **MCO**, **TIM1_CH1**, USART1_CK | 可输出系统时钟 |
+| **PA9** | **TIM1_CH2**, **USART1_TX** | USART1 默认 TX |
+| **PA10** | **TIM1_CH3**, **USART1_RX** | USART1 默认 RX |
+| **PA11** | **TIM1_CH4**, USART1_CTS, **CAN_RX**, USBDM | CAN 默认 RX |
+| **PA12** | **TIM1_ETR**, USART1_RTS, **CAN_TX**, USBDP | CAN 默认 TX |
+| **PA13** | **JTMS-SWDIO** | 调试口，慎改 |
+| **PA14** | **JTCK-SWCLK** | 调试口，慎改 |
+| **PA15** | **JTDI**, SPI1_NSS, SPI3_NSS, TIM2_CH1 | JTAG；Remap 后 TIM2_CH1 |
+
+### 3.2 GPIOB
+
+| 引脚 | 主要复用功能 | 备注 |
+|------|--------------|------|
+| **PB0** | **ADC1_IN8**, **TIM3_CH3**, TIM1_CH2N, TIM8_CH2N | |
+| **PB1** | **ADC1_IN9**, **TIM3_CH4**, TIM1_CH3N, TIM8_CH3N | |
+| **PB2** | BOOT1 | 启动配置，通常不作复用 |
+| **PB3** | **JTDO**, SPI1_SCK(Remap), SPI3_SCK, TIM2_CH2(Remap1) | JTAG |
+| **PB4** | **NJTRST**, SPI1_MISO(Remap), TIM3_CH1(Remap) | JTAG |
+| **PB5** | SPI1_MOSI(Remap), TIM3_CH2(Remap), I2C1_SMBA | |
+| **PB6** | **I2C1_SCL**, **TIM4_CH1**, USART1_TX(Remap) | I2C1 默认 SCL |
+| **PB7** | **I2C1_SDA**, **TIM4_CH2**, USART1_RX(Remap) | I2C1 默认 SDA |
+| **PB8** | **TIM4_CH3**, CAN_RX(Remap), I2C1_SCL(Remap) | |
+| **PB9** | **TIM4_CH4**, CAN_TX(Remap), I2C1_SDA(Remap) | |
+| **PB10** | **I2C2_SCL**, **USART3_TX**, TIM2_CH3(Remap2) | USART3 默认 TX |
+| **PB11** | **I2C2_SDA**, **USART3_RX**, TIM2_CH4(Remap2) | USART3 默认 RX |
+| **PB12** | **SPI2_NSS**, **I2C2_SMBA**, USART3_CK | |
+| **PB13** | **SPI2_SCK**, **TIM1_CH1N**, USART3_CTS | TIM1 互补输出 |
+| **PB14** | **SPI2_MISO**, **TIM1_CH2N**, USART3_RTS | |
+| **PB15** | **SPI2_MOSI**, **TIM1_CH3N** | |
+
+### 3.3 GPIOC（LQFP48 通常仅有 PC13～PC15）
+
+| 引脚 | 主要复用功能 | 备注 |
+|------|--------------|------|
+| **PC13** | TAMPER-RTC, RTC 闹钟输出 | 板载 LED 常见脚 |
+| **PC14** | OSC32_IN | 32.768 kHz 晶振 |
+| **PC15** | OSC32_OUT | 32.768 kHz 晶振 |
+| **PC6** | **TIM3_CH1(Full Remap)**, TIM8_CH1 | **64pin+** |
+| **PC7** | **TIM3_CH2(Full Remap)**, TIM8_CH2 | **64pin+** |
+| **PC8** | **TIM3_CH3(Full Remap)**, TIM8_CH3 | **64pin+** |
+| **PC9** | **TIM3_CH4(Full Remap)**, TIM8_CH4 | **64pin+** |
+| **PC10** | **UART4_TX**, USART3_TX(Partial Remap) | **64pin+** |
+| **PC11** | **UART4_RX**, USART3_RX(Partial Remap) | **64pin+** |
+| **PC12** | **UART5_TX**, USART3_CK(Partial Remap) | **64pin+** |
+
+### 3.4 GPIOD（LQFP48 通常仅有 PD0～PD1）
+
+| 引脚 | 主要复用功能 | 备注 |
+|------|--------------|------|
+| **PD0** | OSC_IN | 8 MHz 主晶振；Remap 后可作 GPIO |
+| **PD1** | OSC_OUT | 8 MHz 主晶振 |
+| **PD2** | **TIM3_ETR**, UART5_RX | **64pin+** |
+| **PD3** | FSMC_CLK | **64pin+ 高密度** |
+| **PD5** | **USART2_TX(Remap)** | **64pin+** |
+| **PD6** | **USART2_RX(Remap)** | **64pin+** |
+| **PD8～PD12** | **USART3(Full Remap)** | **64pin+** |
+| **PD12～PD15** | **TIM4(Remap)** | **64pin+** |
+
+### 3.5 GPIOE / GPIOF / GPIOG
+
+LQFP48 **无** 这些端口。100pin 及以上高密度才有 **PE、PF、PG** 及 FSMC、ETH 等大量 Remap，请查对应型号参考手册 *Alternate function I/O* 表。
+
+
+## 四、按外设：默认引脚速查
+
+### 4.1 USART
+
+| 外设 | TX | RX | CK | CTS | RTS | 重映射 |
+|------|----|----|----|----|-----|--------|
+| **USART1** | PA9 | PA10 | PA8 | PA11 | PA12 | TX/RX → PB6/PB7 |
+| **USART2** | PA2 | PA3 | PA4 | PA0 | PA1 | TX/RX → PD5/PD6 |
+| **USART3** | PB10 | PB11 | PB12 | PB13 | PB14 | Partial → PC10～PC12 等；Full → PD8～PD12 |
+
+### 4.2 SPI
+
+| 外设 | NSS | SCK | MISO | MOSI | 重映射 |
+|------|-----|-----|------|------|--------|
+| **SPI1** | PA4 | PA5 | PA6 | PA7 | SCK/MISO/MOSI → PB3/PB4/PB5 |
+| **SPI2** | PB12 | PB13 | PB14 | PB15 | 无 Remap |
+
+### 4.3 I2C
+
+| 外设 | SCL | SDA | 重映射 |
+|------|-----|-----|--------|
+| **I2C1** | PB6 | PB7 | → PB8/PB9 |
+| **I2C2** | PB10 | PB11 | 无 Remap |
+
+### 4.4 CAN
+
+| 信号 | 默认 | Remap |
+|------|------|-------|
+| **CAN_RX** | PA11 | PB8 |
+| **CAN_TX** | PA12 | PB9 |
+
+### 4.5 ADC（模拟输入，非数字复用）
+
+| 通道 | 默认引脚 |
+|------|----------|
+| ADC1_IN0～IN3 | PA0～PA3 |
+| ADC1_IN4～IN7 | PA4～PA7 |
+| ADC1_IN8～IN9 | PB0～PB1 |
+| ADC1_IN10～IN15 | PC0～PC5（**64pin+**） |
+| 内部 | 温度传感器、VREFINT |
+
+配置为 **`GPIO_Mode_AIN`**，不走 AF_PP。
+
+### 4.6 TIM（摘要）
+
+| 定时器 | 默认 CH 引脚 | 重映射要点 |
+|--------|--------------|------------|
+| **TIM1** | PA8～11, 互补 PB13～15, BKIN PB12 | Partial：互补改 PA7/PB0/PB1，BKIN→PA6 |
+| **TIM2** | PA0～PA3 | 三种 Remap，ETR 固定 PA0 |
+| **TIM3** | PA6/7, PB0/1 | Partial→PB4/5；Full→PC6～9 |
+| **TIM4** | PB6～PB9 | → PD12～15 |
+| **TIM5** | PA0～PA3 | 无 Remap，与 TIM2 冲突 |
+
+完整 TIM 引脚表见 [TIM 定时器详解 · 引脚对照](../jxkj-stm32/tim/timer-guide#142-tim1高级定时器)。
+
+
+## 五、F103C8（LQFP48）实用引脚一览
+
+48 脚封装 **实际可用 GPIO** 约 37 个，规划外设时注意：
+
+| 引脚 | 常见用途 | 冲突提醒 |
+|------|----------|----------|
+| PA0～PA3 | TIM2 / TIM5 / USART2 / ADC | TIM2 与 TIM5 不能同时用 |
+| PA4～PA7 | SPI1 / TIM3 / ADC | 最小系统 SPI Flash 常用 |
+| PA9/10 | USART1 |  USB 串口模块默认 TX/RX |
+| PA13/14 | SWD 调试 | 勿当普通 IO（除非关 SWD） |
+| PB6/7 | I2C1 / TIM4 | MPU6050、OLED 常用 |
+| PB10/11 | I2C2 / USART3 | |
+| PB12～15 | SPI2 / TIM1 互补 | |
+| PC13 | LED / 按键 | 接 32 kHz 晶振时慎用 PC14/15 |
+| PD0/1 | 8 MHz 晶振 | 无外部晶振时可 Remap 作 GPIO |
+
+**无 USB 引脚功能** 的型号（如 F103C8）：PA11/12 的 USBDM/USBDP **不可用**，可当 CAN 或 GPIO。
+
+
+## 六、配置示例：USART1 重映射到 PB6/PB7
+
+```c
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB | RCC_APB2Periph_AFIO, ENABLE);
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
+
+GPIO_PinRemapConfig(GPIO_Remap_USART1, ENABLE);
+
+GPIO_InitTypeDef init;
+init.GPIO_Pin   = GPIO_Pin_6 | GPIO_Pin_7;
+init.GPIO_Mode  = GPIO_Mode_AF_PP;
+init.GPIO_Speed = GPIO_Speed_50MHz;
+GPIO_Init(GPIOB, &init);
+
+/* USART_Init(USART1, ...) */
+```
+
+
+## 七、常见冲突
+
+| 冲突组 | 涉及引脚 | 建议 |
+|--------|----------|------|
+| TIM2 vs TIM5 | PA0～PA3 | 只启用一个 |
+| TIM3 默认 vs TIM8 | PA6/7, PB0/1 | 低密度无 TIM8，可忽略 |
+| SPI1 Remap vs JTAG | PB3/4/5 | 需 `GPIO_Remap_SWJ_JTAGDisable` 释放 PB3/4 |
+| I2C1 默认 vs TIM4 | PB6/7 | 二选一或 I2C1 Remap 到 PB8/9 |
+| USART1 Remap vs I2C1 | PB6/7 | 二选一 |
+| TIM3 Full vs TIM8 | PC6～9 | 64pin+ 才存在 |
+
+---
+
+## 八、小结
+
+| 要点 | 说明 |
+|------|------|
+| F103 复用 | **默认引脚 + AFIO Remap**，不是 AF 编号选择 |
+| 必开 AFIO | Remap、EXTI 引脚选择前开 `RCC_APB2Periph_AFIO` |
+| GPIO 模式 | 外设输出用 `AF_PP`/`AF_OD`；ADC 用 `AIN` |
+| 查表顺序 | 外设默认 → 是否 Remap → 封装有无该脚 |
+| 权威来源 | STM32F10xxx 参考手册 **Alternate function I/O** 章节 |
