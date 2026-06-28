@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280" width="720" height="280" role="img">
+
+<style>
+  .stroke { fill: none; stroke: var(--ec-stroke); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .thin { stroke-width: 1.5; }
+  .divider { fill: none; stroke: var(--ec-divider); stroke-width: 2; }
+  .divider-thin { fill: none; stroke: var(--ec-divider); stroke-width: 1.5; }
+  .fill-light { fill: var(--ec-fill-neutral); stroke: var(--ec-stroke); stroke-width: 1.5; }
+  .fill-blue { fill: var(--ec-fill-blue); stroke: var(--ec-blue); stroke-width: 1.5; }
+  .fill-red { fill: var(--ec-fill-red); stroke: var(--ec-red); stroke-width: 1.5; }
+  .fill-green { fill: var(--ec-fill-green); stroke: var(--ec-green); stroke-width: 1.5; }
+  .fill-yellow { fill: var(--ec-fill-yellow); stroke: var(--ec-yellow); stroke-width: 1.5; }
+  .label { font: 14px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-text); }
+  .small { font-size: 12px; fill: var(--ec-muted); }
+  .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-title); }
+  .accent-blue { stroke: var(--ec-blue); fill: none; }
+  .accent-blue-fill { fill: var(--ec-blue); stroke: none; }
+  .accent-red { stroke: var(--ec-red); fill: none; }
+  .accent-red-fill { fill: var(--ec-red); stroke: none; }
+  .accent-green { stroke: var(--ec-green); fill: none; }
+  .accent-green-fill { fill: var(--ec-green); stroke: none; }
+  .text-blue { fill: var(--ec-blue); }
+  .text-red { fill: var(--ec-red); }
+  .seg-on { stroke: var(--ec-red); fill: none; stroke-width: 4; }
+  .seg-off { stroke: var(--ec-green); fill: none; stroke-width: 4; }
+  .symbol-fill { fill: var(--ec-stroke); stroke: none; }
+</style>
+
+
+<text class="title" x="360" y="28" text-anchor="middle">七段数码管（显示数字 3）</text>
+<polyline points="200,80 280,80 270,90 210,90" class="seg-on"/>
+<polyline points="290,95 290,145" class="seg-on"/>
+<polyline points="290,155 290,205" class="seg-off"/>
+<polyline points="200,210 280,210 270,200 210,200" class="seg-on"/>
+<polyline points="200,155 200,205" class="seg-off"/>
+<polyline points="200,95 200,145" class="seg-off"/>
+<polyline points="205,150 275,150" class="seg-on"/>
+<text class="small" x="240" y="250" text-anchor="middle">点亮 a,b,c,d,g → 显示 "3"</text>
+<text class="small" x="480" y="120">共阴：公共阴极接地</text>
+<text class="small" x="480" y="145">共阳：公共阳极接 Vcc</text>
+
+</svg>

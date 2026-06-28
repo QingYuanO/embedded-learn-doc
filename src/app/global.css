@@ -121,6 +121,47 @@
   }
 }
 
+/* 电子元器件 SVG 示意图 — 亮色 / 暗色主题变量（需 Diagram 内联渲染） */
+.ec-diagram {
+  --ec-stroke: #334155;
+  --ec-divider: #cbd5e1;
+  --ec-title: #0f172a;
+  --ec-text: #1e293b;
+  --ec-muted: #64748b;
+  --ec-blue: #2563eb;
+  --ec-red: #dc2626;
+  --ec-green: #16a34a;
+  --ec-yellow: #ca8a04;
+  --ec-fill-neutral: #f1f5f9;
+  --ec-fill-blue: #dbeafe;
+  --ec-fill-red: #fee2e2;
+  --ec-fill-green: #dcfce7;
+  --ec-fill-yellow: #fef9c3;
+}
+
+.dark .ec-diagram {
+  --ec-stroke: #94a3b8;
+  --ec-divider: #475569;
+  --ec-title: #f8fafc;
+  --ec-text: #e2e8f0;
+  --ec-muted: #94a3b8;
+  --ec-blue: #60a5fa;
+  --ec-red: #f87171;
+  --ec-green: #4ade80;
+  --ec-yellow: #facc15;
+  --ec-fill-neutral: #1e293b;
+  --ec-fill-blue: #1e3a5f;
+  --ec-fill-red: #450a0a;
+  --ec-fill-green: #14532d;
+  --ec-fill-yellow: #422006;
+}
+
+.ec-diagram .ec-diagram-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 @keyframes moveGradientLeft {
   0% {
     background-position: 0% 0%;

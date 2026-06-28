@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 220" width="720" height="220" role="img">
+
+<style>
+  .stroke { fill: none; stroke: var(--ec-stroke); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .thin { stroke-width: 1.5; }
+  .divider { fill: none; stroke: var(--ec-divider); stroke-width: 2; }
+  .divider-thin { fill: none; stroke: var(--ec-divider); stroke-width: 1.5; }
+  .fill-light { fill: var(--ec-fill-neutral); stroke: var(--ec-stroke); stroke-width: 1.5; }
+  .fill-blue { fill: var(--ec-fill-blue); stroke: var(--ec-blue); stroke-width: 1.5; }
+  .fill-red { fill: var(--ec-fill-red); stroke: var(--ec-red); stroke-width: 1.5; }
+  .fill-green { fill: var(--ec-fill-green); stroke: var(--ec-green); stroke-width: 1.5; }
+  .fill-yellow { fill: var(--ec-fill-yellow); stroke: var(--ec-yellow); stroke-width: 1.5; }
+  .label { font: 14px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-text); }
+  .small { font-size: 12px; fill: var(--ec-muted); }
+  .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-title); }
+  .accent-blue { stroke: var(--ec-blue); fill: none; }
+  .accent-blue-fill { fill: var(--ec-blue); stroke: none; }
+  .accent-red { stroke: var(--ec-red); fill: none; }
+  .accent-red-fill { fill: var(--ec-red); stroke: none; }
+  .accent-green { stroke: var(--ec-green); fill: none; }
+  .accent-green-fill { fill: var(--ec-green); stroke: none; }
+  .text-blue { fill: var(--ec-blue); }
+  .text-red { fill: var(--ec-red); }
+  .seg-on { stroke: var(--ec-red); fill: none; stroke-width: 4; }
+  .seg-off { stroke: var(--ec-green); fill: none; stroke-width: 4; }
+  .symbol-fill { fill: var(--ec-stroke); stroke: none; }
+</style>
+
+
+<text class="title" x="360" y="28" text-anchor="middle">四色环电阻读法（示例 150Ω ±5%）</text>
+<rect x="180" y="70" width="360" height="36" rx="18" fill="#d4a574" stroke="#92400e"/>
+<rect x="200" y="70" width="16" height="36" fill="#8B4513"/><rect x="240" y="70" width="16" height="36" fill="#008000"/>
+<rect x="280" y="70" width="16" height="36" fill="#1a1a1a"/><rect x="320" y="70" width="16" height="36" fill="#8B4513"/>
+<rect x="480" y="70" width="16" height="36" fill="#FFD700"/>
+<text class="small" x="208" y="130" text-anchor="middle">1</text>
+<text class="small" x="248" y="130" text-anchor="middle">5</text>
+<text class="small" x="288" y="130" text-anchor="middle">×10⁰</text>
+<text class="small" x="488" y="130" text-anchor="middle">±5%</text>
+<text class="label" x="360" y="180" text-anchor="middle">= 15 × 10⁰ = 150Ω</text>
+
+</svg>

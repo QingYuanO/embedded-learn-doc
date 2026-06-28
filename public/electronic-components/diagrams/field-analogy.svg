@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" width="720" height="300" role="img">
+
+<style>
+  .stroke { fill: none; stroke: var(--ec-stroke); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .thin { stroke-width: 1.5; }
+  .divider { fill: none; stroke: var(--ec-divider); stroke-width: 2; }
+  .divider-thin { fill: none; stroke: var(--ec-divider); stroke-width: 1.5; }
+  .fill-light { fill: var(--ec-fill-neutral); stroke: var(--ec-stroke); stroke-width: 1.5; }
+  .fill-blue { fill: var(--ec-fill-blue); stroke: var(--ec-blue); stroke-width: 1.5; }
+  .fill-red { fill: var(--ec-fill-red); stroke: var(--ec-red); stroke-width: 1.5; }
+  .fill-green { fill: var(--ec-fill-green); stroke: var(--ec-green); stroke-width: 1.5; }
+  .fill-yellow { fill: var(--ec-fill-yellow); stroke: var(--ec-yellow); stroke-width: 1.5; }
+  .label { font: 14px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-text); }
+  .small { font-size: 12px; fill: var(--ec-muted); }
+  .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-title); }
+  .accent-blue { stroke: var(--ec-blue); fill: none; }
+  .accent-blue-fill { fill: var(--ec-blue); stroke: none; }
+  .accent-red { stroke: var(--ec-red); fill: none; }
+  .accent-red-fill { fill: var(--ec-red); stroke: none; }
+  .accent-green { stroke: var(--ec-green); fill: none; }
+  .accent-green-fill { fill: var(--ec-green); stroke: none; }
+  .text-blue { fill: var(--ec-blue); }
+  .text-red { fill: var(--ec-red); }
+  .seg-on { stroke: var(--ec-red); fill: none; stroke-width: 4; }
+  .seg-off { stroke: var(--ec-green); fill: none; stroke-width: 4; }
+  .symbol-fill { fill: var(--ec-stroke); stroke: none; }
+</style>
+
+
+<text class="title" x="180" y="28" text-anchor="middle">重力场类比</text>
+<text class="title" x="540" y="28" text-anchor="middle">电场</text>
+<line x1="360" y1="40" x2="360" y2="280" class="divider-thin"/>
+<rect x="140" y="220" width="80" height="12" class="fill-light"/>
+<text class="small" x="180" y="250" text-anchor="middle">地面</text>
+<circle cx="180" cy="120" r="18" class="fill-green"/>
+<line x1="180" y1="138" x2="180" y2="220" class="accent-green" stroke-width="2" marker-end="url(#arr)"/>
+<text class="small" x="180" y="100" text-anchor="middle">质量 m</text>
+<text class="small" x="180" y="180" text-anchor="middle">重力 F=mg</text>
+<circle cx="540" cy="160" r="22" class="fill-red"/>
+<text class="small" x="540" y="165" text-anchor="middle">+</text>
+<circle cx="480" cy="220" r="10" class="fill-blue"/>
+<text class="small" x="480" y="224" text-anchor="middle">+</text>
+<line x1="490" y1="215" x2="520" y2="175" class="accent-blue" stroke-width="2"/>
+<text class="small" x="540" y="250" text-anchor="middle">试探电荷受力</text>
+<defs><marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><polygon points="0,0 8,4 0,8" class="accent-green-fill"/></marker></defs>
+
+</svg>

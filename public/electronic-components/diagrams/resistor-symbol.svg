@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 180" width="720" height="180" role="img">
+
+<style>
+  .stroke { fill: none; stroke: var(--ec-stroke); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .thin { stroke-width: 1.5; }
+  .divider { fill: none; stroke: var(--ec-divider); stroke-width: 2; }
+  .divider-thin { fill: none; stroke: var(--ec-divider); stroke-width: 1.5; }
+  .fill-light { fill: var(--ec-fill-neutral); stroke: var(--ec-stroke); stroke-width: 1.5; }
+  .fill-blue { fill: var(--ec-fill-blue); stroke: var(--ec-blue); stroke-width: 1.5; }
+  .fill-red { fill: var(--ec-fill-red); stroke: var(--ec-red); stroke-width: 1.5; }
+  .fill-green { fill: var(--ec-fill-green); stroke: var(--ec-green); stroke-width: 1.5; }
+  .fill-yellow { fill: var(--ec-fill-yellow); stroke: var(--ec-yellow); stroke-width: 1.5; }
+  .label { font: 14px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-text); }
+  .small { font-size: 12px; fill: var(--ec-muted); }
+  .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-title); }
+  .accent-blue { stroke: var(--ec-blue); fill: none; }
+  .accent-blue-fill { fill: var(--ec-blue); stroke: none; }
+  .accent-red { stroke: var(--ec-red); fill: none; }
+  .accent-red-fill { fill: var(--ec-red); stroke: none; }
+  .accent-green { stroke: var(--ec-green); fill: none; }
+  .accent-green-fill { fill: var(--ec-green); stroke: none; }
+  .text-blue { fill: var(--ec-blue); }
+  .text-red { fill: var(--ec-red); }
+  .seg-on { stroke: var(--ec-red); fill: none; stroke-width: 4; }
+  .seg-off { stroke: var(--ec-green); fill: none; stroke-width: 4; }
+  .symbol-fill { fill: var(--ec-stroke); stroke: none; }
+</style>
+
+
+<text class="title" x="360" y="28" text-anchor="middle">电阻器电路符号</text>
+<line x1="120" y1="90" x2="200" y2="90" class="stroke"/>
+<polyline points="200,90 220,70 260,110 300,70 340,110 380,70 420,110 440,90" class="stroke"/>
+<line x1="440" y1="90" x2="520" y2="90" class="stroke"/>
+<text class="label" x="320" y="140" text-anchor="middle">R — 限制电流、分压</text>
+
+</svg>

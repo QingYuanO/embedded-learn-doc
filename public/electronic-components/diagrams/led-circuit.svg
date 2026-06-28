@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 240" width="720" height="240" role="img">
+
+<style>
+  .stroke { fill: none; stroke: var(--ec-stroke); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .thin { stroke-width: 1.5; }
+  .divider { fill: none; stroke: var(--ec-divider); stroke-width: 2; }
+  .divider-thin { fill: none; stroke: var(--ec-divider); stroke-width: 1.5; }
+  .fill-light { fill: var(--ec-fill-neutral); stroke: var(--ec-stroke); stroke-width: 1.5; }
+  .fill-blue { fill: var(--ec-fill-blue); stroke: var(--ec-blue); stroke-width: 1.5; }
+  .fill-red { fill: var(--ec-fill-red); stroke: var(--ec-red); stroke-width: 1.5; }
+  .fill-green { fill: var(--ec-fill-green); stroke: var(--ec-green); stroke-width: 1.5; }
+  .fill-yellow { fill: var(--ec-fill-yellow); stroke: var(--ec-yellow); stroke-width: 1.5; }
+  .label { font: 14px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-text); }
+  .small { font-size: 12px; fill: var(--ec-muted); }
+  .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-title); }
+  .accent-blue { stroke: var(--ec-blue); fill: none; }
+  .accent-blue-fill { fill: var(--ec-blue); stroke: none; }
+  .accent-red { stroke: var(--ec-red); fill: none; }
+  .accent-red-fill { fill: var(--ec-red); stroke: none; }
+  .accent-green { stroke: var(--ec-green); fill: none; }
+  .accent-green-fill { fill: var(--ec-green); stroke: none; }
+  .text-blue { fill: var(--ec-blue); }
+  .text-red { fill: var(--ec-red); }
+  .seg-on { stroke: var(--ec-red); fill: none; stroke-width: 4; }
+  .seg-off { stroke: var(--ec-green); fill: none; stroke-width: 4; }
+  .symbol-fill { fill: var(--ec-stroke); stroke: none; }
+</style>
+
+
+<text class="title" x="360" y="28" text-anchor="middle">LED 限流电阻</text>
+<rect x="80" y="90" width="60" height="40" class="fill-yellow"/><text class="small" x="110" y="115" text-anchor="middle">Vcc</text>
+<line x1="140" y1="110" x2="200" y2="110" class="stroke"/>
+<rect x="200" y="95" width="80" height="30" class="fill-light"/><text class="small" x="240" y="115" text-anchor="middle">R</text>
+<line x1="280" y1="110" x2="340" y2="110" class="stroke"/>
+<polygon points="340,110 370,95 370,125" class="fill-light"/>
+<line x1="370" y1="95" x2="370" y2="125" class="stroke"/>
+<line x1="370" y1="110" x2="420" y2="110" class="stroke"/>
+<line x1="420" y1="110" x2="420" y2="160" class="stroke"/>
+<line x1="420" y1="160" x2="110" y2="160" class="stroke"/>
+<line x1="110" y1="160" x2="110" y2="130" class="stroke"/>
+<text class="label" x="360" y="200" text-anchor="middle">R = (Vcc − V_LED) / I_LED</text>
+
+</svg>

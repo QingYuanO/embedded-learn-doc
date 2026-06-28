@@ -1,7 +1,7 @@
 import defaultMdxComponents from 'fumadocs-ui/mdx';
 import type { MDXComponents } from 'mdx/types';
 import { Mermaid } from '@/components/mdx/mermaid';
-import { Image } from '@/components/mdx/image';
+import { Image, Diagram } from '@/components/mdx/image';
 import { R2Link } from '@/components/mdx/R2Link';
 import { Accordion, Accordions } from 'fumadocs-ui/components/accordion';
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -20,6 +20,7 @@ export function getMDXComponents(components?: MDXComponents): MDXComponents {
     Accordions,
     Mermaid,
     Image,
+    Diagram,
     R2Link,
     blockquote: Callout as unknown as FC<ComponentProps<'blockquote'>>,
     ...components,

@@ -1,5 +1,6 @@
 {
   "pages": [
+    "electronic-components",
     "jxkj-stm32",
     "c-lang",
     "std",

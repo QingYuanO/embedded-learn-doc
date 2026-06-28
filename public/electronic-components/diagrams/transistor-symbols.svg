@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 220" width="720" height="220" role="img">
+
+<style>
+  .stroke { fill: none; stroke: var(--ec-stroke); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .thin { stroke-width: 1.5; }
+  .divider { fill: none; stroke: var(--ec-divider); stroke-width: 2; }
+  .divider-thin { fill: none; stroke: var(--ec-divider); stroke-width: 1.5; }
+  .fill-light { fill: var(--ec-fill-neutral); stroke: var(--ec-stroke); stroke-width: 1.5; }
+  .fill-blue { fill: var(--ec-fill-blue); stroke: var(--ec-blue); stroke-width: 1.5; }
+  .fill-red { fill: var(--ec-fill-red); stroke: var(--ec-red); stroke-width: 1.5; }
+  .fill-green { fill: var(--ec-fill-green); stroke: var(--ec-green); stroke-width: 1.5; }
+  .fill-yellow { fill: var(--ec-fill-yellow); stroke: var(--ec-yellow); stroke-width: 1.5; }
+  .label { font: 14px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-text); }
+  .small { font-size: 12px; fill: var(--ec-muted); }
+  .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-title); }
+  .accent-blue { stroke: var(--ec-blue); fill: none; }
+  .accent-blue-fill { fill: var(--ec-blue); stroke: none; }
+  .accent-red { stroke: var(--ec-red); fill: none; }
+  .accent-red-fill { fill: var(--ec-red); stroke: none; }
+  .accent-green { stroke: var(--ec-green); fill: none; }
+  .accent-green-fill { fill: var(--ec-green); stroke: none; }
+  .text-blue { fill: var(--ec-blue); }
+  .text-red { fill: var(--ec-red); }
+  .seg-on { stroke: var(--ec-red); fill: none; stroke-width: 4; }
+  .seg-off { stroke: var(--ec-green); fill: none; stroke-width: 4; }
+  .symbol-fill { fill: var(--ec-stroke); stroke: none; }
+</style>
+
+
+<text class="title" x="180" y="28" text-anchor="middle">NPN</text>
+<text class="title" x="540" y="28" text-anchor="middle">PNP</text>
+<line x1="360" y1="40" x2="360" y2="200" class="divider-thin"/>
+<line x1="180" y1="120" x2="280" y2="120" class="stroke"/>
+<line x1="180" y1="80" x2="180" y2="160" class="stroke"/>
+<line x1="180" y1="160" x2="220" y2="160" class="stroke"/>
+<polygon points="220,160 210,155 210,165" class="symbol-fill"/>
+<text class="small" x="180" y="190" text-anchor="middle">箭头 P→N 在 E</text>
+<line x1="540" y1="120" x2="440" y2="120" class="stroke"/>
+<line x1="540" y1="80" x2="540" y2="160" class="stroke"/>
+<line x1="540" y1="80" x2="500" y2="80" class="stroke"/>
+<polygon points="500,80 510,75 510,85" class="symbol-fill"/>
+<text class="small" x="540" y="190" text-anchor="middle">中间=B，箭头线=E</text>
+
+</svg>

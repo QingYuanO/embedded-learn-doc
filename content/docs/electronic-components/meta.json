@@ -1,0 +1,21 @@
+{
+  "title": "电子元器件入门",
+  "icon": "Cpu",
+  "pages": [
+    "index",
+    "01-electrical-basics",
+    "02-common-components",
+    "03-packaging-procurement",
+    "04-power-supply",
+    "05-resistors",
+    "06-capacitors",
+    "07-inductors",
+    "08-buzzer-relay",
+    "09-semiconductor-basics",
+    "10-pn-junction",
+    "11-diodes",
+    "12-transistors",
+    "13-mosfet"
+  ],
+  "root": true
+}

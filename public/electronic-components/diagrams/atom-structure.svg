@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 320" width="720" height="320" role="img">
+
+<style>
+  .stroke { fill: none; stroke: var(--ec-stroke); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .thin { stroke-width: 1.5; }
+  .divider { fill: none; stroke: var(--ec-divider); stroke-width: 2; }
+  .divider-thin { fill: none; stroke: var(--ec-divider); stroke-width: 1.5; }
+  .fill-light { fill: var(--ec-fill-neutral); stroke: var(--ec-stroke); stroke-width: 1.5; }
+  .fill-blue { fill: var(--ec-fill-blue); stroke: var(--ec-blue); stroke-width: 1.5; }
+  .fill-red { fill: var(--ec-fill-red); stroke: var(--ec-red); stroke-width: 1.5; }
+  .fill-green { fill: var(--ec-fill-green); stroke: var(--ec-green); stroke-width: 1.5; }
+  .fill-yellow { fill: var(--ec-fill-yellow); stroke: var(--ec-yellow); stroke-width: 1.5; }
+  .label { font: 14px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-text); }
+  .small { font-size: 12px; fill: var(--ec-muted); }
+  .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-title); }
+  .accent-blue { stroke: var(--ec-blue); fill: none; }
+  .accent-blue-fill { fill: var(--ec-blue); stroke: none; }
+  .accent-red { stroke: var(--ec-red); fill: none; }
+  .accent-red-fill { fill: var(--ec-red); stroke: none; }
+  .accent-green { stroke: var(--ec-green); fill: none; }
+  .accent-green-fill { fill: var(--ec-green); stroke: none; }
+  .text-blue { fill: var(--ec-blue); }
+  .text-red { fill: var(--ec-red); }
+  .seg-on { stroke: var(--ec-red); fill: none; stroke-width: 4; }
+  .seg-off { stroke: var(--ec-green); fill: none; stroke-width: 4; }
+  .symbol-fill { fill: var(--ec-stroke); stroke: none; }
+</style>
+
+
+<text class="title" x="360" y="28" text-anchor="middle">碳原子结构（简化）</text>
+<circle cx="360" cy="170" r="28" class="fill-red"/>
+<text class="label" x="360" y="175" text-anchor="middle">原子核</text>
+<text class="small" x="360" y="192" text-anchor="middle">质子 + 中子</text>
+<circle cx="360" cy="170" r="55" class="stroke thin"/>
+<text class="small" x="430" y="120">第 1 层 (2e)</text>
+<circle cx="360" cy="170" r="90" class="stroke thin"/>
+<text class="small" x="470" y="95">第 2 层 (8e)</text>
+<circle cx="310" cy="130" r="5" class="fill-blue"/>
+<circle cx="410" cy="130" r="5" class="fill-blue"/>
+<circle cx="360" cy="95" r="5" class="fill-blue"/>
+<circle cx="280" cy="170" r="5" class="fill-blue"/>
+<circle cx="440" cy="170" r="5" class="fill-blue"/>
+<circle cx="360" cy="245" r="5" class="fill-blue"/>
+<text class="small" x="360" y="300" text-anchor="middle">电子（负电荷）围绕原子核运动</text>
+
+</svg>

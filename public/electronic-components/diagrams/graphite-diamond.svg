@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280" width="720" height="280" role="img">
+
+<style>
+  .stroke { fill: none; stroke: var(--ec-stroke); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .thin { stroke-width: 1.5; }
+  .divider { fill: none; stroke: var(--ec-divider); stroke-width: 2; }
+  .divider-thin { fill: none; stroke: var(--ec-divider); stroke-width: 1.5; }
+  .fill-light { fill: var(--ec-fill-neutral); stroke: var(--ec-stroke); stroke-width: 1.5; }
+  .fill-blue { fill: var(--ec-fill-blue); stroke: var(--ec-blue); stroke-width: 1.5; }
+  .fill-red { fill: var(--ec-fill-red); stroke: var(--ec-red); stroke-width: 1.5; }
+  .fill-green { fill: var(--ec-fill-green); stroke: var(--ec-green); stroke-width: 1.5; }
+  .fill-yellow { fill: var(--ec-fill-yellow); stroke: var(--ec-yellow); stroke-width: 1.5; }
+  .label { font: 14px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-text); }
+  .small { font-size: 12px; fill: var(--ec-muted); }
+  .title { font: 600 15px ui-sans-serif, system-ui, sans-serif; fill: var(--ec-title); }
+  .accent-blue { stroke: var(--ec-blue); fill: none; }
+  .accent-blue-fill { fill: var(--ec-blue); stroke: none; }
+  .accent-red { stroke: var(--ec-red); fill: none; }
+  .accent-red-fill { fill: var(--ec-red); stroke: none; }
+  .accent-green { stroke: var(--ec-green); fill: none; }
+  .accent-green-fill { fill: var(--ec-green); stroke: none; }
+  .text-blue { fill: var(--ec-blue); }
+  .text-red { fill: var(--ec-red); }
+  .seg-on { stroke: var(--ec-red); fill: none; stroke-width: 4; }
+  .seg-off { stroke: var(--ec-green); fill: none; stroke-width: 4; }
+  .symbol-fill { fill: var(--ec-stroke); stroke: none; }
+</style>
+
+
+<text class="title" x="180" y="28" text-anchor="middle">石墨（导体）</text>
+<text class="title" x="540" y="28" text-anchor="middle">金刚石（绝缘体）</text>
+<line x1="360" y1="40" x2="360" y2="260" class="divider"/>
+<circle cx="120" cy="100" r="16" class="fill-light"/><circle cx="180" cy="100" r="16" class="fill-light"/>
+<circle cx="150" cy="150" r="16" class="fill-light"/><circle cx="210" cy="150" r="16" class="fill-light"/>
+<line x1="136" y1="100" x2="164" y2="100" class="stroke thin"/>
+<line x1="166" y1="108" x2="142" y2="142" class="stroke thin"/>
+<line x1="180" y1="116" x2="195" y2="134" class="stroke thin"/>
+<circle cx="240" cy="120" r="6" class="fill-blue"/>
+<text class="small" x="180" y="210" text-anchor="middle">层间自由电子</text>
+<text class="small" x="180" y="230" text-anchor="middle">可移动 → 导电</text>
+<circle cx="480" cy="110" r="16" class="fill-light"/><circle cx="540" cy="90" r="16" class="fill-light"/>
+<circle cx="600" cy="110" r="16" class="fill-light"/><circle cx="510" cy="170" r="16" class="fill-light"/>
+<circle cx="570" cy="170" r="16" class="fill-light"/><circle cx="630" cy="150" r="16" class="fill-light"/>
+<line x1="496" y1="110" x2="524" y2="98" class="stroke thin"/>
+<line x1="556" y1="98" x2="584" y2="110" class="stroke thin"/>
+<line x1="488" y1="122" x2="502" y2="154" class="stroke thin"/>
+<line x1="524" y1="170" x2="556" y2="170" class="stroke thin"/>
+<text class="small" x="540" y="210" text-anchor="middle">共价键封闭</text>
+<text class="small" x="540" y="230" text-anchor="middle">无自由电子 → 绝缘</text>
+
+</svg>

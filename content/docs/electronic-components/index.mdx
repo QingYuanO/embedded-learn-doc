@@ -1,0 +1,41 @@
+---
+title: 电子元器件零基础入门
+description: 从零认识电阻、电容、二极管与三极管，打好嵌入式硬件基础
+---
+
+> 面向零基础入门，系统讲解电学基础、常见无源/有源元器件，以及二极管、三极管、MOS 管等半导体器件。  
+
+## 系列目录
+
+| 篇章 | 主题 | 内容概要 |
+|------|------|----------|
+| [电学基础](/docs/electronic-components/01-electrical-basics) | 第一章 | 原子结构、电流、电压、电阻、欧姆定律、串并联 |
+| [常见电子元器件](/docs/electronic-components/02-common-components) | **第二章** | 章节导读与无源/机电器件总览 |
+| [封装与采购](/docs/electronic-components/03-packaging-procurement) | 第二章 | 插件/贴片封装、元器件采购 |
+| [直流稳压电源](/docs/electronic-components/04-power-supply) | 第二章 | 电源模块基本概念 |
+| [电阻器](/docs/electronic-components/05-resistors) | 第二章 | 各类电阻、阻值识别、数据手册 |
+| [电容器](/docs/electronic-components/06-capacitors) | 第二章 | 电容原理、类型、容值识别 |
+| [电感器](/docs/electronic-components/07-inductors) | 第二章 | 电磁感应、常见电感 |
+| [蜂鸣器与继电器](/docs/electronic-components/08-buzzer-relay) | 第二章 | 蜂鸣器分类、继电器参数 |
+| [半导体基础](/docs/electronic-components/09-semiconductor-basics) | 第三章 | 本征/N 型/P 型半导体 |
+| [PN 结](/docs/electronic-components/10-pn-junction) | 第三章 | 内建电场与单向导通 |
+| [二极管](/docs/electronic-components/11-diodes) | 第三章 | 整流、稳压、LED、数码管 |
+| [三极管](/docs/electronic-components/12-transistors) | 第三章 | NPN/PNP 结构与原理 |
+| [MOS 管](/docs/electronic-components/13-mosfet) | 第三章 | 场效应管分类与识别 |
+
+## 三章结构
+
+```
+电子元器件入门
+├── 第一章：电学基础        ← 电流、电压、电路、欧姆定律
+├── 第二章：常见电子元器件  ← 封装、电阻、电容、电感、蜂鸣器、继电器
+└── 第三章：半导体          ← PN 结、二极管、三极管、MOS 管
+```
+
+## 学习建议
+
+1. **先打电学基础**：理解电流、电压、电阻的关系，再碰具体元器件。
+2. **读第二章导读**：从 [常见电子元器件](/docs/electronic-components/02-common-components) 进入，按顺序学习各小节。
+3. **无源器件优先**：电阻 → 电容 → 电感，三者是滤波、耦合、储能的基本积木。
+4. **半导体放最后**：二极管、三极管、MOS 管建立在前述概念之上，与嵌入式 GPIO、驱动电路直接相关。
+5. **动手验证**：配合万用表、面包板和 [立创商城](https://www.szlcsc.com/) 采购样品，比纯阅读更有效。
